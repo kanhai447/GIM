@@ -1,0 +1,58 @@
+# Read-only reference implementations must never enter GIM history.
+reference/
+
+# Local environment and secrets.
+.env
+.env.*
+!.env.example
+
+# Private keys and certificates.
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Frontend dependencies and build output.
+node_modules/
+dist/
+
+# Logs and temporary files.
+logs/
+*.log
+tmp/
+temp/
+
+# Local uploads and object storage.
+uploads/
+storage/uploads/
+local-storage/
+
+# Local infrastructure data.
+.local-data/
+data/mysql/
+data/redis/
+data/etcd/
+data/kafka/
+mysql-data/
+redis-data/
+etcd-data/
+kafka-data/
+
+# Go build and test artifacts.
+bin/
+coverage/
+*.test
+*.out
+
+# IDE and editor settings.
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating-system generated files.
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
