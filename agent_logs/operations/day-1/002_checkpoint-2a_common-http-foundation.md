@@ -59,10 +59,10 @@
 
 ## Git
 
-- **Commit hash:** PENDING。
-- **Push:** PENDING。
+- **Commit hash:** `e6811c9df4248c3af9e84b905da6bdb498958e2a`。
+- **Push:** SUCCESS — `origin/main`。
 
 ## 下一步
 
-- 完成 staged diff 与 Secret Scan，提交并 push Checkpoint 2A。
-- 稳定后从 Checkpoint 2B：MySQL、Redis、etcd 客户端恢复。
+- Checkpoint 2A 已形成远端稳定节点。
+- 从 Checkpoint 2B：MySQL、Redis、etcd 客户端恢复。

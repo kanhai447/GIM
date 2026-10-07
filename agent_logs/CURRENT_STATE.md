@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 2A — 配置、统一错误与 HTTP 响应（COMPLETED，等待 commit/push）
-- **Last Completed Checkpoint:** Checkpoint 1 — 安全配置检查与 GIM 独立工程骨架
-- **Last Stable Commit:** `81340911fe58df2ccaee3e3fc540b6c6c7cbf662`
-- **Last Push Status:** SUCCESS — Checkpoint 1 pushed to `origin/main`
+- **Current Checkpoint:** Checkpoint 2B — MySQL、Redis、etcd 基础设施客户端（NOT STARTED）
+- **Last Completed Checkpoint:** Checkpoint 2A — 配置、统一错误与 HTTP 响应
+- **Last Stable Commit:** `e6811c9df4248c3af9e84b905da6bdb498958e2a`
+- **Last Push Status:** SUCCESS — Checkpoint 2A pushed to `origin/main`
 
 ## Completed
 
@@ -18,7 +18,7 @@
 
 ## In Progress
 
-- Checkpoint 2A：staged diff、Secret Scan、commit 与 push 交付。
+- 无。Checkpoint 2A 已完成并 push；Checkpoint 2B 尚未开始。
 
 ## Not Started
 
@@ -44,4 +44,4 @@
 
 ## Next Action
 
-- 完成 Checkpoint 2A staged Secret Scan、commit 与 push；成功后进入 Checkpoint 2B。
+- 实施 Checkpoint 2B：MySQL、Redis、etcd 基础设施客户端及真实本地连接测试。

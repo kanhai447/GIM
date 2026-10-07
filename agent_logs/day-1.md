@@ -40,5 +40,5 @@
 - DB/API/WS 变化：没有业务路由或字段变化；公共响应保持 `{code,msg,data}`。
 - 测试：普通单测、覆盖率、vet、gofmt、安全脚本 PASS。
 - Race：本机 cgo 编译器不支持 64 位模式，真实状态为 NOT AVAILABLE。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`e6811c9df4248c3af9e84b905da6bdb498958e2a`。
+- Push：SUCCESS — `origin/main`。
