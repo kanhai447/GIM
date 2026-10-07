@@ -73,7 +73,6 @@ try {
             'MYSQL_DATABASE',
             'REDIS_HOST',
             'REDIS_PORT',
-            'REDIS_PASSWORD',
             'ETCD_ENDPOINTS',
             'JWT_SECRET',
             'GATEWAY_PORT'
@@ -89,6 +88,12 @@ try {
             } else {
                 Write-Output "PASS: $key is configured"
             }
+        }
+
+        if (-not $config.ContainsKey('REDIS_PASSWORD') -or $config['REDIS_PASSWORD'] -eq 'CHANGE_ME') {
+            Add-Failure 'local configuration is incomplete: REDIS_PASSWORD'
+        } else {
+            Write-Output 'PASS: REDIS_PASSWORD=[REDACTED] (empty is allowed)'
         }
 
         if ($config.ContainsKey('JWT_SECRET')) {

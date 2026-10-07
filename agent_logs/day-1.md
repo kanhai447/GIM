@@ -8,7 +8,7 @@
 
 - [x] Checkpoint 1：安全配置检查与 GIM 独立工程骨架。
 - [x] Checkpoint 2A：配置、统一错误与 HTTP 响应。
-- [ ] Checkpoint 2B：MySQL、Redis、etcd 客户端。
+- [x] Checkpoint 2B：MySQL、Redis、etcd 客户端。
 - [ ] Checkpoint 3：User API / RPC 基础能力。
 - [ ] Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - [ ] Checkpoint 5：Gateway 与 Auth 鉴权链路。
@@ -42,3 +42,18 @@
 - Race：本机 cgo 编译器不支持 64 位模式，真实状态为 NOT AVAILABLE。
 - Commit：`e6811c9df4248c3af9e84b905da6bdb498958e2a`。
 - Push：SUCCESS — `origin/main`。
+
+## Checkpoint 2B
+
+- 日期：2026-10-07
+- Phase：0.5
+- 主要改动：MySQL/GORM、Redis、etcd 可注入客户端，context 健康检查与显式 Close，真实本地集成测试。
+- DB/API/WS 变化：无 migration、无业务表、无业务 Redis key、无 API/WS 变化。
+- 测试：全量单测、覆盖率、vet、gofmt、安全脚本、MySQL/Redis/etcd 集成测试 PASS。
+- Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN。
+- Commit：PENDING。
+- Push：PENDING。
+
+## 次步入口
+
+- Checkpoint 2B push 后停止；下一次从 Checkpoint 3 User API / RPC 基础能力恢复。

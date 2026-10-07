@@ -2,7 +2,7 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 2B — MySQL、Redis、etcd 基础设施客户端（NOT STARTED）
+- **Current Checkpoint:** Checkpoint 2B — MySQL、Redis、etcd 基础设施客户端（COMPLETED，等待 commit/push）
 - **Last Completed Checkpoint:** Checkpoint 2A — 配置、统一错误与 HTTP 响应
 - **Last Stable Commit:** `e6811c9df4248c3af9e84b905da6bdb498958e2a`
 - **Last Push Status:** SUCCESS — Checkpoint 2A pushed to `origin/main`
@@ -15,14 +15,14 @@
 - GIM 独立 Go module 与 `server/`、`web/`、`admin/` 空骨架。
 - 可重复执行且不回显 Secret 的仓库安全检查脚本。
 - 安全 dotenv 配置读取、统一应用错误与 V1 HTTP 响应基础模块。
+- 可注入的 MySQL/GORM、Redis、etcd 客户端及真实本地连接测试。
 
 ## In Progress
 
-- 无。Checkpoint 2A 已完成并 push；Checkpoint 2B 尚未开始。
+- Checkpoint 2B：staged diff、Secret Scan、commit 与 push 交付。
 
 ## Not Started
 
-- Checkpoint 2B：MySQL、Redis、etcd 基础设施客户端。
 - Checkpoint 3：User API / RPC 基础能力。
 - Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - Checkpoint 5：Gateway 与 Auth 鉴权链路。
@@ -36,6 +36,7 @@
 - Pre-Day1 Verification：PASS。
 - Checkpoint 1：安全脚本、`gofmt`、`go test ./...`、`go vet ./...`、reference 零依赖与目录边界检查均 PASS。
 - Checkpoint 2A：普通单测、覆盖率、vet、gofmt 和安全脚本 PASS；race 因本机 cgo 64 位编译器不可用而未能执行。
+- Checkpoint 2B：全量单测、覆盖率、vet、gofmt、安全脚本和 MySQL/Redis/etcd 真实集成测试 PASS；race 仍为 NOT RUN。
 
 ## Known Issues
 
@@ -44,4 +45,4 @@
 
 ## Next Action
 
-- 实施 Checkpoint 2B：MySQL、Redis、etcd 基础设施客户端及真实本地连接测试。
+- 完成 Checkpoint 2B staged Secret Scan、commit 与 push 后停止；下一步为 Checkpoint 3。

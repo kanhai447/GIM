@@ -72,3 +72,32 @@
 ### 下一步
 
 - 完成 Checkpoint 2A commit/push，然后实施 Checkpoint 2B 基础设施客户端。
+
+## 2026-10-07 Day 1 / Phase 0.5 — Checkpoint 2B 基础设施客户端
+
+### 目标与修改
+
+- 新增可注入的 MySQL/GORM、Redis、etcd 客户端与 context 健康检查、Close 生命周期。
+- 新增真实本地基础设施集成测试；未执行 migration 或业务数据写入。
+
+### 参考与调整
+
+- 参考 FIM 基础连接需求和 ServiceContext 依赖关系。
+- 不沿用 panic、无效 timeout context、反复创建且不关闭 etcd client 的方式。
+
+### 测试
+
+- `go test ./...`、cover、vet、gofmt、安全脚本 -> PASS。
+- MySQL connect/Ping/错误凭据脱敏/Close -> PASS。
+- Redis Ping/Close -> PASS。
+- etcd Status/Close -> PASS。
+- race -> NOT RUN，本机 cgo 64 位工具链不可用。
+
+### Git
+
+- commit: PENDING。
+- push: PENDING。
+
+### 下一步
+
+- 完成 Checkpoint 2B commit/push 后停止；下一次进入 Checkpoint 3。
