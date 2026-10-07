@@ -44,3 +44,31 @@
 ### 遗留与下一步
 
 - 完成 Checkpoint 1 commit/push 后实施 Checkpoint 2 公共基础模块。
+
+## 2026-10-07 Day 1 / Phase 0.5 — Checkpoint 2A 公共 HTTP 基础
+
+### 目标与修改
+
+- 自主实现 dotenv 配置读取、统一应用错误和 V1 HTTP 响应。
+- 未新增业务路由、数据库访问或 WebSocket 实现。
+
+### 参考与调整
+
+- 保留 FIM `{code,msg,data}` 与业务 HTTP 200 兼容行为。
+- 不沿用直接返回 `err.Error()`；未知错误统一隐藏内部细节。
+
+### 测试
+
+- `go test ./...` -> PASS。
+- `go test -cover ./internal/platform/...` -> PASS。
+- `go vet ./...`、`gofmt -l .`、安全脚本 -> PASS。
+- `go test -race ...` -> NOT AVAILABLE，本机 cgo C 编译器不支持 64 位模式。
+
+### Git
+
+- commit: PENDING。
+- push: PENDING。
+
+### 下一步
+
+- 完成 Checkpoint 2A commit/push，然后实施 Checkpoint 2B 基础设施客户端。

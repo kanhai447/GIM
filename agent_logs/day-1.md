@@ -7,7 +7,8 @@
 ## 完成项
 
 - [x] Checkpoint 1：安全配置检查与 GIM 独立工程骨架。
-- [ ] Checkpoint 2：Server 公共基础模块。
+- [x] Checkpoint 2A：配置、统一错误与 HTTP 响应。
+- [ ] Checkpoint 2B：MySQL、Redis、etcd 客户端。
 - [ ] Checkpoint 3：User API / RPC 基础能力。
 - [ ] Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - [ ] Checkpoint 5：Gateway 与 Auth 鉴权链路。
@@ -29,4 +30,15 @@
 
 ## 次步入口
 
-- 从 Checkpoint 2 Server 公共基础模块恢复。
+- 从 Checkpoint 2B MySQL、Redis、etcd 客户端恢复。
+
+## Checkpoint 2A
+
+- 日期：2026-10-07
+- Phase：0.5
+- 主要改动：安全配置解析、统一应用错误、V1 HTTP 响应与单元测试。
+- DB/API/WS 变化：没有业务路由或字段变化；公共响应保持 `{code,msg,data}`。
+- 测试：普通单测、覆盖率、vet、gofmt、安全脚本 PASS。
+- Race：本机 cgo 编译器不支持 64 位模式，真实状态为 NOT AVAILABLE。
+- Commit：PENDING。
+- Push：PENDING。
