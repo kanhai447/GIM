@@ -67,9 +67,9 @@
 - 安全：Auth 负责 Hash，User 只接收 `password_hash`；公开 DTO 不返回密码哈希，底层数据库错误不泄露。
 - 测试：全量单测、User 覆盖率、vet、gofmt、安全脚本、内存 gRPC 调用 PASS。
 - Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`3aa0150ffbeecadbcc872344c70b67cf24a0ce0a`。
+- Push：SUCCESS — `origin/main`。
 
 ## 次步入口
 
-- Checkpoint 3 push 后停止；下一次从 Checkpoint 4 Auth 注册、登录、JWT、Logout 基础链路恢复。
+- Checkpoint 3 已完成并推送；下一次从 Checkpoint 4 Auth 注册、登录、JWT、Logout 基础链路恢复。

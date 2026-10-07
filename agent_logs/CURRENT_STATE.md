@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 3 — User API / RPC 基础能力（COMPLETED，等待 commit/push）
-- **Last Completed Checkpoint:** Checkpoint 2B — MySQL、Redis、etcd 基础设施客户端
-- **Last Stable Commit:** `b255dd3221a7fc83f15aeb3a15cfaf70c7257b93`
-- **Last Push Status:** SUCCESS — Checkpoint 2B pushed to `origin/main`
+- **Current Checkpoint:** Checkpoint 4 — Auth 注册、登录、JWT、Logout（NOT STARTED）
+- **Last Completed Checkpoint:** Checkpoint 3 — User API / RPC 基础能力
+- **Last Stable Commit:** `3aa0150ffbeecadbcc872344c70b67cf24a0ce0a`
+- **Last Push Status:** SUCCESS — Checkpoint 3 pushed to `origin/main`
 
 ## Completed
 
@@ -20,7 +20,7 @@
 
 ## In Progress
 
-- Checkpoint 3：staged diff、Secret Scan、commit 与 push 交付。
+- 无。
 
 ## Not Started
 
@@ -47,4 +47,4 @@
 
 ## Next Action
 
-- 完成 Checkpoint 3 staged Secret Scan、commit 与 push 后停止；下一步为 Checkpoint 4。
+- 等待用户继续指令；下一步为 Checkpoint 4 — Auth 注册、登录、JWT、Logout 基础链路。

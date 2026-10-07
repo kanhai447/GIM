@@ -76,10 +76,10 @@
 
 ## Git
 
-- **Commit hash:** PENDING。
-- **Push:** PENDING。
+- **Commit hash:** `3aa0150ffbeecadbcc872344c70b67cf24a0ce0a`。
+- **Push:** SUCCESS — `origin/main`。
 
 ## 下一步
 
-- 完成 staged diff、Secret Scan、commit 和 push 后停止。
+- Checkpoint 3 已完成测试、Secret Scan、commit 和 push；在稳定节点停止。
 - 下一 Checkpoint：Checkpoint 4 — Auth 注册、登录、JWT、Logout 基础链路。

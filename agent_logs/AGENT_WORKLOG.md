@@ -123,9 +123,9 @@
 
 ### Git
 
-- commit: PENDING。
-- push: PENDING。
+- commit: `3aa0150ffbeecadbcc872344c70b67cf24a0ce0a feat(user): add user api rpc and domain foundation`。
+- push: `origin/main` -> SUCCESS。
 
 ### 下一步
 
-- 完成 Checkpoint 3 commit/push 后停止；下一次进入 Checkpoint 4 Auth。
+- Checkpoint 3 已完成并推送；停止，下一次进入 Checkpoint 4 Auth。
