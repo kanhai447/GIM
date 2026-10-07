@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0
-- **Current Checkpoint:** Checkpoint 1 — 安全配置检查与 GIM 独立工程骨架（COMPLETED，等待 commit/push）
+- **Current Checkpoint:** Checkpoint 2 — Server 公共基础模块（NOT STARTED）
 - **Last Completed Checkpoint:** Checkpoint 1 — 安全配置检查与 GIM 独立工程骨架
-- **Last Stable Commit:** `c1dc8d47a0e294b66bd7097227b2b0e5fd09540f`
-- **Last Push Status:** SUCCESS — local `main` matched `origin/main`
+- **Last Stable Commit:** `81340911fe58df2ccaee3e3fc540b6c6c7cbf662`
+- **Last Push Status:** SUCCESS — Checkpoint 1 pushed to `origin/main`
 
 ## Completed
 
@@ -17,7 +17,7 @@
 
 ## In Progress
 
-- Checkpoint 1：Git staged diff、Secret Scan、commit 与 push 交付。
+- 无。Checkpoint 1 已完成并 push；Checkpoint 2 尚未开始。
 
 ## Not Started
 
@@ -41,4 +41,4 @@
 
 ## Next Action
 
-- 对 Checkpoint 1 执行 staged diff 与 Secret Scan，commit 并 push；成功后进入 Checkpoint 2。
+- 读取公共基础设施相关设计和 FIM 行为边界，规划 Checkpoint 2 文件与测试后开始实现。

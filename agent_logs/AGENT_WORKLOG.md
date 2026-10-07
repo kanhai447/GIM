@@ -37,8 +37,8 @@
 
 ### Git
 
-- commit: PENDING。
-- push: PENDING。
+- commit: `81340911fe58df2ccaee3e3fc540b6c6c7cbf662 chore(day1): establish independent project skeleton`。
+- push: `origin/main` -> SUCCESS。
 - tag: 无。
 
 ### 遗留与下一步

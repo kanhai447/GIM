@@ -24,9 +24,9 @@
 - DB/API/WS 变化：无。
 - 测试：安全脚本、gofmt、Go test/vet、reference 零依赖、工程边界均 PASS。
 - 问题：首次测试脚本相对路径错误；修正调用路径后完整重跑通过。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`81340911fe58df2ccaee3e3fc540b6c6c7cbf662`。
+- Push：SUCCESS — `origin/main`。
 
 ## 次步入口
 
-- 完成 Checkpoint 1 commit/push 后，从 Checkpoint 2 Server 公共基础模块恢复。
+- 从 Checkpoint 2 Server 公共基础模块恢复。
