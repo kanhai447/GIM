@@ -36,6 +36,8 @@ V1 不强制一次性改成 RESTful status 语义。网关/系统级错误仍应
 - `PUT /api/user/valid_status`
 - `POST /api/user/friends` 添加好友
 
+`GET /api/user/user_info` 的最小公开资料包含 `userID/account/nickname/avatar/role/status`，不得返回 `pwd_hash`。调用方用户 ID 由后续 Gateway/Auth 链路通过可信 `User-ID` Header 注入；浏览器直接提供该 Header 不是安全边界。
+
 好友返回必须包含 `isOnline`，值来自 Redis Presence。
 
 ## 4. Chat
@@ -88,6 +90,8 @@ V1 不强制一次性改成 RESTful status 语义。网关/系统级错误仍应
 ## 7. 错误约定
 
 优先复用参考项目现有 code。新增错误至少区分：未认证/无权限、参数错误、好友关系不存在、群成员不存在/禁言、重复 clientMsgId（应返回原消息而非失败）、消息不存在/无权撤回、文件超限/类型不允许、系统错误。
+
+User 基础能力使用：`1001` 参数错误、`1101` 用户不存在、`1102` 账号已存在；数据库原始错误只作为服务端私有 cause，不进入 HTTP/RPC 响应。
 
 ## 8. API 兼容规则
 

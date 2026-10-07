@@ -101,3 +101,31 @@
 ### 下一步
 
 - Checkpoint 2B 已完成并推送；停止，下一次进入 Checkpoint 3。
+
+## 2026-10-07 Day 1 / Phase 0.5 — Checkpoint 3 User API / RPC 基础能力
+
+### 目标与修改
+
+- 新增 User Domain、GORM Repository、共享 Service、go-zero HTTP Handler 与 gRPC Adapter。
+- RPC 提供 CreateUser、GetUserByID、GetUserByAccount；公开 UserInfo 不含 password hash。
+- 同步 users account/status 模型约束和 HTTP 错误码文档；未执行 migration。
+
+### 参考与调整
+
+- 参考 FIM User 字段语义、`/api/user/user_info` 路径及 User RPC 服务调用关系。
+- GIM 不在 User 内 Hash 密码，不返回整模型 JSON bytes，不暴露数据库原始错误；HTTP/RPC 共用 Service。
+
+### 测试
+
+- `go test ./...`、User cover、vet、gofmt、安全脚本 -> PASS。
+- Handler 公开字段与内存 gRPC 生成客户端调用 -> PASS。
+- race -> NOT RUN - environment limitation，本机 cgo 64 位工具链不可用。
+
+### Git
+
+- commit: PENDING。
+- push: PENDING。
+
+### 下一步
+
+- 完成 Checkpoint 3 commit/push 后停止；下一次进入 Checkpoint 4 Auth。

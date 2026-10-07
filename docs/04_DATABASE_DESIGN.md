@@ -13,9 +13,9 @@
 
 ### users
 
-`id, pwd_hash, nickname, abstract, avatar, ip, addr, role, open_id, register_source, created_at, updated_at`
+`id, account, pwd_hash, nickname, abstract, avatar, ip, addr, role, status, open_id, register_source, created_at, updated_at`
 
-索引：`open_id`（若第三方登录启用）；昵称搜索按实际查询决定普通索引/前缀搜索限制。
+约束/索引：`account UNIQUE`；`open_id`（若第三方登录启用）；昵称搜索按实际查询决定普通索引/前缀搜索限制。`pwd_hash` 只存 Auth 生成的强哈希，不存明文；`role` 使用 `1=管理员、2=普通用户`，`status` 使用 `1=启用、2=禁用`。Checkpoint 3 只建立模型与 Repository 契约，正式 migration 在 Day 1 Checkpoint 7 集中创建。
 
 ### user_confs
 

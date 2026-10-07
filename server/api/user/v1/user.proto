@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package gim.user.v1;
+
+option go_package = "github.com/kanhai447/GIM/server/api/user/v1;userv1";
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUserByID(GetUserByIDRequest) returns (GetUserByIDResponse);
+  rpc GetUserByAccount(GetUserByAccountRequest) returns (GetUserByAccountResponse);
+}
+
+message CreateUserRequest {
+  string account = 1;
+  string nickname = 2;
+  string password_hash = 3;
+  int32 role = 4;
+  int32 status = 5;
+  string avatar = 6;
+}
+
+message CreateUserResponse {
+  uint64 user_id = 1;
+}
+
+message GetUserByIDRequest {
+  uint64 user_id = 1;
+}
+
+message GetUserByIDResponse {
+  UserInfo user = 1;
+}
+
+message GetUserByAccountRequest {
+  string account = 1;
+}
+
+message GetUserByAccountResponse {
+  UserCredential credential = 1;
+}
+
+message UserInfo {
+  uint64 id = 1;
+  string account = 2;
+  string nickname = 3;
+  string avatar = 4;
+  int32 role = 5;
+  int32 status = 6;
+}
+
+// UserCredential is an internal Auth-facing contract. It must never be used
+// as an HTTP response or written to logs.
+message UserCredential {
+  UserInfo user = 1;
+  string password_hash = 2;
+}

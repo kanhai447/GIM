@@ -9,7 +9,7 @@
 - [x] Checkpoint 1：安全配置检查与 GIM 独立工程骨架。
 - [x] Checkpoint 2A：配置、统一错误与 HTTP 响应。
 - [x] Checkpoint 2B：MySQL、Redis、etcd 客户端。
-- [ ] Checkpoint 3：User API / RPC 基础能力。
+- [x] Checkpoint 3：User API / RPC 基础能力。
 - [ ] Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - [ ] Checkpoint 5：Gateway 与 Auth 鉴权链路。
 - [ ] Checkpoint 6：Gateway -> Auth -> User 集成测试。
@@ -57,3 +57,19 @@
 ## 次步入口
 
 - Checkpoint 2B 已完成并推送；下一次从 Checkpoint 3 User API / RPC 基础能力恢复。
+
+## Checkpoint 3
+
+- 日期：2026-10-07
+- Phase：0.5
+- 主要改动：User Domain/Repository/Service、公开资料 HTTP Handler、Create/GetByID/GetByAccount gRPC 契约与生成客户端集成测试。
+- DB/API/RPC 变化：建立 users GORM 模型契约但未 migration；实现 `GET /api/user/user_info`；新增三个内部 User RPC。
+- 安全：Auth 负责 Hash，User 只接收 `password_hash`；公开 DTO 不返回密码哈希，底层数据库错误不泄露。
+- 测试：全量单测、User 覆盖率、vet、gofmt、安全脚本、内存 gRPC 调用 PASS。
+- Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
+- Commit：PENDING。
+- Push：PENDING。
+
+## 次步入口
+
+- Checkpoint 3 push 后停止；下一次从 Checkpoint 4 Auth 注册、登录、JWT、Logout 基础链路恢复。
