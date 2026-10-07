@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 2B — MySQL、Redis、etcd 基础设施客户端（COMPLETED，等待 commit/push）
-- **Last Completed Checkpoint:** Checkpoint 2A — 配置、统一错误与 HTTP 响应
-- **Last Stable Commit:** `e6811c9df4248c3af9e84b905da6bdb498958e2a`
-- **Last Push Status:** SUCCESS — Checkpoint 2A pushed to `origin/main`
+- **Current Checkpoint:** Checkpoint 3 — User API / RPC 基础能力（NOT STARTED）
+- **Last Completed Checkpoint:** Checkpoint 2B — MySQL、Redis、etcd 基础设施客户端
+- **Last Stable Commit:** `b255dd3221a7fc83f15aeb3a15cfaf70c7257b93`
+- **Last Push Status:** SUCCESS — Checkpoint 2B pushed to `origin/main`
 
 ## Completed
 
@@ -19,7 +19,7 @@
 
 ## In Progress
 
-- Checkpoint 2B：staged diff、Secret Scan、commit 与 push 交付。
+- 无。
 
 ## Not Started
 
@@ -45,4 +45,4 @@
 
 ## Next Action
 
-- 完成 Checkpoint 2B staged Secret Scan、commit 与 push 后停止；下一步为 Checkpoint 3。
+- 等待用户继续指令；下一步为 Checkpoint 3 — User API / RPC 基础能力。

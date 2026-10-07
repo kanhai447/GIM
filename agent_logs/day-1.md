@@ -51,9 +51,9 @@
 - DB/API/WS 变化：无 migration、无业务表、无业务 Redis key、无 API/WS 变化。
 - 测试：全量单测、覆盖率、vet、gofmt、安全脚本、MySQL/Redis/etcd 集成测试 PASS。
 - Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`b255dd3221a7fc83f15aeb3a15cfaf70c7257b93`。
+- Push：SUCCESS — `origin/main`。
 
 ## 次步入口
 
-- Checkpoint 2B push 后停止；下一次从 Checkpoint 3 User API / RPC 基础能力恢复。
+- Checkpoint 2B 已完成并推送；下一次从 Checkpoint 3 User API / RPC 基础能力恢复。

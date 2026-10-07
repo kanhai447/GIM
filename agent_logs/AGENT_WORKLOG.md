@@ -95,9 +95,9 @@
 
 ### Git
 
-- commit: PENDING。
-- push: PENDING。
+- commit: `b255dd3221a7fc83f15aeb3a15cfaf70c7257b93 feat(platform): add mysql redis and etcd clients`。
+- push: `origin/main` -> SUCCESS。
 
 ### 下一步
 
-- 完成 Checkpoint 2B commit/push 后停止；下一次进入 Checkpoint 3。
+- Checkpoint 2B 已完成并推送；停止，下一次进入 Checkpoint 3。
