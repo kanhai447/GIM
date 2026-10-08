@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
@@ -29,12 +30,16 @@ func TestMapError(t *testing.T) {
 }
 
 func TestRecordRoundTripPreservesInternalFields(t *testing.T) {
-	record := userRecord{ID: 7, Account: "gim-user", PasswordHash: "private-hash", Nickname: "GIM", Role: 2, Status: 1}
+	openID := "provider-user-id"
+	record := userRecord{
+		ID: 7, Account: "gim-user", PasswordHash: "private-hash", Nickname: "GIM",
+		IP: "127.0.0.1", Address: "local", OpenID: &openID, RegisterSource: "provider", Role: 2, Status: 1,
+	}
 	user := record.toDomain()
 	if user.ID != record.ID || user.Account != record.Account || user.PasswordHash != record.PasswordHash {
 		t.Fatalf("toDomain() lost fields: %#v", user)
 	}
-	if converted := recordFromDomain(user); converted != record {
+	if converted := recordFromDomain(user); !reflect.DeepEqual(converted, record) {
 		t.Fatalf("recordFromDomain() = %#v, want %#v", converted, record)
 	}
 }

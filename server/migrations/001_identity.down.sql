@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS user_confs;
+DROP TABLE IF EXISTS users;

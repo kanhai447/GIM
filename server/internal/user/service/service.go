@@ -49,12 +49,13 @@ func (service *Service) CreateUser(ctx context.Context, input CreateUserInput) (
 	}
 
 	user := domain.User{
-		Account:      input.Account,
-		Nickname:     input.Nickname,
-		PasswordHash: input.PasswordHash,
-		Avatar:       strings.TrimSpace(input.Avatar),
-		Role:         input.Role,
-		Status:       input.Status,
+		Account:        input.Account,
+		Nickname:       input.Nickname,
+		PasswordHash:   input.PasswordHash,
+		Avatar:         strings.TrimSpace(input.Avatar),
+		RegisterSource: "account",
+		Role:           input.Role,
+		Status:         input.Status,
 	}
 	if err := service.users.Create(ctx, &user); err != nil {
 		return domain.User{}, translateRepositoryError(err)

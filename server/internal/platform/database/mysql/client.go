@@ -84,16 +84,7 @@ func FromValues(values config.Values) (Config, error) {
 }
 
 func Open(ctx context.Context, cfg Config) (*Client, error) {
-	driverConfig := mysqldriver.Config{
-		User:      cfg.User,
-		Passwd:    cfg.Password,
-		Net:       "tcp",
-		Addr:      net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
-		DBName:    cfg.Database,
-		ParseTime: true,
-		Loc:       time.Local,
-		Params:    map[string]string{"charset": "utf8mb4"},
-	}
+	driverConfig := newDriverConfig(cfg)
 	dsn := driverConfig.FormatDSN()
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -104,9 +95,7 @@ func Open(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, &operationError{"pool initialization", err}
 	}
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	configurePool(sqlDB, cfg)
 
 	client := &Client{db: db, sqlDB: sqlDB}
 	if err := client.Health(ctx); err != nil {
@@ -114,6 +103,43 @@ func Open(ctx context.Context, cfg Config) (*Client, error) {
 		return nil, err
 	}
 	return client, nil
+}
+
+// OpenSQL opens a raw database/sql pool for infrastructure operations such as
+// versioned migrations. Callers must close the returned pool. The public error
+// text never contains the formatted DSN.
+func OpenSQL(ctx context.Context, cfg Config, multiStatements bool) (*sql.DB, error) {
+	driverConfig := newDriverConfig(cfg)
+	driverConfig.MultiStatements = multiStatements
+	db, err := sql.Open("mysql", driverConfig.FormatDSN())
+	if err != nil {
+		return nil, &operationError{"initialization", err}
+	}
+	configurePool(db, cfg)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, &operationError{"health check", err}
+	}
+	return db, nil
+}
+
+func newDriverConfig(cfg Config) mysqldriver.Config {
+	return mysqldriver.Config{
+		User:      cfg.User,
+		Passwd:    cfg.Password,
+		Net:       "tcp",
+		Addr:      net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
+		DBName:    cfg.Database,
+		ParseTime: true,
+		Loc:       time.Local,
+		Params:    map[string]string{"charset": "utf8mb4"},
+	}
+}
+
+func configurePool(db *sql.DB, cfg Config) {
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 }
 
 func (c *Client) DB() *gorm.DB { return c.db }

@@ -27,16 +27,20 @@ func (status Status) Valid() bool {
 
 // User is the internal aggregate. PasswordHash is intentionally excluded from JSON.
 type User struct {
-	ID           uint64    `json:"id"`
-	Account      string    `json:"account"`
-	PasswordHash string    `json:"-"`
-	Nickname     string    `json:"nickname"`
-	Abstract     string    `json:"abstract"`
-	Avatar       string    `json:"avatar"`
-	Role         Role      `json:"role"`
-	Status       Status    `json:"status"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID             uint64    `json:"id"`
+	Account        string    `json:"account"`
+	PasswordHash   string    `json:"-"`
+	Nickname       string    `json:"nickname"`
+	Abstract       string    `json:"abstract"`
+	Avatar         string    `json:"avatar"`
+	IP             string    `json:"ip"`
+	Address        string    `json:"address"`
+	OpenID         string    `json:"-"`
+	RegisterSource string    `json:"registerSource"`
+	Role           Role      `json:"role"`
+	Status         Status    `json:"status"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // UserInfo is safe for public HTTP and general business RPC responses.

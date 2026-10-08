@@ -11,6 +11,7 @@ func TestUserAndPublicInfoNeverMarshalPasswordHash(t *testing.T) {
 		ID:           42,
 		Account:      "gim-user",
 		PasswordHash: "sensitive-password-hash",
+		OpenID:       "private-provider-identity",
 		Nickname:     "GIM User",
 		Role:         RoleMember,
 		Status:       StatusActive,
@@ -21,8 +22,8 @@ func TestUserAndPublicInfoNeverMarshalPasswordHash(t *testing.T) {
 		if err != nil {
 			t.Fatalf("json.Marshal(%s) error = %v", name, err)
 		}
-		if strings.Contains(string(payload), user.PasswordHash) || strings.Contains(string(payload), "PasswordHash") {
-			t.Fatalf("json.Marshal(%s) exposed password hash", name)
+		if strings.Contains(string(payload), user.PasswordHash) || strings.Contains(string(payload), user.OpenID) || strings.Contains(string(payload), "PasswordHash") {
+			t.Fatalf("json.Marshal(%s) exposed private identity data", name)
 		}
 	}
 }
