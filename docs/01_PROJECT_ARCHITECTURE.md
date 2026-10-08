@@ -81,6 +81,8 @@ User Web -> Gateway WS proxy -> Auth validation -> Chat/Group WS endpoint -> Hub
 ### gim_gateway
 服务发现、反向代理、统一调用 Auth、注入 User-ID/Role、HTTP/WS Upgrade 转发。V1 不改成本地验 JWT。
 
+Gateway 通过 etcd 前缀 `/gim/services/{service}/{instance}` 查找 API 服务，resolver 返回端点列表以保留多实例扩展边界；Day 1 V1 转发选择排序后的首个有效 lease 注册端点。服务以 TTL lease + keepalive 注册并在优雅退出时 revoke。Gateway 路由使用 `auth/user/chat/group/file/settings/logs` 显式映射，禁止从外部路径模糊拼接任意 etcd key。
+
 ### gim_auth
 注册、登录、JWT 签发/验证、logout blacklist、第三方登录兼容。日志不得记录密码、Token 或完整敏感 Header。
 
@@ -111,3 +113,5 @@ User Web -> Gateway WS proxy -> Auth validation -> Chat/Group WS endpoint -> Hub
 ## 6. 部署边界
 
 原 docker-compose 只部署用户端 `fim_web`，没有部署 `fim_admin`。GIM 应补充 Admin 的构建/启动说明；正式环境只公开 Gateway 和前端入口，API/RPC 服务不直接暴露公网，避免绕过 Gateway 伪造 `Role` Header。
+
+Gateway 在调用 Auth 前必须删除外部请求中的 `User-ID`、`Role`、`ValidPath`；公开请求保持无身份 Header，受保护请求只注入 Auth 返回的可信身份。内部 API 对这些 Header 的信任以网络隔离和仅公开 Gateway 为前提。

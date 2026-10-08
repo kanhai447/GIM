@@ -47,6 +47,8 @@ upload root/max size/allowed mime
 frontend public base url
 ```
 
+Gateway/服务发现还使用：`GATEWAY_DISCOVERY_TIMEOUT`、`GATEWAY_AUTH_TIMEOUT`、`GATEWAY_PROXY_TIMEOUT`、`INTERNAL_API_HOST`、各 API port/instance ID、`ETCD_SERVICE_TTL`。API 服务注册 key 为 `/gim/services/{service}/{instance}`，value 为配置生成的内部 HTTP endpoint；通过 lease keepalive 维持并在优雅退出时清理。正式部署不得把内部 API endpoint 暴露公网。
+
 本地开发使用 `.env.example`/YAML example + docker-compose。任何 `192.168.x.x`、作者机器路径必须清理。
 
 ## 4. Docker Compose

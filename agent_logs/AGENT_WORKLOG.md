@@ -159,3 +159,33 @@
 ### 下一步
 
 - Checkpoint 4 已完成并推送；下一 Checkpoint 为 Gateway，不在本轮实施。
+
+## 2026-10-08 Day 1 / Phase 0.5 — Checkpoint 5 Gateway 鉴权代理
+
+### 目标与修改
+
+- 自主实现 Gateway 显式路由、etcd 服务发现/lease 注册、独立 Auth Client、可信身份 Header 注入和 HTTP Reverse Proxy。
+- 增加 Gateway 可执行入口与真实 etcd 下 Gateway/Auth/User 注册、登录、认证、资料访问、注销集成测试。
+- 未实现 Chat/Group WebSocket、Hub、Presence、ACK、File、Kafka、Docker 或 Day 2 内容。
+
+### 参考与调整
+
+- 参考 FIM `/api/{service}/...`、etcd 查询、Auth authentication、身份 Header 和 ReverseProxy 业务语义。
+- GIM 改为显式服务表、可扩展多端点 Resolver、lease/keepalive 注册、调用方 context/timeout、身份 Header 先删除后可信注入、安全错误映射和单一 Auth allowlist。
+
+### 测试
+
+- `go test ./...`、Gateway cover、vet、gofmt、安全脚本、diff check -> PASS。
+- Gateway 相关汇总 coverage（含集成测试）：79.5% statements。
+- 真实 etcd Gateway -> Auth -> User 注册/登录/认证/User API/Logout，以及身份 Header 防伪造 -> PASS。
+- etcd health/status 与测试注册清理 -> PASS。
+- race -> NOT RUN - environment limitation，本机 cgo 64 位工具链不可用。
+
+### Git
+
+- commit: PENDING。
+- push: PENDING。
+
+### 下一步
+
+- Checkpoint 5 commit/push 后停止；下一次进入 Checkpoint 6，本轮不实施。

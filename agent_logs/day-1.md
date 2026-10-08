@@ -11,7 +11,7 @@
 - [x] Checkpoint 2B：MySQL、Redis、etcd 客户端。
 - [x] Checkpoint 3：User API / RPC 基础能力。
 - [x] Checkpoint 4：Auth 注册、登录、JWT、Logout。
-- [ ] Checkpoint 5：Gateway 与 Auth 鉴权链路。
+- [x] Checkpoint 5：Gateway 与 Auth 鉴权链路。
 - [ ] Checkpoint 6：Gateway -> Auth -> User 集成测试。
 - [ ] Checkpoint 7：Day 1 数据库底座与 migration。
 - [ ] Checkpoint 8：Web/Admin 基础工程与 build。
@@ -89,3 +89,19 @@
 ## 次步入口
 
 - Checkpoint 4 已完成并推送；下一次仅在用户明确指令下进入 Checkpoint 5 Gateway。
+
+## Checkpoint 5
+
+- 日期：2026-10-08
+- Phase：0.5
+- 主要改动：Gateway 显式服务路由、etcd 多端点 discovery 与 lease registry、Auth Client、身份 Header 防伪造和 HTTP Reverse Proxy。
+- API/Discovery 变化：所有合法 Gateway API 先调用 Auth authentication；新增 `/gim/services/{service}/{instanceID}` 注册契约和 Gateway `1301`–`1306` 错误语义。
+- 安全：删除客户端 `User-ID` / `Role` / `ValidPath`，只注入 Auth 可信身份；仅 Gateway 应公开，内部 API 不作为公网入口。
+- 测试：全量单测、Gateway 相关 79.5% 汇总 coverage、vet、gofmt、安全脚本、真实 etcd Gateway/Auth/User 注册登录认证注销链路均 PASS。
+- Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
+- Commit：PENDING。
+- Push：PENDING。
+
+## 次步入口
+
+- Checkpoint 5 完成实现与验收；commit/push 后停止。下一次仅在用户明确指令下进入 Checkpoint 6。

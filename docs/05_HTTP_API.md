@@ -12,6 +12,10 @@ V1 不强制一次性改成 RESTful status 语义。网关/系统级错误仍应
 
 客户端 Token Header V1 保持：`token: <jwt>`。
 
+Gateway 接受 `/api/{service}/...`，其中 service 仅允许 `auth/user/chat/group/file/settings/logs` 的显式映射。非法路径使用 `1301`，不支持的服务使用 `1302`，服务未注册/发现不可用使用 `1303`，Auth 不可用/超时使用 `1304`，上游连接失败使用 `1305`，代理超时使用 `1306`。系统级错误使用对应的 4xx/5xx HTTP status，响应仍保持统一 envelope。
+
+Gateway 不解析 JWT，也不维护第二套公开路径。每个合法 API 请求都调用 Auth authentication；Auth 返回 `public=true` 时无身份 Header 放行，返回 `authenticated=true` 时 Gateway 注入 `User-ID` / `Role`。任何客户端提供的 `User-ID`、`Role`、`ValidPath` 均先删除。
+
 ## 2. Auth
 
 - `POST /api/auth/login` `{account,password}` -> `{token,user}`；兼容既有请求字段 `userName`，但 `account` 与 `userName` 同时存在时必须一致
