@@ -189,3 +189,35 @@
 ### 下一步
 
 - Checkpoint 5 已完成并推送；下一次进入 Checkpoint 6，本轮不实施。
+
+## 2026-10-08 Day 1 / Phase 0.5 — Checkpoint 6 Core Integration Acceptance
+
+### 目标与修改
+
+- 对既有 Platform/User/Auth/Gateway/MySQL/Redis/etcd 做完整回归、安全、context 与资源生命周期验收。
+- 补充真实链路错误签名/过期凭证、ValidPath 伪造、不可用 upstream 与 lease keepalive/cleanup 测试。
+- 修复 discovery registration Close 未等待 keepalive goroutine 退出的问题；无业务协议、migration 或 Day 2 功能变化。
+
+### 验收结果
+
+- Register/Login/JWT/Gateway/Auth/User 主链路与 public/protected path -> PASS。
+- 缺失、malformed、错误签名、过期、Logout 后凭证 -> 均返回预期 Auth 公开错误。
+- `User-ID` / `Role` / `ValidPath` 伪造 -> 删除后注入普通用户可信身份，PASS。
+- etcd 注册/发现/lease/keepalive/cleanup、服务不存在、lookup timeout、upstream 不可用 -> PASS，服务 key 无残留。
+- 请求 context/timeout 正确传播；HTTP/MySQL/Redis/etcd/RPC/lease 资源关闭与公开错误安全审计 -> PASS。
+
+### 测试
+
+- `go test ./... -count=1`、core cover、`go vet ./...`、gofmt、Secret Scan、diff check -> PASS。
+- 真实 MySQL/Redis/etcd/Gateway/Auth/User/lease 生命周期测试 -> PASS。
+- Day 1 核心汇总 coverage：75.7% statements。
+- race -> NOT RUN - environment limitation，本机 cgo 64 位工具链不可用。
+
+### Git
+
+- commit: PENDING。
+- push: PENDING。
+
+### 下一步
+
+- Checkpoint 6 commit/push 后停止；下一次进入 Checkpoint 7 migration，本轮不实施。

@@ -81,6 +81,13 @@ func (registration *Registration) Close(ctx context.Context) error {
 	registration.once.Do(func() {
 		registration.cancel()
 		_, closeErr = registration.client.Revoke(ctx, registration.leaseID)
+		select {
+		case <-registration.done:
+		case <-ctx.Done():
+			if closeErr == nil {
+				closeErr = ctx.Err()
+			}
+		}
 	})
 	if closeErr != nil {
 		return &operationError{cause: closeErr}

@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 6 — Gateway -> Auth -> User 集成测试（NOT STARTED）
-- **Last Completed Checkpoint:** Checkpoint 5 — Gateway 与 Auth 鉴权链路
+- **Current Checkpoint:** Checkpoint 7 — Day 1 数据库底座与 migration（NOT STARTED）
+- **Last Completed Checkpoint:** Checkpoint 6 — Day 1 Core Integration Acceptance
 - **Last Stable Commit:** `eb9eebc6bfe4ee41c388d6eb6297cbfca43316bf`
-- **Last Push Status:** SUCCESS — Checkpoint 5 pushed to `origin/main`
+- **Last Push Status:** PENDING — Checkpoint 6 delivery not committed yet
 
 ## Completed
 
@@ -20,6 +20,7 @@
 - Auth 注册/登录、bcrypt、JWT Claims/验证、精确公开路径、authentication、Logout Redis blacklist 与 User RPC 适配。
 - Gateway 显式路由、etcd lease 注册/多端点发现、Auth Client、可信身份 Header 注入与 HTTP Reverse Proxy。
 - 真实 etcd 下 Gateway -> Auth -> User 注册、登录、认证、资料访问、注销与身份防伪造集成链路。
+- Day 1 核心主链路、Authentication 异常、Header 防伪造、discovery lease/keepalive/cleanup、context、资源与错误安全验收。
 
 ## In Progress
 
@@ -27,7 +28,6 @@
 
 ## Not Started
 
-- Checkpoint 6：Gateway -> Auth -> User 集成测试。
 - Checkpoint 7：Day 1 数据库底座与 migration。
 - Checkpoint 8：Web/Admin 基础工程与 build。
 - Checkpoint 9：Day 1 全量验收。
@@ -41,6 +41,7 @@
 - Checkpoint 3：全量单测、User 覆盖率、vet、gofmt、安全脚本、HTTP Handler 与内存 gRPC 集成测试 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 4：全量单测、Auth 72.8% 汇总覆盖率、vet、gofmt、安全脚本、真实 Redis blacklist TTL 集成测试 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 5：全量单测、Gateway 相关 79.5% 汇总覆盖率、vet、gofmt、安全脚本、真实 etcd Gateway/Auth/User 全链路与身份 Header 防伪造测试 PASS；race 因相同环境限制为 NOT RUN。
+- Checkpoint 6：非缓存全量测试、Day 1 核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL/Redis/etcd/Gateway/Auth/User 与 lease 生命周期回归 PASS；race 因相同环境限制为 NOT RUN。
 
 ## Known Issues
 
@@ -51,4 +52,4 @@
 
 ## Next Action
 
-- Checkpoint 5 已完成并推送；等待用户继续指令。下一步为 Checkpoint 6，但本轮未进入。
+- Checkpoint 6 验收通过，等待本轮 commit/push 闭环；不进入 Checkpoint 7 migration。

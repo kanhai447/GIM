@@ -12,7 +12,7 @@
 - [x] Checkpoint 3：User API / RPC 基础能力。
 - [x] Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - [x] Checkpoint 5：Gateway 与 Auth 鉴权链路。
-- [ ] Checkpoint 6：Gateway -> Auth -> User 集成测试。
+- [x] Checkpoint 6：Day 1 Core Integration Acceptance。
 - [ ] Checkpoint 7：Day 1 数据库底座与 migration。
 - [ ] Checkpoint 8：Web/Admin 基础工程与 build。
 - [ ] Checkpoint 9：Day 1 全量验收。
@@ -105,3 +105,20 @@
 ## 次步入口
 
 - Checkpoint 5 已完成并推送；下一次仅在用户明确指令下进入 Checkpoint 6。
+
+## Checkpoint 6
+
+- 日期：2026-10-08
+- Phase：0.5
+- 主要内容：既有 Platform/User/Auth/Gateway 核心主链路、异常认证、Header 防伪造、context/timeout、资源关闭、错误与配置安全验收。
+- 小修复：`Registration.Close` 在 revoke 后于调用方 context 内等待 keepalive goroutine 退出。
+- 回归补强：真实链路分别覆盖 malformed、错误签名、过期、注销凭证，补充 ValidPath 伪造、不可用 upstream、2 秒 lease keepalive 与 cleanup。
+- 测试：非缓存全量测试、真实 MySQL/Redis/etcd/Gateway/Auth/User 集成、核心 75.7% 汇总 coverage、vet、gofmt、Secret Scan 均 PASS。
+- Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
+- DB/API/WS 变化：无 migration、无协议或业务功能变化；未进入 Day 2。
+- Commit：PENDING。
+- Push：PENDING。
+
+## 次步入口
+
+- Checkpoint 6 验收通过；commit/push 后停止。下一次仅在用户明确指令下进入 Checkpoint 7 migration。

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	userservice "github.com/kanhai447/GIM/server/internal/user/service"
 	usergrpc "github.com/kanhai447/GIM/server/internal/user/transport/grpc"
 	userhttp "github.com/kanhai447/GIM/server/internal/user/transport/http"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	googlegrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -62,7 +64,8 @@ func TestGatewayAuthUserChain(t *testing.T) {
 	rpcClient, stopRPC := startUserRPC(t, userService)
 	t.Cleanup(stopRPC)
 
-	tokenManager, err := token.NewManager(bytes.Repeat([]byte{0x5a}, 32), time.Hour)
+	authSecret := bytes.Repeat([]byte{0x5a}, 32)
+	tokenManager, err := token.NewManager(authSecret, time.Hour)
 	if err != nil {
 		t.Fatalf("create token manager: %v", err)
 	}
@@ -80,11 +83,13 @@ func TestGatewayAuthUserChain(t *testing.T) {
 	profileHandler := userhttp.NewProfileHandler(userService)
 	var observedRole string
 	var observedUserID string
+	var observedValidPath string
 	var observedMutex sync.Mutex
 	userServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		observedMutex.Lock()
 		observedRole = request.Header.Get("Role")
 		observedUserID = request.Header.Get("User-ID")
+		observedValidPath = request.Header.Get("ValidPath")
 		observedMutex.Unlock()
 		profileHandler.ServeHTTP(writer, request)
 	}))
@@ -147,10 +152,10 @@ func TestGatewayAuthUserChain(t *testing.T) {
 		t.Fatalf("profile through Gateway failed: status=%d code=%d", profileResponse.StatusCode, profileEnvelope.Code)
 	}
 	observedMutex.Lock()
-	role, userID := observedRole, observedUserID
+	role, userID, validPath := observedRole, observedUserID, observedValidPath
 	observedMutex.Unlock()
-	if role != "2" || userID != strconv.FormatUint(loginData.User.UserID, 10) {
-		t.Fatalf("Gateway forwarded identity role=%q userID=%q", role, userID)
+	if role != "2" || userID != strconv.FormatUint(loginData.User.UserID, 10) || validPath != "" {
+		t.Fatalf("Gateway forwarded identity role=%q userID=%q validPath=%q", role, userID, validPath)
 	}
 
 	missingToken := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/user/user_info", nil, "", false)
@@ -160,11 +165,41 @@ func TestGatewayAuthUserChain(t *testing.T) {
 		t.Fatalf("missing-token response status=%d code=%d", missingToken.StatusCode, missingEnvelope.Code)
 	}
 
-	invalidToken := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/user/user_info", nil, "invalid-credential", false)
-	defer invalidToken.Body.Close()
-	invalidEnvelope := decodeGatewayEnvelope(t, invalidToken)
-	if invalidToken.StatusCode != http.StatusUnauthorized || invalidEnvelope.Code != authservice.CodeTokenInvalid {
-		t.Fatalf("invalid-token response status=%d code=%d", invalidToken.StatusCode, invalidEnvelope.Code)
+	malformedToken := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/user/user_info", nil, "invalid-credential", false)
+	defer malformedToken.Body.Close()
+	malformedEnvelope := decodeGatewayEnvelope(t, malformedToken)
+	if malformedToken.StatusCode != http.StatusUnauthorized || malformedEnvelope.Code != authservice.CodeTokenInvalid {
+		t.Fatalf("malformed-token response status=%d code=%d", malformedToken.StatusCode, malformedEnvelope.Code)
+	}
+
+	wrongSignatureManager, err := token.NewManager(bytes.Repeat([]byte{0x6b}, 32), time.Hour)
+	if err != nil {
+		t.Fatalf("create wrong-signature manager: %v", err)
+	}
+	wrongSignatureToken, _, err := wrongSignatureManager.Issue(loginData.User.UserID, loginData.User.Role)
+	if err != nil {
+		t.Fatalf("issue wrong-signature token: %v", err)
+	}
+	wrongSignatureResponse := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/user/user_info", nil, wrongSignatureToken, false)
+	defer wrongSignatureResponse.Body.Close()
+	wrongSignatureEnvelope := decodeGatewayEnvelope(t, wrongSignatureResponse)
+	if wrongSignatureResponse.StatusCode != http.StatusUnauthorized || wrongSignatureEnvelope.Code != authservice.CodeTokenInvalid {
+		t.Fatalf("wrong-signature response status=%d code=%d", wrongSignatureResponse.StatusCode, wrongSignatureEnvelope.Code)
+	}
+
+	expiredManager, err := token.NewManagerWithClock(authSecret, time.Hour, func() time.Time { return time.Now().Add(-2 * time.Hour) })
+	if err != nil {
+		t.Fatalf("create expired-token manager: %v", err)
+	}
+	expiredToken, _, err := expiredManager.Issue(loginData.User.UserID, loginData.User.Role)
+	if err != nil {
+		t.Fatalf("issue expired token: %v", err)
+	}
+	expiredResponse := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/user/user_info", nil, expiredToken, false)
+	defer expiredResponse.Body.Close()
+	expiredEnvelope := decodeGatewayEnvelope(t, expiredResponse)
+	if expiredResponse.StatusCode != http.StatusUnauthorized || expiredEnvelope.Code != authservice.CodeTokenExpired {
+		t.Fatalf("expired-token response status=%d code=%d", expiredResponse.StatusCode, expiredEnvelope.Code)
 	}
 
 	missingService := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/chat/history", nil, loginData.Token, false)
@@ -172,6 +207,23 @@ func TestGatewayAuthUserChain(t *testing.T) {
 	missingServiceEnvelope := decodeGatewayEnvelope(t, missingService)
 	if missingService.StatusCode != http.StatusServiceUnavailable || missingServiceEnvelope.Code != gateway.CodeServiceUnavailable {
 		t.Fatalf("missing-service response status=%d code=%d", missingService.StatusCode, missingServiceEnvelope.Code)
+	}
+
+	unavailableEndpoint, _ := url.Parse("http://127.0.0.1:1")
+	unavailableRegistration, err := registry.Register(lifecycleContext, "chat_api", "acceptance-unavailable", *unavailableEndpoint)
+	if err != nil {
+		t.Fatalf("register unavailable upstream: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = unavailableRegistration.Close(cleanupContext)
+	})
+	unavailableResponse := gatewayRequest(t, gatewayServer.Client(), http.MethodGet, gatewayServer.URL+"/api/chat/history", nil, loginData.Token, false)
+	defer unavailableResponse.Body.Close()
+	unavailableEnvelope := decodeGatewayEnvelope(t, unavailableResponse)
+	if unavailableResponse.StatusCode != http.StatusBadGateway || unavailableEnvelope.Code != proxy.CodeUpstreamUnavailable || strings.Contains(unavailableEnvelope.Msg, unavailableEndpoint.Host) {
+		t.Fatalf("unavailable-upstream response status=%d code=%d", unavailableResponse.StatusCode, unavailableEnvelope.Code)
 	}
 
 	logoutResponse := gatewayRequest(t, gatewayServer.Client(), http.MethodPost, gatewayServer.URL+"/api/auth/logout", nil, loginData.Token, false)
@@ -189,8 +241,100 @@ func TestGatewayAuthUserChain(t *testing.T) {
 	}
 }
 
+func TestDiscoveryLeaseKeepAliveCleanup(t *testing.T) {
+	envFile := os.Getenv("GIM_ENV_FILE")
+	if envFile == "" {
+		t.Skip("set GIM_ENV_FILE to run discovery lifecycle integration tests")
+	}
+	values, err := platformconfig.LoadFile(envFile)
+	if err != nil {
+		t.Fatalf("load local configuration: %v", err)
+	}
+	etcdConfig, err := platformetcd.FromValues(values)
+	if err != nil {
+		t.Fatalf("build etcd configuration: %v", err)
+	}
+	startupContext, startupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
+	startupCancel()
+	if err != nil {
+		t.Fatalf("open etcd client: %v", err)
+	}
+	t.Cleanup(func() { _ = etcdClient.Close() })
+
+	registry, err := discovery.NewRegistry(etcdClient.Raw(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("create registry: %v", err)
+	}
+	lifecycleContext, lifecycleCancel := context.WithCancel(context.Background())
+	defer lifecycleCancel()
+	instanceID := "lease-check-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	endpoint, _ := url.Parse("http://127.0.0.1:65530")
+	registration, err := registry.Register(lifecycleContext, "acceptance_api", instanceID, *endpoint)
+	if err != nil {
+		t.Fatalf("register acceptance service: %v", err)
+	}
+	closed := false
+	t.Cleanup(func() {
+		if closed {
+			return
+		}
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = registration.Close(cleanupContext)
+	})
+
+	prefix, err := discovery.ServicePrefix("acceptance_api")
+	if err != nil {
+		t.Fatalf("build service prefix: %v", err)
+	}
+	key := prefix + instanceID
+	queryContext, queryCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	response, err := etcdClient.Raw().Get(queryContext, key)
+	queryCancel()
+	if err != nil || len(response.Kvs) != 1 || response.Kvs[0].Lease == 0 {
+		t.Fatalf("registered lease unavailable: entries=%d err=%v", len(response.Kvs), err)
+	}
+	leaseID := clientv3.LeaseID(response.Kvs[0].Lease)
+	ttlContext, ttlCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ttl, err := etcdClient.Raw().TimeToLive(ttlContext, leaseID)
+	ttlCancel()
+	if err != nil || ttl == nil || ttl.TTL <= 0 {
+		t.Fatalf("lease TTL unavailable: ttl=%v err=%v", ttl, err)
+	}
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-lifecycleContext.Done():
+		t.Fatal("registration lifecycle ended before keepalive check")
+	}
+	keepaliveContext, keepaliveCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	keepaliveResponse, err := etcdClient.Raw().Get(keepaliveContext, key)
+	keepaliveCancel()
+	if err != nil || len(keepaliveResponse.Kvs) != 1 {
+		t.Fatalf("keepalive did not preserve registration: entries=%d err=%v", len(keepaliveResponse.Kvs), err)
+	}
+
+	closeContext, closeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	err = registration.Close(closeContext)
+	closeCancel()
+	if err != nil {
+		t.Fatalf("close registration: %v", err)
+	}
+	closed = true
+	cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	cleanupResponse, err := etcdClient.Raw().Get(cleanupContext, key)
+	cleanupCancel()
+	if err != nil || len(cleanupResponse.Kvs) != 0 {
+		t.Fatalf("registration cleanup failed: entries=%d err=%v", len(cleanupResponse.Kvs), err)
+	}
+}
+
 type gatewayEnvelope struct {
 	Code uint32          `json:"code"`
+	Msg  string          `json:"msg"`
 	Data json.RawMessage `json:"data"`
 }
 
@@ -209,6 +353,7 @@ func gatewayRequest(t *testing.T, client *http.Client, method, target string, bo
 	if forgedIdentity {
 		request.Header.Set("User-ID", "1")
 		request.Header.Set("Role", "1")
+		request.Header.Set("ValidPath", "/api/auth/login")
 	}
 	response, err := client.Do(request)
 	if err != nil {
