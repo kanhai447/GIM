@@ -14,7 +14,7 @@
 - [x] Checkpoint 5：Gateway 与 Auth 鉴权链路。
 - [x] Checkpoint 6：Day 1 Core Integration Acceptance。
 - [x] Checkpoint 7：Day 1 数据库底座与 migration。
-- [ ] Checkpoint 8：Web/Admin 基础工程与 build。
+- [x] Checkpoint 8：Web/Admin 基础工程与 build。
 - [ ] Checkpoint 9：Day 1 全量验收。
 
 ## Checkpoint 1
@@ -138,3 +138,19 @@
 ## 次步入口
 
 - Checkpoint 7 完成后停止；下一次仅在用户明确指令下进入 Checkpoint 8 Web/Admin 基础工程与 build。
+
+## Checkpoint 8
+
+- 日期：2026-10-08
+- Phase：1
+- Web：Vue 3/TS/Vite/Pinia/Router/Element Plus；完成 Login/Register、typed API Client、Auth Store、session restore、protected guard、Main/Profile 与 Chat/Group/File 占位入口。
+- Admin：Vue 3/TS/Vite/Pinia/Router/Arco/ECharts；完成复用 Auth、role UI guard、Admin Layout、Dashboard 空状态与 User/Chat/Group/File/Settings/Logs 路由骨架。
+- 安全：同源 API + 可配置 dev proxy；`.env.example` 无 Secret；local env、dist、node_modules 忽略；无 token 输出、Mock Dashboard API、`v-html`、WebSocket/File/Kafka 业务。
+- 联调：真实 etcd 下既有 Gateway/Auth/User Register→Login→User Info→Logout→revoked request 集成链路 PASS；前端 API contract 路径/Header PASS。
+- 测试：Web type-check/build + 4 files / 9 tests PASS；Admin type-check/build + 5 files / 9 tests PASS；lint 未配置；Secret Scan PASS。
+- Commits：`19512be` Web，`59490fa` Admin；push：SUCCESS — `origin/main`。
+- DB/API/WS：无数据库变化、无新后端协议、无 WebSocket；仅按既有 HTTP 契约接入基础能力。
+
+## 次步入口
+
+- Checkpoint 8 完成后停止；下一次仅在用户明确指令下进入 Checkpoint 9 Day 1 全量验收。

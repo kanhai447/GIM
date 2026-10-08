@@ -249,3 +249,32 @@
 
 - implementation commit：`b38a893 feat(db): add v1 schema and versioned migrations`，push SUCCESS。
 - Checkpoint 7 完成即停止；Checkpoint 8 Web/Admin 仅在用户明确指令后进入。
+
+## 2026-10-08 Day 1 / Phase 1 — Checkpoint 8 Web + Admin 基础工程
+
+### 目标与修改
+
+- 自主建立相互独立的 Web 与 Admin Vue 3 SPA；统一使用 pnpm、TypeScript、Vite、Pinia、Router 和 typed Axios API 层。
+- Web 使用 Element Plus，完成登录/注册、Auth Store/session restore、protected guard、主布局与 Profile/Chat/Group/File 基础入口。
+- Admin 使用 Arco Design + ECharts，复用现有 Auth，完成 role UI guard、管理布局、Dashboard 空状态及 User/Chat/Group/File/Settings/Logs 骨架。
+- API 默认同源，并由 Vite 开发代理连接可配置 Gateway；无硬编码生产地址或 Secret。
+
+### Reference 与自主实现
+
+- 仅参考 FIM Web 的页面/API 语义和 FIM Admin 的真实模块范围；全部配置、组件、store、HTTP Client、路由和测试均自主编写。
+- 避免原 Admin 错误 Logout URL、三个 Mock Dashboard endpoint 和 `v-html`；没有复制原前端，也没有进入 WebSocket/File/Kafka 业务。
+
+### 验收
+
+- Web：`pnpm install`、type-check、production build、4 files / 9 tests PASS。
+- Admin：`pnpm install`、type-check、production build、5 files / 9 tests PASS；ECharts 按需运行验证 PASS。
+- lint：两端均未配置；没有为本 Checkpoint 无依据新增工具链。
+- 真实 etcd Gateway/Auth/User Register/Login/User Info/Logout/注销后拒绝链路 PASS；前端 API contract 路径和 `token` Header PASS。
+- env/ignore/Secret Scan/diff check PASS；无 Token、JWT signing material、数据库/Redis凭据或 FIM Secret。
+
+### Git / 下一步
+
+- Web commit：`19512be8afe74cd03cb457b0b3a96770f4ac14e0`。
+- Admin commit：`59490fae4e4590e3a91d49a26234c30564065267`。
+- push：SUCCESS — `origin/main`。
+- Checkpoint 8 完成后停止；下一次仅在用户明确指令下进入 Checkpoint 9。

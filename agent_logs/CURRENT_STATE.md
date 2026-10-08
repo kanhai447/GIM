@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 1
-- **Current Checkpoint:** Checkpoint 7 — 正式数据库 Migration + Day 1 数据底座（COMPLETED）
-- **Last Completed Checkpoint:** Checkpoint 7 — 正式数据库 Migration + Day 1 数据底座
-- **Last Stable Commit:** `b38a893` — `feat(db): add v1 schema and versioned migrations`
-- **Last Push Status:** SUCCESS — Checkpoint 7 implementation and status/log records pushed to `origin/main`
+- **Current Checkpoint:** Checkpoint 8 — Web + Admin 基础工程（COMPLETED）
+- **Last Completed Checkpoint:** Checkpoint 8 — Web + Admin 基础工程
+- **Last Stable Commits:** `19512be` — Web foundation；`59490fa` — Admin foundation
+- **Last Push Status:** SUCCESS — Checkpoint 8 Web/Admin implementation pushed to `origin/main`；状态日志随当前提交推送
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -24,6 +24,9 @@
 - Day 1 核心主链路、Authentication 异常、Header 防伪造、discovery lease/keepalive/cleanup、context、资源与错误安全验收。
 - 六个正式 MySQL migration、轻量 Runner/CLI、16 张 V1 业务表、约束/索引、dirty failure state 与 rollback 文档。
 - 真实隔离 MySQL 的字段/default/constraint、9 类重复写入、11 类 EXPLAIN、User/Auth Repository 与 UP/DOWN/UP 回归。
+- 独立 Web Vue 3 SPA：Element Plus、typed API Client、Auth Store、登录/注册、session restore、Router Guard 与主界面/业务占位路由。
+- 独立 Admin Vue 3 SPA：Arco Design、ECharts 按需加载、复用 Auth、role UI guard、Admin Layout 与六类管理页面骨架。
+- Web/Admin 同源 API + 可配置开发 Gateway proxy、安全 env 模板、独立 pnpm lockfiles、类型检查/单测/production build。
 
 ## In Progress
 
@@ -31,7 +34,6 @@
 
 ## Not Started
 
-- Checkpoint 8：Web/Admin 基础工程与 build。
 - Checkpoint 9：Day 1 全量验收。
 
 ## Test Status
@@ -45,13 +47,15 @@
 - Checkpoint 5：全量单测、Gateway 相关 79.5% 汇总覆盖率、vet、gofmt、安全脚本、真实 etcd Gateway/Auth/User 全链路与身份 Header 防伪造测试 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 6：非缓存全量测试、Day 1 核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL/Redis/etcd/Gateway/Auth/User 与 lease 生命周期回归 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 7：非缓存全量测试、核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL UP/DOWN/UP、constraint/EXPLAIN 与 User/Auth 回归 PASS；race 因相同环境限制为 NOT RUN。
+- Checkpoint 8：Web/Admin `pnpm install`、type-check、production build、Secret Scan PASS；Web 4 files / 9 tests、Admin 5 files / 9 tests PASS；真实 etcd Gateway/Auth/User 注册登录资料注销链路 PASS；lint 未配置。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
 - 本机 cgo C 编译器不支持 64 位 race 构建；Day 2 并发验收前需要准备兼容环境。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
+- Auth/User 尚无独立正式命令入口；Checkpoint 8 使用现有真实 etcd Gateway 集成测试验证链路，浏览器到多进程服务的手工联调留给可执行部署入口完善后进行。
 
 ## Next Action
 
-- Checkpoint 7 已完成并推送；等待用户继续指令。下一步为 Checkpoint 8 Web/Admin 基础工程与 build，本轮未进入。
+- Checkpoint 8 已完成并推送；等待用户继续指令。下一步为 Checkpoint 9 Day 1 全量验收，本轮未进入。
