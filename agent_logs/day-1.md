@@ -83,9 +83,9 @@
 - 安全：签名材料仅从安全配置读取；不记录口令/完整认证材料；Redis key 使用 SHA-256 fingerprint；登录失败统一外部提示。
 - 测试：全量单测、72.8% Auth 汇总 coverage、vet、gofmt、安全脚本、真实 Redis TTL 集成测试 PASS。
 - Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`519282dbdfdbead9efeb556e6013dd14104d1c08`。
+- Push：SUCCESS — `origin/main`。
 
 ## 次步入口
 
-- Checkpoint 4 完成 commit/push 后停止；下一次仅在用户明确指令下进入 Checkpoint 5 Gateway。
+- Checkpoint 4 已完成并推送；下一次仅在用户明确指令下进入 Checkpoint 5 Gateway。

@@ -87,10 +87,10 @@
 
 ## Git
 
-- **Commit hash:** PENDING。
-- **Push:** PENDING。
+- **Commit hash:** `519282dbdfdbead9efeb556e6013dd14104d1c08`。
+- **Push:** SUCCESS — `origin/main`。
 
 ## 下一步
 
-- 完成 staged diff、Secret Scan、commit 和 push 后立即停止。
+- Checkpoint 4 已完成测试、Secret Scan、commit 和 push；在稳定节点停止。
 - 下一 Checkpoint：Checkpoint 5 — Gateway 与 Auth 鉴权链路；本次未实现 Gateway。

@@ -153,9 +153,9 @@
 
 ### Git
 
-- commit: PENDING。
-- push: PENDING。
+- commit: `519282dbdfdbead9efeb556e6013dd14104d1c08 feat(auth): add registration jwt authentication and logout`。
+- push: `origin/main` -> SUCCESS。
 
 ### 下一步
 
-- 完成 Checkpoint 4 commit/push 后停止；下一 Checkpoint 为 Gateway，不在本轮实施。
+- Checkpoint 4 已完成并推送；下一 Checkpoint 为 Gateway，不在本轮实施。

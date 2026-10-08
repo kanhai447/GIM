@@ -2,10 +2,10 @@
 
 - **Current Day:** Day 1
 - **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 4 — Auth 注册、登录、JWT、Logout（COMPLETED，等待 commit/push）
-- **Last Completed Checkpoint:** Checkpoint 3 — User API / RPC 基础能力
-- **Last Stable Commit:** `3aa0150ffbeecadbcc872344c70b67cf24a0ce0a`
-- **Last Push Status:** SUCCESS — Checkpoint 3 pushed to `origin/main`
+- **Current Checkpoint:** Checkpoint 5 — Gateway 与 Auth 鉴权链路（NOT STARTED）
+- **Last Completed Checkpoint:** Checkpoint 4 — Auth 注册、登录、JWT、Logout
+- **Last Stable Commit:** `519282dbdfdbead9efeb556e6013dd14104d1c08`
+- **Last Push Status:** SUCCESS — Checkpoint 4 pushed to `origin/main`
 
 ## Completed
 
@@ -21,7 +21,7 @@
 
 ## In Progress
 
-- Checkpoint 4：staged diff、Secret Scan、commit 与 push 交付。
+- 无。
 
 ## Not Started
 
@@ -49,4 +49,4 @@
 
 ## Next Action
 
-- 完成 Checkpoint 4 staged Secret Scan、commit 与 push 后停止；下一步为 Checkpoint 5 Gateway，但本轮不得进入。
+- Checkpoint 4 已完成并推送；等待用户继续指令。下一步为 Checkpoint 5 Gateway，但本轮未进入。
