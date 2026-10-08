@@ -20,6 +20,8 @@ gim:user:base:{uid}                  -> JSON, bounded TTL
 
 Token 黑名单 key 不建议直接把完整 JWT 暴露在 Redis key/log；可以存 token hash/jti。
 
+GIM Auth V1 选择 SHA-256 token fingerprint 作为 `tokenHash`：Logout 写入 `gim:auth:logout:{tokenHash}`，值为 `1`，TTL 严格使用 JWT 的剩余有效时间；authentication 先完成验签/过期校验，再查询该 key。原始 JWT 不进入 Redis key、value 或日志。
+
 ## 2. Presence 规则
 
 - Chat WS register 首连接写/刷新；

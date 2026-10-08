@@ -14,11 +14,15 @@ V1 不强制一次性改成 RESTful status 语义。网关/系统级错误仍应
 
 ## 2. Auth
 
-- `POST /api/auth/login` `{userName,password}` -> `{token}`
-- `POST /api/auth/register` `{nickname,pwd,rePwd}` -> `{userID}`
-- `POST /api/auth/authentication` 内部/网关认证，兼容原 Header `Token`/`ValidPath`
-- `POST /api/auth/logout`
+- `POST /api/auth/login` `{account,password}` -> `{token,user}`；兼容既有请求字段 `userName`，但 `account` 与 `userName` 同时存在时必须一致
+- `POST /api/auth/register` `{account,nickname,pwd,rePwd}` -> 公开用户资料；不得返回密码哈希
+- `POST /api/auth/authentication` 内部/网关认证，兼容原 Header `Token`/`ValidPath`，返回 `{userID,role,authenticated,public}`
+- `POST /api/auth/logout`，从 `token` Header 读取 JWT，并返回 `{loggedOut:true}`
 - `POST /api/auth/open_login` 可保留但非 V1 验收重点
+
+JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和过期时间分别从 `JWT_SECRET`、`JWT_EXPIRE_SECONDS` 读取；错误响应不得暴露验签细节。
+
+`authentication` 的 V1 精确公开路径为：`/api/auth/login`、`/api/auth/register`、`/api/auth/open_login`、`/api/settings/info`、`/api/settings/open_login`。允许携带 query，但路径必须完全匹配；禁止 substring 或正则模糊放行。
 
 ## 3. User
 
@@ -92,6 +96,8 @@ V1 不强制一次性改成 RESTful status 语义。网关/系统级错误仍应
 优先复用参考项目现有 code。新增错误至少区分：未认证/无权限、参数错误、好友关系不存在、群成员不存在/禁言、重复 clientMsgId（应返回原消息而非失败）、消息不存在/无权撤回、文件超限/类型不允许、系统错误。
 
 User 基础能力使用：`1001` 参数错误、`1101` 用户不存在、`1102` 账号已存在；数据库原始错误只作为服务端私有 cause，不进入 HTTP/RPC 响应。
+
+Auth 使用：`1201` 账号或密码错误、`1202` 用户禁用、`1203` Token 缺失、`1204` Token 非法、`1205` Token 过期、`1206` Token 已注销。登录的账号不存在与密码错误统一返回 `1201`，避免账号枚举；User RPC/Redis 内部错误使用安全的通用系统错误。
 
 ## 8. API 兼容规则
 

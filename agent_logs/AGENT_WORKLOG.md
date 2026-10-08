@@ -129,3 +129,33 @@
 ### 下一步
 
 - Checkpoint 3 已完成并推送；停止，下一次进入 Checkpoint 4 Auth。
+
+## 2026-10-08 Day 1 / Phase 0.5 — Checkpoint 4 Auth 服务
+
+### 目标与修改
+
+- 自主实现 Auth 注册、登录、bcrypt、JWT、authentication、Logout 与 Redis blacklist。
+- 新增 User RPC 适配、统一 Redis key helper、四个 HTTP Handler 和真实 Redis TTL 集成测试。
+- 未实现 Gateway、第三方登录、migration 或任何 Day 2 内容。
+
+### 参考与调整
+
+- 参考 FIM Auth 路由、`Token`/`ValidPath`、User/Settings RPC 边界和 Logout TTL 语义。
+- GIM 改为 Auth 侧强哈希、User RPC 登录查询、精确公开路径、`jti/iat/exp` Claims、SHA-256 fingerprint key、调用方 context 传播和安全错误映射。
+
+### 测试
+
+- `go test ./...`、Auth cover、vet、gofmt、安全脚本、diff check -> PASS。
+- Auth + Redis key helper 汇总 coverage：72.8% statements。
+- 真实本地 Redis blacklist 写入、查询与 TTL -> PASS。
+- race -> NOT RUN - environment limitation，本机 cgo 64 位工具链不可用。
+- 额外基础设施复核：MySQL/Redis PASS；本机 etcd 未运行，因此既有 etcd health test 连接被拒绝。
+
+### Git
+
+- commit: PENDING。
+- push: PENDING。
+
+### 下一步
+
+- 完成 Checkpoint 4 commit/push 后停止；下一 Checkpoint 为 Gateway，不在本轮实施。

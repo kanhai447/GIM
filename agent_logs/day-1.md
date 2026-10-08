@@ -10,7 +10,7 @@
 - [x] Checkpoint 2A：配置、统一错误与 HTTP 响应。
 - [x] Checkpoint 2B：MySQL、Redis、etcd 客户端。
 - [x] Checkpoint 3：User API / RPC 基础能力。
-- [ ] Checkpoint 4：Auth 注册、登录、JWT、Logout。
+- [x] Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - [ ] Checkpoint 5：Gateway 与 Auth 鉴权链路。
 - [ ] Checkpoint 6：Gateway -> Auth -> User 集成测试。
 - [ ] Checkpoint 7：Day 1 数据库底座与 migration。
@@ -73,3 +73,19 @@
 ## 次步入口
 
 - Checkpoint 3 已完成并推送；下一次从 Checkpoint 4 Auth 注册、登录、JWT、Logout 基础链路恢复。
+
+## Checkpoint 4
+
+- 日期：2026-10-08
+- Phase：0.5
+- 主要改动：Auth 注册/登录、bcrypt、JWT Claims 与验证、精确公开路径、authentication、Logout Redis blacklist、User RPC 适配与 HTTP Handler。
+- DB/API/Redis 变化：无 migration；实现四个 Auth HTTP 路由；新增统一 `gim:auth:logout:{tokenHash}`，TTL 为 JWT 剩余时间。
+- 安全：签名材料仅从安全配置读取；不记录口令/完整认证材料；Redis key 使用 SHA-256 fingerprint；登录失败统一外部提示。
+- 测试：全量单测、72.8% Auth 汇总 coverage、vet、gofmt、安全脚本、真实 Redis TTL 集成测试 PASS。
+- Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
+- Commit：PENDING。
+- Push：PENDING。
+
+## 次步入口
+
+- Checkpoint 4 完成 commit/push 后停止；下一次仅在用户明确指令下进入 Checkpoint 5 Gateway。
