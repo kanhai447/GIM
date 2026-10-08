@@ -1,11 +1,12 @@
 # GIM Current State
 
 - **Current Day:** Day 1
-- **Current Phase:** Phase 0.5
-- **Current Checkpoint:** Checkpoint 7 — Day 1 数据库底座与 migration（NOT STARTED）
-- **Last Completed Checkpoint:** Checkpoint 6 — Day 1 Core Integration Acceptance
-- **Last Stable Commit:** `af53a76a1217918fb2f2008b068ff451908bbd95`
-- **Last Push Status:** SUCCESS — Checkpoint 6 pushed to `origin/main`
+- **Current Phase:** Phase 1
+- **Current Checkpoint:** Checkpoint 7 — 正式数据库 Migration + Day 1 数据底座（COMPLETED）
+- **Last Completed Checkpoint:** Checkpoint 7 — 正式数据库 Migration + Day 1 数据底座
+- **Last Stable Commit:** `b38a893` — `feat(db): add v1 schema and versioned migrations`
+- **Last Push Status:** SUCCESS — Checkpoint 7 implementation and status/log records pushed to `origin/main`
+- **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
 
@@ -21,6 +22,8 @@
 - Gateway 显式路由、etcd lease 注册/多端点发现、Auth Client、可信身份 Header 注入与 HTTP Reverse Proxy。
 - 真实 etcd 下 Gateway -> Auth -> User 注册、登录、认证、资料访问、注销与身份防伪造集成链路。
 - Day 1 核心主链路、Authentication 异常、Header 防伪造、discovery lease/keepalive/cleanup、context、资源与错误安全验收。
+- 六个正式 MySQL migration、轻量 Runner/CLI、16 张 V1 业务表、约束/索引、dirty failure state 与 rollback 文档。
+- 真实隔离 MySQL 的字段/default/constraint、9 类重复写入、11 类 EXPLAIN、User/Auth Repository 与 UP/DOWN/UP 回归。
 
 ## In Progress
 
@@ -28,7 +31,6 @@
 
 ## Not Started
 
-- Checkpoint 7：Day 1 数据库底座与 migration。
 - Checkpoint 8：Web/Admin 基础工程与 build。
 - Checkpoint 9：Day 1 全量验收。
 
@@ -42,14 +44,14 @@
 - Checkpoint 4：全量单测、Auth 72.8% 汇总覆盖率、vet、gofmt、安全脚本、真实 Redis blacklist TTL 集成测试 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 5：全量单测、Gateway 相关 79.5% 汇总覆盖率、vet、gofmt、安全脚本、真实 etcd Gateway/Auth/User 全链路与身份 Header 防伪造测试 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 6：非缓存全量测试、Day 1 核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL/Redis/etcd/Gateway/Auth/User 与 lease 生命周期回归 PASS；race 因相同环境限制为 NOT RUN。
+- Checkpoint 7：非缓存全量测试、核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL UP/DOWN/UP、constraint/EXPLAIN 与 User/Auth 回归 PASS；race 因相同环境限制为 NOT RUN。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
 - 本机 cgo C 编译器不支持 64 位 race 构建；Day 2 并发验收前需要准备兼容环境。
-- users 正式 migration 尚未创建；按 Day 1 边界留在 Checkpoint 7，当前 Repository 只经过单元测试。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
 
 ## Next Action
 
-- Checkpoint 6 已完成并推送；等待用户继续指令。下一步为 Checkpoint 7 migration，但本轮未进入。
+- Checkpoint 7 已完成并推送；等待用户继续指令。下一步为 Checkpoint 8 Web/Admin 基础工程与 build，本轮未进入。

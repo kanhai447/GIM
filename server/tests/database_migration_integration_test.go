@@ -70,7 +70,13 @@ func TestDatabaseMigrationsAndUserAuthRegression(t *testing.T) {
 	t.Cleanup(func() {
 		_ = testDB.Close()
 		if migrationDatabasePattern.MatchString(testDatabase) {
-			_, _ = adminDB.Exec("DROP DATABASE IF EXISTS `" + testDatabase + "`")
+			if _, err := adminDB.Exec("DROP DATABASE IF EXISTS `" + testDatabase + "`"); err != nil {
+				t.Errorf("drop isolated migration database: %v", err)
+			}
+			var remaining int
+			if err := adminDB.QueryRow(`SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = ?`, testDatabase).Scan(&remaining); err != nil || remaining != 0 {
+				t.Errorf("isolated migration database cleanup: remaining=%d err=%v", remaining, err)
+			}
 		}
 		_ = adminDB.Close()
 	})

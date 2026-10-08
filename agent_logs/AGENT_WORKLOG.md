@@ -221,3 +221,31 @@
 ### 下一步
 
 - Checkpoint 6 已完成并推送；下一次进入 Checkpoint 7 migration，本轮不实施。
+
+## 2026-10-08 Day 1 / Phase 1 — Checkpoint 7 正式数据库底座
+
+### 目标与修改
+
+- 新增 001–006 成对 UP/DOWN SQL、嵌入式轻量 migration Runner/CLI 和 dirty failure state。
+- 正式建立 Identity/Friend/Private Chat/Group/File/Settings 共 16 张 V1 业务表，并将 User Domain/GORM record 与 Schema 对齐。
+- 新增隔离 MySQL 集成验收：字段/default/collation/index、真实 duplicate constraint、11 类 EXPLAIN、User/Auth 注册登录、UP/DOWN/RE-UP。
+
+### Reference 与自主改进
+
+- 只读参考 FIM 相关 Model/查询的业务语义，没有复制 SQL、GORM Model 或配置。
+- GIM 使用清晰 pending 状态、clientMsgId 幂等、独立 chat/group session、用户维度隐藏/删除、SHA-256 FileObject/UserFile 分层和公开 Settings 边界。
+- V1 统一无数据库 FK，通过服务事务、唯一/非空/CHECK/索引保持一致性；明确好友接受、消息+session、建群+owner member、文件补偿边界。
+
+### 验收
+
+- EMPTY→UP、重复 UP、ALL DOWN、RE-UP：PASS；隔离测试库自动清理。
+- 9 类 duplicate insert：全部被预期唯一约束拒绝。
+- 11 类 EXPLAIN：索引与谓词/排序匹配；小数据量下两类历史查询由 optimizer 选择 PRIMARY 反向扫描，设计组合索引仍为 possible key。
+- User/Auth 真实 Repository + gRPC 注册、登录、lookup：PASS。
+- `go test ./... -count=1`、75.7% core coverage、vet、gofmt、Secret Scan：PASS。
+- Race：NOT RUN - environment limitation（Windows cgo 64 位编译器限制）。
+
+### Git / 下一步
+
+- implementation commit：`b38a893 feat(db): add v1 schema and versioned migrations`，push SUCCESS。
+- Checkpoint 7 完成即停止；Checkpoint 8 Web/Admin 仅在用户明确指令后进入。

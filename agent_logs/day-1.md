@@ -13,7 +13,7 @@
 - [x] Checkpoint 4：Auth 注册、登录、JWT、Logout。
 - [x] Checkpoint 5：Gateway 与 Auth 鉴权链路。
 - [x] Checkpoint 6：Day 1 Core Integration Acceptance。
-- [ ] Checkpoint 7：Day 1 数据库底座与 migration。
+- [x] Checkpoint 7：Day 1 数据库底座与 migration。
 - [ ] Checkpoint 8：Web/Admin 基础工程与 build。
 - [ ] Checkpoint 9：Day 1 全量验收。
 
@@ -122,3 +122,19 @@
 ## 次步入口
 
 - Checkpoint 6 已完成并推送；下一次仅在用户明确指令下进入 Checkpoint 7 migration。
+
+## Checkpoint 7
+
+- 日期：2026-10-08
+- Phase：1
+- 主要改动：六个版本化 UP/DOWN migration、轻量 Runner/CLI、16 张 V1 业务表、正式 unique/check/default/index、User GORM 对齐和隔离 MySQL 验收。
+- 数据设计：好友双向行 + pending pair 唯一；私聊/群聊 session 分离；clientMsgId 幂等；用户维度隐藏/删除；SHA-256 FileObject/UserFile 分层；Settings 与部署 Secret 分离；统一无数据库 FK。
+- 实测：EMPTY→UP、重复 UP、ALL DOWN、RE-UP、9 类重复写入、11 类 EXPLAIN、真实 User Repository/Auth 注册登录与 lookup 全部 PASS，临时库已清理。
+- 测试：`go test ./... -count=1`、75.7% 核心汇总 coverage、vet、gofmt、Secret Scan PASS。
+- Race：NOT RUN - environment limitation，本机 cgo C 编译器不支持 64 位模式。
+- Implementation commit：`b38a893`；push：SUCCESS — `origin/main`。
+- DB/API/WS：新增正式 Schema 与 migration 命令；无新 HTTP/WS 协议，无 Day 2 行为。
+
+## 次步入口
+
+- Checkpoint 7 完成后停止；下一次仅在用户明确指令下进入 Checkpoint 8 Web/Admin 基础工程与 build。
