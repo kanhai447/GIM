@@ -183,9 +183,9 @@
 
 ### Git
 
-- commit: PENDING。
-- push: PENDING。
+- commit: `eb9eebc6bfe4ee41c388d6eb6297cbfca43316bf feat(gateway): add auth-aware service proxy`。
+- push: `origin/main` -> SUCCESS。
 
 ### 下一步
 
-- Checkpoint 5 commit/push 后停止；下一次进入 Checkpoint 6，本轮不实施。
+- Checkpoint 5 已完成并推送；下一次进入 Checkpoint 6，本轮不实施。

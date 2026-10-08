@@ -4,8 +4,8 @@
 - **Current Phase:** Phase 0.5
 - **Current Checkpoint:** Checkpoint 6 — Gateway -> Auth -> User 集成测试（NOT STARTED）
 - **Last Completed Checkpoint:** Checkpoint 5 — Gateway 与 Auth 鉴权链路
-- **Last Stable Commit:** `519282dbdfdbead9efeb556e6013dd14104d1c08`
-- **Last Push Status:** PENDING — Checkpoint 5 delivery not committed yet
+- **Last Stable Commit:** `eb9eebc6bfe4ee41c388d6eb6297cbfca43316bf`
+- **Last Push Status:** SUCCESS — Checkpoint 5 pushed to `origin/main`
 
 ## Completed
 
@@ -51,4 +51,4 @@
 
 ## Next Action
 
-- Checkpoint 5 已完成实现与验收，等待本轮 commit/push 闭环；不进入 Checkpoint 6。
+- Checkpoint 5 已完成并推送；等待用户继续指令。下一步为 Checkpoint 6，但本轮未进入。

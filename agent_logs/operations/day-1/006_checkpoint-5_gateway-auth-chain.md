@@ -108,10 +108,10 @@
 
 ## Git
 
-- **Commit hash:** PENDING。
-- **Push:** PENDING。
+- **Commit hash:** `eb9eebc6bfe4ee41c388d6eb6297cbfca43316bf`。
+- **Push:** SUCCESS — `origin/main`。
 
 ## 下一步
 
-- Checkpoint 5 实现与验收完成；完成 commit/push 后立即停止。
+- Checkpoint 5 实现、验收、commit 与 push 已完成；在稳定节点立即停止。
 - 下一 Checkpoint：Checkpoint 6 — Gateway -> Auth -> User 集成测试；本次不进入。

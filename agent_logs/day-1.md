@@ -99,9 +99,9 @@
 - 安全：删除客户端 `User-ID` / `Role` / `ValidPath`，只注入 Auth 可信身份；仅 Gateway 应公开，内部 API 不作为公网入口。
 - 测试：全量单测、Gateway 相关 79.5% 汇总 coverage、vet、gofmt、安全脚本、真实 etcd Gateway/Auth/User 注册登录认证注销链路均 PASS。
 - Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`eb9eebc6bfe4ee41c388d6eb6297cbfca43316bf`。
+- Push：SUCCESS — `origin/main`。
 
 ## 次步入口
 
-- Checkpoint 5 完成实现与验收；commit/push 后停止。下一次仅在用户明确指令下进入 Checkpoint 6。
+- Checkpoint 5 已完成并推送；下一次仅在用户明确指令下进入 Checkpoint 6。
