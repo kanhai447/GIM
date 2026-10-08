@@ -215,9 +215,9 @@
 
 ### Git
 
-- commit: PENDING。
-- push: PENDING。
+- commit: `af53a76a1217918fb2f2008b068ff451908bbd95 test(day1): verify core auth gateway user integration`。
+- push: `origin/main` -> SUCCESS。
 
 ### 下一步
 
-- Checkpoint 6 commit/push 后停止；下一次进入 Checkpoint 7 migration，本轮不实施。
+- Checkpoint 6 已完成并推送；下一次进入 Checkpoint 7 migration，本轮不实施。

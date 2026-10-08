@@ -116,9 +116,9 @@
 - 测试：非缓存全量测试、真实 MySQL/Redis/etcd/Gateway/Auth/User 集成、核心 75.7% 汇总 coverage、vet、gofmt、Secret Scan 均 PASS。
 - Race：本机 cgo C 编译器不支持 64 位模式，NOT RUN - environment limitation。
 - DB/API/WS 变化：无 migration、无协议或业务功能变化；未进入 Day 2。
-- Commit：PENDING。
-- Push：PENDING。
+- Commit：`af53a76a1217918fb2f2008b068ff451908bbd95`。
+- Push：SUCCESS — `origin/main`。
 
 ## 次步入口
 
-- Checkpoint 6 验收通过；commit/push 后停止。下一次仅在用户明确指令下进入 Checkpoint 7 migration。
+- Checkpoint 6 已完成并推送；下一次仅在用户明确指令下进入 Checkpoint 7 migration。

@@ -4,8 +4,8 @@
 - **Current Phase:** Phase 0.5
 - **Current Checkpoint:** Checkpoint 7 — Day 1 数据库底座与 migration（NOT STARTED）
 - **Last Completed Checkpoint:** Checkpoint 6 — Day 1 Core Integration Acceptance
-- **Last Stable Commit:** `eb9eebc6bfe4ee41c388d6eb6297cbfca43316bf`
-- **Last Push Status:** PENDING — Checkpoint 6 delivery not committed yet
+- **Last Stable Commit:** `af53a76a1217918fb2f2008b068ff451908bbd95`
+- **Last Push Status:** SUCCESS — Checkpoint 6 pushed to `origin/main`
 
 ## Completed
 
@@ -52,4 +52,4 @@
 
 ## Next Action
 
-- Checkpoint 6 验收通过，等待本轮 commit/push 闭环；不进入 Checkpoint 7 migration。
+- Checkpoint 6 已完成并推送；等待用户继续指令。下一步为 Checkpoint 7 migration，但本轮未进入。

@@ -110,10 +110,10 @@
 
 ## Git
 
-- **Commit:** PENDING。
-- **Push:** PENDING。
+- **Commit:** `af53a76a1217918fb2f2008b068ff451908bbd95`。
+- **Push:** SUCCESS — `origin/main`。
 
 ## 下一步
 
-- Checkpoint 6 验收已通过；完成 commit/push 后停止。
+- Checkpoint 6 验收、commit 与 push 已完成；在稳定节点停止。
 - 下一 Checkpoint：Checkpoint 7 — Day 1 数据库底座与 migration；本次不进入。
