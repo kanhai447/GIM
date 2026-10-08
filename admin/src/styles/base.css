@@ -1,0 +1,6 @@
+:root { font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; color: #17243d; background: #f3f5f8; font-synthesis: none; text-rendering: optimizeLegibility; }
+* { box-sizing: border-box; }
+html, body, #app { min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; }
+button, input { font: inherit; }
+.arco-menu-dark, .arco-menu.arco-menu-dark { background: transparent; }

@@ -1,5 +1,13 @@
 # GIM Admin
 
-`admin/` is the independent Vue 3 administration application for GIM. It is separate from the user Web application and will use pnpm.
+Independent Vue 3 administration application for GIM. It uses TypeScript, Vite, Pinia, Vue Router, Axios, Arco Design and an on-demand ECharts runtime.
 
-The application will be created in Day 1 Checkpoint 8. This checkpoint reserves the GIM-owned source boundary without copying files or dependencies from `reference/fim_admin-master`. Mock-only FIM dashboard endpoints are not treated as implemented GIM APIs.
+```powershell
+Copy-Item .env.example .env.local
+pnpm install
+pnpm type-check
+pnpm test
+pnpm build
+```
+
+`VITE_API_BASE_URL=/` keeps browser requests same-origin. During local development, Vite proxies `/api` to the public Gateway configured by `VITE_DEV_GATEWAY_TARGET`; production should provide the same path through its edge proxy. Admin reuses `/api/auth/login` and `/api/auth/logout`; frontend role checks improve navigation but are never the authorization boundary. Dashboard metrics are intentionally empty until real server APIs exist. No Mock `/api/data/*`, unsafe `v-html`, WebSocket, upload or Kafka behavior is included in Checkpoint 8.
