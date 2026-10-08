@@ -1,0 +1,16 @@
+:root { font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; color: #17243d; background: #f4f6f9; font-synthesis: none; text-rendering: optimizeLegibility; }
+* { box-sizing: border-box; }
+html, body, #app { min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; }
+button, input { font: inherit; }
+.auth-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .8fr); align-items: center; gap: clamp(40px, 8vw, 120px); padding: clamp(28px, 7vw, 100px); background: radial-gradient(circle at 15% 20%, #dceaff 0, transparent 36%), linear-gradient(135deg, #f7f9fc, #eef3fb); }
+.auth-intro h1 { margin: 16px 0; font-size: clamp(46px, 7vw, 84px); line-height: .98; letter-spacing: -.04em; }
+.auth-intro p { max-width: 620px; color: #60708a; font-size: 17px; line-height: 1.8; }
+.eyebrow { color: #4774bd; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.auth-card { width: 100%; max-width: 470px; justify-self: end; padding: 12px; border: 1px solid rgba(49,94,168,.12); border-radius: 18px; box-shadow: 0 28px 70px rgba(38,58,91,.12); }
+.auth-card h2 { margin-bottom: 6px; font-size: 28px; }
+.muted { color: #8993a4; }
+.submit { width: 100%; margin-top: 8px; }
+.switch-link { margin: 22px 0 4px; color: #7b8798; text-align: center; }
+.switch-link a { color: #315ea8; font-weight: 700; text-decoration: none; }
+@media (max-width: 820px) { .auth-page { grid-template-columns: 1fr; } .auth-intro { display: none; } .auth-card { justify-self: center; } }

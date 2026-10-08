@@ -1,5 +1,13 @@
 # GIM Web
 
-`web/` is the independent Vue 3 user application for GIM. It will use TypeScript, Pinia, Vue Router, Axios, Element Plus, Vite, and pnpm.
+Independent Vue 3 user application for GIM. It uses TypeScript, Vite, Pinia, Vue Router, Axios and Element Plus.
 
-The application will be created in Day 1 Checkpoint 8. This checkpoint reserves the GIM-owned source boundary without copying files or dependencies from `reference/fim_web-master`.
+```powershell
+Copy-Item .env.example .env.local
+pnpm install
+pnpm type-check
+pnpm test
+pnpm build
+```
+
+`VITE_API_BASE_URL=/` keeps browser requests same-origin. During local development, Vite proxies `/api` to the public Gateway configured by `VITE_DEV_GATEWAY_TARGET`; production should provide the same path through its edge proxy. Local `.env.local`, tokens, service credentials and signing material must never be committed. Chat, Group and File routes are intentional placeholders in Checkpoint 8; no WebSocket or upload behavior is implemented yet.
