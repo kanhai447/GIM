@@ -19,6 +19,7 @@ dist/
 # Logs and temporary files.
 logs/
 *.log
+.tmp/
 tmp/
 temp/
 
