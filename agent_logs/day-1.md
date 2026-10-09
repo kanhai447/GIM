@@ -15,7 +15,7 @@
 - [x] Checkpoint 6：Day 1 Core Integration Acceptance。
 - [x] Checkpoint 7：Day 1 数据库底座与 migration。
 - [x] Checkpoint 8：Web/Admin 基础工程与 build。
-- [ ] Checkpoint 9：Day 1 全量验收。
+- [x] Checkpoint 9：Day 1 全量验收与冻结。
 
 ## Checkpoint 1
 
@@ -154,3 +154,93 @@
 ## 次步入口
 
 - Checkpoint 8 完成后停止；下一次仅在用户明确指令下进入 Checkpoint 9 Day 1 全量验收。
+
+## Checkpoint 9
+
+- 日期：2026-10-09
+- Phase：1 Final Acceptance & Freeze。
+- 补齐正式入口：Auth API、User API、User RPC；与既有 Gateway/Migrate 共同形成可启动 Day 1 后端。
+- 修复 Windows 下 go-zero REST signal hook 不执行 shutdown 的问题；四个进程 Ctrl+C 均 exit 0，etcd key immediate cleanup。
+- 真实多进程：Register→Login→Gateway/Auth→User Info→Logout→旧 credential 拒绝；Header spoofing、service missing、upstream unavailable 均 PASS。
+- Database：隔离 MySQL UP/DOWN/dirty fail-fast/RE-UP、约束/EXPLAIN/User/Auth 回归 PASS。
+- Backend：全量非缓存 test、vet、gofmt PASS；核心 coverage 76.7%。
+- Web：type-check/build、4 files / 9 tests PASS；Admin：type-check/build、5 files / 9 tests PASS；lint 均未配置。
+- Security/reference：Secret Scan、ignore、协议、context/resource、reference independence PASS。
+- Race：NOT RUN - environment limitation，Windows cgo C compiler 不支持 64 位模式。
+- Runtime commit：`67d1077e20cda66169a755cae9f36c7996c8a09c`；push SUCCESS。
+- DB/API/WS：无新业务协议、无 schema 变化；只新增正式 runtime wiring 与 migration 验收测试，未进入 Day 2。
+
+# Day 1 Final Summary
+
+## Phase 0
+
+- 完成三份 FIM reference 只读审计、安全边界确认、Git/GitHub 基线、`.gitignore`、安全脚本和独立 `server/ web/ admin/` 空骨架。
+- Reference 未进入 Git，也不是编译/运行依赖；GIM 从空工程自主实现。
+
+## Phase 0.5
+
+- 完成安全 dotenv 配置、统一应用错误/HTTP envelope、MySQL/GORM、Redis、etcd 客户端与显式 Close。
+- 完成 User Domain/Repository/HTTP/gRPC、Auth 注册登录/JWT/Logout blacklist、Gateway/Auth/discovery/proxy 主链路。
+- 完成真实基础设施集成、Header 防伪造、context/timeout、错误安全与 lease 生命周期验收。
+
+## Phase 1
+
+- 完成六个版本化 migration、16 张 V1 业务表、约束/索引/dirty protection/UP-DOWN-RE-UP。
+- 完成独立 Web 与 Admin 基础工程、typed HTTP/Auth/Router/store/layout/page skeleton。
+- 补齐 Gateway、Auth API、User API、User RPC 正式 runtime，完成真实多进程最终验收与 Day 1 freeze。
+
+## Backend
+
+- 可启动命令：`cmd/gateway`、`cmd/auth-api`、`cmd/user-api`、`cmd/user-rpc`、`cmd/migrate`。
+- Gateway 保持 Client → Gateway → Auth → Gateway → Business Service；不在 Gateway 本地验签。
+- Auth API 使用 Redis logout fingerprint TTL，User API/RPC 使用真实 MySQL；API 服务使用 etcd lease 注册。
+- startup/shutdown timeout 配置化；HTTP/gRPC、MySQL、Redis、etcd、lease/keepalive 和连接均有关闭路径。
+
+## Database
+
+- Migration 001–006 覆盖 Identity、Friend、Chat、Group、File、Settings；正式 schema 不依赖 AutoMigrate。
+- clientMsgId 幂等、chat/group sessions、unread/read/top、SHA-256 FileObject/UserFile 字段和关键索引已准备。
+- 真实隔离 MySQL 的 UP、重复 UP、DOWN、dirty fail-fast、RE-UP、9 类 duplicate constraint、11 类 EXPLAIN 全部 PASS。
+
+## Web
+
+- Vue 3 + TypeScript + Vite + Pinia + Router + Axios + Element Plus。
+- Login/Register、Auth Store、session restore、Router Guard、User Info、Logout、Main/Profile，以及 Chat/Group/File 占位入口完成。
+- 同源 API + 可配置 Vite Gateway proxy；未提前实现实时业务。
+
+## Admin
+
+- 独立 Vue 3 + TypeScript + Vite + Pinia + Router + Axios + Arco Design + ECharts SPA。
+- Login/Forbidden、role UI guard、Admin Layout、Dashboard 空状态和 User/Chat/Group/File/Settings/Logs 路由骨架完成。
+- 不信任前端 role 作为服务端安全边界；未接入 FIM Mock Dashboard 或危险 HTML 渲染。
+
+## Security
+
+- Auth 错误签名/过期/注销、公开/保护路径、Header spoofing 与安全 Gateway/discovery/proxy 错误均通过。
+- `.env.local`、reference、private key、真实凭据、完整 credential、node_modules/dist/local data 均未跟踪。
+- `server/web/admin` 无 reference import、runtime read、symlink、module/package/build dependency。
+
+## Tests
+
+- Backend：`go test ./... -count=1`、`go vet ./...`、gofmt PASS；核心 coverage 76.7%。
+- Integration：真实 MySQL/Redis/etcd、正式四进程 Gateway/Auth/User、lease keepalive/revoke、migration 全部 PASS。
+- Web：type-check/build PASS，4 files / 9 tests；Admin：type-check/build PASS，5 files / 9 tests；lint NOT CONFIGURED。
+- Race：NOT RUN - environment limitation，未虚报 PASS。
+
+## Known Issues
+
+- Windows cgo C compiler 不支持 64 位 race；Day 2 WebSocket 并发开发前应优先准备兼容环境。
+- 本机 `protoc 3.9.0` 较旧，新增 RPC 契约时需验证插件兼容性。
+- Gateway V1 只选择排序后的首个 lease endpoint；负载均衡和主动健康探测留待后续多实例阶段。
+
+## Explicitly Not Implemented
+
+- Day 2：Chat WebSocket、Hub/Client、readPump/writePump、Ping/Pong、Presence、ACK、clientMsgId 实时逻辑、session/unread 业务。
+- Day 3：Group WebSocket、群消息可靠性、文件上传/下载/预览、Web 自动重连与实时状态。
+- Day 4：真实 Admin 管理 API、Kafka/Logs 完整链路、最终部署与完整 V1 release。
+- Docker Compose 最终部署、WebRTC、WS ticket、多实例 WS 路由均未在 Day 1 实现。
+
+## Day 1 Freeze
+
+- **DAY 1 = COMPLETED**。
+- Checkpoint 9 完成后停止；Day 2 状态为 **NOT STARTED**，当前 **Next Authorized Work: NONE**。

@@ -1,11 +1,14 @@
 # GIM Current State
 
-- **Current Day:** Day 1
-- **Current Phase:** Phase 1
-- **Current Checkpoint:** Checkpoint 8 — Web + Admin 基础工程（COMPLETED）
-- **Last Completed Checkpoint:** Checkpoint 8 — Web + Admin 基础工程
-- **Last Stable Commits:** `19512be` — Web foundation；`59490fa` — Admin foundation
-- **Last Push Status:** SUCCESS — Checkpoint 8 Web/Admin implementation pushed to `origin/main`；状态日志随当前提交推送
+- **Current Day:** DAY 1 COMPLETED
+- **Current Phase:** PHASE 1 COMPLETED
+- **Current Checkpoint:** CHECKPOINT 9 COMPLETED
+- **Last Completed Checkpoint:** Checkpoint 9 — Day 1 Final Acceptance & Freeze
+- **Working Tree:** CLEAN
+- **Last Stable Commit:** `67d1077e20cda66169a755cae9f36c7996c8a09c` — `feat(runtime): complete day1 service startup wiring`
+- **Last Push:** SUCCESS — `origin/main`（最终状态日志随当前提交推送）
+- **Next Authorized Work:** NONE
+- **Next Planned Work:** DAY 2 - CHAT WEBSOCKET
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -27,14 +30,17 @@
 - 独立 Web Vue 3 SPA：Element Plus、typed API Client、Auth Store、登录/注册、session restore、Router Guard 与主界面/业务占位路由。
 - 独立 Admin Vue 3 SPA：Arco Design、ECharts 按需加载、复用 Auth、role UI guard、Admin Layout 与六类管理页面骨架。
 - Web/Admin 同源 API + 可配置开发 Gateway proxy、安全 env 模板、独立 pnpm lockfiles、类型检查/单测/production build。
+- Gateway、Auth API、User API、User RPC 正式启动入口及跨平台 graceful shutdown/资源关闭。
+- 真实多进程 Register/Login/Gateway/Auth/User/Logout、Header 防伪造、lease keepalive 与 immediate cleanup 最终验收。
 
 ## In Progress
 
 - 无。
 
-## Not Started
+## Not Started / Not Authorized
 
-- Checkpoint 9：Day 1 全量验收。
+- Day 2：Chat WebSocket、Hub/Client、Presence、ACK、幂等与 session/unread 业务。
+- Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
 
@@ -48,14 +54,14 @@
 - Checkpoint 6：非缓存全量测试、Day 1 核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL/Redis/etcd/Gateway/Auth/User 与 lease 生命周期回归 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 7：非缓存全量测试、核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL UP/DOWN/UP、constraint/EXPLAIN 与 User/Auth 回归 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 8：Web/Admin `pnpm install`、type-check、production build、Secret Scan PASS；Web 4 files / 9 tests、Admin 5 files / 9 tests PASS；真实 etcd Gateway/Auth/User 注册登录资料注销链路 PASS；lint 未配置。
+- Checkpoint 9：正式四进程 smoke、Auth/Gateway 异常与 Header 防伪造、etcd lease/keepalive/revoke、migration dirty/UP/DOWN/RE-UP、非缓存全量测试、vet、gofmt、76.7% 核心 coverage、Web/Admin test/type-check/build、Secret Scan 与 reference independence 全部 PASS；race 为 NOT RUN。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
 - 本机 cgo C 编译器不支持 64 位 race 构建；Day 2 并发验收前需要准备兼容环境。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
-- Auth/User 尚无独立正式命令入口；Checkpoint 8 使用现有真实 etcd Gateway 集成测试验证链路，浏览器到多进程服务的手工联调留给可执行部署入口完善后进行。
 
 ## Next Action
 
-- Checkpoint 8 已完成并推送；等待用户继续指令。下一步为 Checkpoint 9 Day 1 全量验收，本轮未进入。
+- DAY 1 已完成并冻结；当前无 Day 2 开发授权。等待用户明确授权后，计划从 DAY 2 - CHAT WEBSOCKET 开始。

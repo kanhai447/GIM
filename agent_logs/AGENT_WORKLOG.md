@@ -278,3 +278,38 @@
 - Admin commit：`59490fae4e4590e3a91d49a26234c30564065267`。
 - push：SUCCESS — `origin/main`。
 - Checkpoint 8 完成后停止；下一次仅在用户明确指令下进入 Checkpoint 9。
+
+## 2026-10-09 Day 1 / Phase 1 — Checkpoint 9 Final Acceptance & Freeze
+
+### 目标与修复
+
+- 对 Backend、Database、Web、Admin、安全配置、reference independence 与 Git 做 Day 1 最终验收。
+- 补齐缺失的 Auth API、User API、User RPC 正式入口；复用现有 modules，main 仅负责配置、依赖 wiring、启动和关闭。
+- 新增共享 process 配置与 go-zero REST 显式 lifecycle；修复 Windows proc shutdown no-op 导致 API Ctrl+C 不能运行 defer/lease revoke 的问题。
+- migration 集成测试新增 dirty metadata fail-fast 断言；无 schema 或业务协议变化。
+
+### Runtime / integration
+
+- 正式四进程 + 真实 MySQL/Redis/临时 etcd：Register/Login/Gateway/Auth/User Info/Logout/旧 credential 拒绝 PASS。
+- 缺失/malformed/错误签名/过期/注销、public/protected、Header spoofing、service missing、lookup timeout、upstream unavailable 回归 PASS。
+- Auth/User API lease 等待超过 TTL 后保持；四进程优雅退出均 exit 0；service key immediate cleanup，端口全部关闭。
+- 临时 etcd/data/binaries、隔离 migration 数据库和 3 条 smoke user 均已清理。
+
+### Context / resource / security
+
+- 业务请求 context 贯穿 Gateway/Auth/RPC/Repository；Background 仅用于 process lifecycle、startup/shutdown/migration。
+- HTTP body、gRPC connection/listener/server、MySQL、Redis、etcd、lease/keepalive 都有明确关闭路径。
+- Secret Scan/repository safety、本地敏感值比对、private key/JWT literal/OAuth assignment、reference dependency/symlink 检查全部 PASS。
+
+### Tests
+
+- Backend non-cached full test、真实 integration/migration、vet、gofmt：PASS。
+- 核心 coverage：76.7% statements。
+- Web：type-check/build + 4 files / 9 tests PASS；Admin：type-check/build + 5 files / 9 tests PASS；lint 均 NOT CONFIGURED。
+- Race：NOT RUN - environment limitation；`cc1.exe` 不支持 64 位 mode。
+
+### Git / freeze
+
+- Runtime commit：`67d1077e20cda66169a755cae9f36c7996c8a09c feat(runtime): complete day1 service startup wiring`，push SUCCESS。
+- Final acceptance/docs commit：本记录所在提交，push 后确认 `HEAD == origin/main`。
+- `DAY 1 = COMPLETED`；Day 2 为 NOT STARTED，Next Authorized Work 为 NONE。
