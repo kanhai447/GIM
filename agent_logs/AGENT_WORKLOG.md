@@ -313,3 +313,46 @@
 - Runtime commit：`67d1077e20cda66169a755cae9f36c7996c8a09c feat(runtime): complete day1 service startup wiring`，push SUCCESS。
 - Final acceptance/docs commit：本记录所在提交，push 后确认 `HEAD == origin/main`。
 - `DAY 1 = COMPLETED`；Day 2 为 NOT STARTED，Next Authorized Work 为 NONE。
+
+## 2026-10-09 Day 2 / Preflight — Concurrency and Readiness
+
+### 目标与范围
+
+- 只检查 Day 2 并发测试环境、Chat schema、Redis、JWT/WS handshake、Gateway Upgrade 和 FIM WebSocket 参考问题。
+- 未实现 Chat WebSocket、Hub/Client、readPump/writePump、Presence、ACK 或 session/unread 业务。
+
+### 开始状态
+
+- branch：`main`。
+- HEAD：`a638581ab538e1ada77e123ad694dc00c888e98b`。
+- `git fetch origin` 后 `HEAD == origin/main`：PASS。
+- working tree：CLEAN。
+
+### 结果
+
+- Race：Go 1.25.2 / windows-amd64 / CGO=1；当前 MinGW.org GCC 6.3.0 target `mingw32/i586`。`go test -race ./...` 在 runtime/cgo 构建阶段报 `64-bit mode not compiled in`；本机无可直接切换的 64 位编译器。**Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT**，保留兼容环境/CI 强制验证要求，不阻塞 Day 2。
+- Schema：`chat_messages`、`send_user_id`、`rev_user_id`、`client_msg_id`、sender/client unique、`chat_sessions`、user/peer unique、last message/read、unread、top 全部符合文档；`hidden_at` 与 `chat_message_deletions` 保持用户维度隐藏语义，未发现 Day 1 遗漏。
+- Redis：现有 go-redis client/lifecycle 可复用；集中 key helper 边界已存在。Presence/可选设备 key 尚未实现，须在下一 Checkpoint 集中加入，不得硬编码。本轮未实现 Presence。
+- Auth：Gateway 已读取 WS query token，继续通过 Auth authentication 完成 JWT/blacklist 校验并注入可信身份；不在 Gateway 或 Chat 复制本地验签，不改 WS ticket。
+- Gateway：`chat -> chat_api` 显式路由、Upgrade detection、Upgrade 请求跳过普通 proxy timeout、标准 ReverseProxy 条件已具备；focused tests PASS。真实 tunnel 测试等待最小 Chat endpoint。
+- FIM reference：确认普通全局 map、多个路径直接写 Conn、无 writePump、无 Ping/Pong、`CheckOrigin=true`、多设备通知/投递语义不一致等问题；未复制代码。
+- Day 2 blocker：NONE。
+
+### 测试
+
+- `go test -race ./...` -> NOT AVAILABLE（environment/toolchain build failure）。
+- Auth/Gateway/Redis focused tests -> PASS。
+- `go test ./... -count=1` -> PASS。
+
+### 数据/协议变化
+
+- DB：无。
+- HTTP：无。
+- WebSocket：无。
+- Redis：无 key/data 写入；仅记录后续 helper 要求。
+
+### Git / 下一步
+
+- commit：本记录所在 `chore(day2): record concurrency preflight` 提交。
+- push：完成 Secret Scan 后推送 `origin/main`，最终结果由本轮 Git 复核确认。
+- Next Checkpoint：Chat WebSocket Hub / Client foundation。

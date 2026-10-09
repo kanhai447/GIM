@@ -1,14 +1,14 @@
 # GIM Current State
 
-- **Current Day:** DAY 1 COMPLETED
-- **Current Phase:** PHASE 1 COMPLETED
-- **Current Checkpoint:** CHECKPOINT 9 COMPLETED
-- **Last Completed Checkpoint:** Checkpoint 9 — Day 1 Final Acceptance & Freeze
-- **Working Tree:** CLEAN
-- **Last Stable Commit:** `67d1077e20cda66169a755cae9f36c7996c8a09c` — `feat(runtime): complete day1 service startup wiring`
-- **Last Push:** SUCCESS — `origin/main`（最终状态日志随当前提交推送）
-- **Next Authorized Work:** NONE
-- **Next Planned Work:** DAY 2 - CHAT WEBSOCKET
+- **Current Day:** DAY 2 AUTHORIZED
+- **Current Phase:** PRE-DAY2 CONCURRENCY PREFLIGHT COMPLETED; PHASE 2 AUTHORIZED / NOT STARTED
+- **Current Checkpoint:** PRE-DAY2 PREFLIGHT COMPLETED
+- **Last Completed Checkpoint:** Pre-Day2 Concurrency Preflight
+- **Working Tree:** CLEAN（本状态随 preflight 日志提交并推送后）
+- **Last Stable Business Baseline:** `a638581ab538e1ada77e123ad694dc00c888e98b` — `docs(day1): finalize day1 delivery`
+- **Last Push:** Pre-Day2 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Chat WebSocket Hub / Client foundation
+- **Next Planned Work:** DAY 2 - PHASE 2 CHAT HUB/CLIENT + PRESENCE
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -37,9 +37,17 @@
 
 - 无。
 
-## Not Started / Not Authorized
+## Authorization
 
-- Day 2：Chat WebSocket、Hub/Client、Presence、ACK、幂等与 session/unread 业务。
+Day 2:
+AUTHORIZED
+
+Next Checkpoint:
+Chat WebSocket Hub / Client foundation
+
+## Not Started
+
+- Day 2 业务：Chat WebSocket、Hub/Client、Presence、ACK、幂等与 session/unread 尚未开始；仅完成 Pre-Day2 只读预检。
 - Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
@@ -55,13 +63,17 @@
 - Checkpoint 7：非缓存全量测试、核心 75.7% 汇总覆盖率、vet、gofmt、Secret Scan、真实 MySQL UP/DOWN/UP、constraint/EXPLAIN 与 User/Auth 回归 PASS；race 因相同环境限制为 NOT RUN。
 - Checkpoint 8：Web/Admin `pnpm install`、type-check、production build、Secret Scan PASS；Web 4 files / 9 tests、Admin 5 files / 9 tests PASS；真实 etcd Gateway/Auth/User 注册登录资料注销链路 PASS；lint 未配置。
 - Checkpoint 9：正式四进程 smoke、Auth/Gateway 异常与 Header 防伪造、etcd lease/keepalive/revoke、migration dirty/UP/DOWN/RE-UP、非缓存全量测试、vet、gofmt、76.7% 核心 coverage、Web/Admin test/type-check/build、Secret Scan 与 reference independence 全部 PASS；race 为 NOT RUN。
+- Pre-Day2：`go test ./... -count=1` 及 Auth/Gateway/Redis focused tests PASS；`go test -race ./...` 在 runtime/cgo 构建阶段失败，准确错误为 `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`。Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Day 2 后续必须在兼容环境/CI 执行 race 验证。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
-- 本机 cgo C 编译器不支持 64 位 race 构建；Day 2 并发验收前需要准备兼容环境。
+- 本机只有 MinGW.org GCC 6.3.0 `mingw32/i586` C 编译器，不支持 windows/amd64 race 构建；未发现可仅切换 `CC` 使用的本机 64 位编译器。该问题不阻塞 Day 2 开发，但 Day 2 完成前必须在兼容环境/CI 做 race 验证。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
+- Gateway 的 Upgrade 检测、query token 认证入口和无普通代理 timeout 路径已就绪；真实 WS tunnel 集成测试需在最小 Chat WS endpoint 存在后补充。
+- Redis Client 已就绪；Presence/connection tracking key helper 尚未建立，必须在 Day 2 实现时集中加入 `rediskeys`，不得硬编码。
 
 ## Next Action
 
-- DAY 1 已完成并冻结；当前无 Day 2 开发授权。等待用户明确授权后，计划从 DAY 2 - CHAT WEBSOCKET 开始。
+- Pre-Day2 Concurrency Preflight 已完成，无 Day 2 blocker。
+- 按授权从 **Chat WebSocket Hub / Client foundation** 开始下一 Checkpoint；不得跳过 Hub/Client 基础直接进入 ACK/session 业务。
