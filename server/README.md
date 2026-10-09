@@ -2,7 +2,7 @@
 
 `server/` is the independent Go backend for GIM. It does not import or compile code from `reference/`.
 
-Planned command boundaries:
+Command boundaries:
 
 - Gateway
 - Auth API/RPC
@@ -13,7 +13,7 @@ Planned command boundaries:
 - Settings API/RPC
 - Logs API and Kafka consumer
 
-Day 1 builds these capabilities incrementally. Checkpoint 5 adds the authentication-aware HTTP Gateway, etcd discovery/lease registration primitives, Auth client, trusted identity Header injection, and a WebSocket-compatible reverse-proxy boundary. Chat/Group WebSocket business behavior is not part of this checkpoint.
+Day 1 provides runnable Gateway, Auth API, User API and User RPC commands. Chat/Group WebSocket business behavior is not part of Day 1.
 
 ## Layout
 
@@ -34,9 +34,14 @@ The Gateway removes any client-provided `User-ID`, `Role`, and `ValidPath` value
 
 Auth/User service processes should build registration parameters from `INTERNAL_API_HOST`, their configured API port/instance ID, and `ETCD_SERVICE_TTL`, register with a lease, and close the registration during graceful shutdown. Business service addresses are never hardcoded in Gateway.
 
-With local etcd running and the ignored environment file configured, start the Gateway from `server/` with:
+With MySQL, Redis and etcd running, migrations applied, and the ignored environment file configured, start the Day 1 services from separate PowerShell terminals in this order:
 
 ```powershell
 $env:GIM_ENV_FILE = '..\.env.local'
+go run ./cmd/user-rpc
+go run ./cmd/user-api
+go run ./cmd/auth-api
 go run ./cmd/gateway
 ```
+
+`user-api` and `auth-api` register leased endpoints in etcd and revoke them on graceful exit. Auth connects to User RPC at `INTERNAL_API_HOST:USER_RPC_PORT`; RPC is an internal configured dependency rather than a Gateway-discovered HTTP service. Only Gateway should be exposed publicly.

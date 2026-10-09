@@ -105,11 +105,26 @@ func TestDatabaseMigrationsAndUserAuthRegression(t *testing.T) {
 		t.Fatalf("migrate database down: %v", err)
 	}
 	assertBusinessTablesAbsent(t, ctx, testDB)
+	assertDirtyMigrationProtection(t, ctx, runner, testDB)
 	if err := runner.Up(ctx); err != nil {
 		t.Fatalf("migrate database up after down: %v", err)
 	}
 	assertMigrationStatus(t, ctx, runner, migrationCount)
 	assertSchema(t, ctx, testDB)
+}
+
+func assertDirtyMigrationProtection(t *testing.T, ctx context.Context, runner *migrations.Runner, db *sql.DB) {
+	t.Helper()
+	if _, err := db.ExecContext(ctx, `INSERT INTO schema_migrations(version, name, dirty) VALUES (1, 'identity', 1)`); err != nil {
+		t.Fatalf("seed dirty migration state: %v", err)
+	}
+	err := runner.Up(ctx)
+	if err == nil || !strings.Contains(err.Error(), "migration 001_identity is dirty") {
+		t.Fatalf("dirty migration state did not stop UP: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM schema_migrations WHERE version = 1 AND dirty = 1`); err != nil {
+		t.Fatalf("clear test dirty migration state: %v", err)
+	}
 }
 
 func assertMigrationStatus(t *testing.T, ctx context.Context, runner *migrations.Runner, wantApplied int) {
