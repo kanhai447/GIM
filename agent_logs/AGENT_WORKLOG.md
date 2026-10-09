@@ -356,3 +356,33 @@
 - commit：本记录所在 `chore(day2): record concurrency preflight` 提交。
 - push：完成 Secret Scan 后推送 `origin/main`，最终结果由本轮 Git 复核确认。
 - Next Checkpoint：Chat WebSocket Hub / Client foundation。
+
+## 2026-10-09 Day 2 / Checkpoint 1 — Chat WebSocket Hub / Client Foundation
+
+### 目标与实现
+
+- 自主实现 Chat Hub event loop、单用户多 Client 模型、幂等 register/unregister、随机 ClientID、有界 Send、readPump/唯一 writePump、slow-client backpressure 和 shutdown。
+- 新增严格 typed envelope boundary、配置化精确 Origin allowlist 和 `/api/chat/ws/chat` Upgrade handler。
+- 新增正式 Chat API 入口，复用既有 go-zero runtime、etcd lease/keepalive/cleanup 和 Gateway/Auth 认证边界。
+- 未实现 Heartbeat、Presence/Redis online、ACK/clientMsgId 处理、消息持久化、session/unread 或前端 socket。
+
+### Reference 与改进
+
+- 只读参考 FIM endpoint、私聊连接和消息流向；没有复制代码或引入 reference 依赖。
+- GIM 避免全局普通 map、并发直写 Conn、无 writePump、无生命周期所有者、Origin 全放行和单用户连接覆盖问题。
+- 生产代码由 writePump 独占 WebSocket 数据写入；Hub event loop 独占连接 map。
+
+### 验收
+
+- Hub/Client、双连接、关闭其一保留另一连接、出站 typed frame、断开清理、slow-client、Origin 单元/集成测试：PASS。
+- 真实临时 etcd 下 Gateway → Auth → Upgrade → go-zero Chat API tunnel：valid JWT PASS，missing/logout JWT 均 401，关闭清理 PASS。
+- 正式 Chat binary 注册 `/gim/services/chat_api/chat-api-local`，Ctrl+C 后 service key 立即清理且端口关闭：PASS。
+- `go test ./... -count=1`、`go vet ./...`、gofmt、diff check、Secret Scan：PASS。
+- Chat foundation coverage：78.6% statements。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；兼容 64 位工具链/CI 验证仍 PENDING。
+
+### Git / 下一步
+
+- implementation commit：`b2e6f8cc2b10bc9cff834e0bf45e92cf7eacd932 feat(chat): add websocket hub and client foundation`。
+- log/status commit：本记录所在提交。
+- 下一 Checkpoint：Chat WebSocket Heartbeat + Connection Lifecycle；本轮完成后停止。

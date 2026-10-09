@@ -1,13 +1,13 @@
 # GIM Current State
 
-- **Current Day:** DAY 2 AUTHORIZED
-- **Current Phase:** PRE-DAY2 CONCURRENCY PREFLIGHT COMPLETED; PHASE 2 AUTHORIZED / NOT STARTED
-- **Current Checkpoint:** PRE-DAY2 PREFLIGHT COMPLETED
-- **Last Completed Checkpoint:** Pre-Day2 Concurrency Preflight
-- **Working Tree:** CLEAN（本状态随 preflight 日志提交并推送后）
-- **Last Stable Business Baseline:** `a638581ab538e1ada77e123ad694dc00c888e98b` — `docs(day1): finalize day1 delivery`
-- **Last Push:** Pre-Day2 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Chat WebSocket Hub / Client foundation
+- **Current Day:** DAY 2
+- **Current Phase:** PHASE 2 AUTHORIZED / IN PROGRESS
+- **Current Checkpoint:** CHAT WEBSOCKET FOUNDATION COMPLETED
+- **Last Completed Checkpoint:** Chat WebSocket Hub / Client Foundation
+- **Working Tree:** CLEAN（本状态随 Checkpoint 1 日志提交并推送后）
+- **Last Stable Business Baseline:** `b2e6f8cc2b10bc9cff834e0bf45e92cf7eacd932` — `feat(chat): add websocket hub and client foundation`
+- **Last Push:** Checkpoint 1 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Chat WebSocket Heartbeat + Connection Lifecycle
 - **Next Planned Work:** DAY 2 - PHASE 2 CHAT HUB/CLIENT + PRESENCE
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
@@ -32,10 +32,12 @@
 - Web/Admin 同源 API + 可配置开发 Gateway proxy、安全 env 模板、独立 pnpm lockfiles、类型检查/单测/production build。
 - Gateway、Auth API、User API、User RPC 正式启动入口及跨平台 graceful shutdown/资源关闭。
 - 真实多进程 Register/Login/Gateway/Auth/User/Logout、Header 防伪造、lease keepalive 与 immediate cleanup 最终验收。
+- Chat Hub event loop、Client、readPump/唯一 writePump、同用户多连接、bounded Send/backpressure 与 shutdown。
+- 配置化精确 Origin policy、Chat API 正式入口、etcd 注册清理及 Gateway/Auth/Chat 真实 WebSocket tunnel。
 
 ## In Progress
 
-- 无。
+- 无；Checkpoint 1 已完成并停止，等待下一 Checkpoint 指令。
 
 ## Authorization
 
@@ -43,11 +45,11 @@ Day 2:
 AUTHORIZED
 
 Next Checkpoint:
-Chat WebSocket Hub / Client foundation
+Chat WebSocket Heartbeat + Connection Lifecycle
 
 ## Not Started
 
-- Day 2 业务：Chat WebSocket、Hub/Client、Presence、ACK、幂等与 session/unread 尚未开始；仅完成 Pre-Day2 只读预检。
+- Day 2 后续：Heartbeat/Ping/Pong/deadline、Presence/Redis online、正式消息 pipeline、ACK/clientMsgId 处理、持久化、session/unread 和前端 socket 尚未开始。
 - Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
@@ -64,16 +66,17 @@ Chat WebSocket Hub / Client foundation
 - Checkpoint 8：Web/Admin `pnpm install`、type-check、production build、Secret Scan PASS；Web 4 files / 9 tests、Admin 5 files / 9 tests PASS；真实 etcd Gateway/Auth/User 注册登录资料注销链路 PASS；lint 未配置。
 - Checkpoint 9：正式四进程 smoke、Auth/Gateway 异常与 Header 防伪造、etcd lease/keepalive/revoke、migration dirty/UP/DOWN/RE-UP、非缓存全量测试、vet、gofmt、76.7% 核心 coverage、Web/Admin test/type-check/build、Secret Scan 与 reference independence 全部 PASS；race 为 NOT RUN。
 - Pre-Day2：`go test ./... -count=1` 及 Auth/Gateway/Redis focused tests PASS；`go test -race ./...` 在 runtime/cgo 构建阶段失败，准确错误为 `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`。Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Day 2 后续必须在兼容环境/CI 执行 race 验证。
+- Day 2 / Checkpoint 1：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Hub/Client/slow-client/Origin 集成和真实 Gateway/Auth/Chat WebSocket tunnel 全部 PASS；Chat foundation coverage 78.6%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
 - 本机只有 MinGW.org GCC 6.3.0 `mingw32/i586` C 编译器，不支持 windows/amd64 race 构建；未发现可仅切换 `CC` 使用的本机 64 位编译器。该问题不阻塞 Day 2 开发，但 Day 2 完成前必须在兼容环境/CI 做 race 验证。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
-- Gateway 的 Upgrade 检测、query token 认证入口和无普通代理 timeout 路径已就绪；真实 WS tunnel 集成测试需在最小 Chat WS endpoint 存在后补充。
+- Gateway 的 Upgrade 检测、query token 认证和真实 Chat WebSocket tunnel 已验证；Chat 内部 endpoint 信任 Gateway Header，正式部署不得直接暴露公网。
 - Redis Client 已就绪；Presence/connection tracking key helper 尚未建立，必须在 Day 2 实现时集中加入 `rediskeys`，不得硬编码。
 
 ## Next Action
 
-- Pre-Day2 Concurrency Preflight 已完成，无 Day 2 blocker。
-- 按授权从 **Chat WebSocket Hub / Client foundation** 开始下一 Checkpoint；不得跳过 Hub/Client 基础直接进入 ACK/session 业务。
+- Chat WebSocket Hub / Client Foundation 已完成，无 Day 2 blocker。
+- 下一授权入口为 **Chat WebSocket Heartbeat + Connection Lifecycle**；Race 必须在兼容环境/CI 补验。本轮不进入下一 Checkpoint。
