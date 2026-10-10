@@ -453,3 +453,42 @@
 - implementation commit：`6bd5c4506bdccf237c3652d0af1e06587a691c41 feat(chat): add redis backed user presence`。
 - log/status commit：本记录所在提交。
 - 下一 Checkpoint：Private Message Persistence + clientMsgId + ACK；本轮完成后停止。
+
+## 2026-10-10 Day 2 / Checkpoint 4 — Private Message Persistence + clientMsgId + Server ACK
+
+### 目标与实现
+
+- 新增 typed `chat.send` / `chat.ack` / `chat.message` / `error`，只实现 text；sender 只来自 Gateway identity/Client.UserID。
+- 新增 Message Service、MySQL Repository、User RPC receiver adapter、curtail_chat 与 friendship policy repository。
+- clientMsgId 使用 MySQL `(send_user_id, client_msg_id)` UNIQUE 最终收敛；duplicate 查询原消息并返回同一 messageId。
+- ACK 只表示 persist/accepted 且只发 originating Client；receiver offline、Pub/Sub failure 或 receiver backpressure 不改变 ACK 语义。
+- 新消息统一走 `gim:chat:delivery` Redis Pub/Sub，所有实例只投本地 receiver Clients；同实例无 direct + bus 双路径，duplicate retry 不 republish。
+- malformed JSON 返回 typed error 并保持连接；错误不泄露 SQL/DSN/RPC/internal detail，日志不记录正文或凭证。
+- 未实现 chat_sessions、unread、read state、history API、frontend socket、Group 或 File。
+
+### Reference 与改进
+
+- 只读参考 FIM 文本 msg、好友/限制校验和 receiver 推送语义；没有复制 handler/repository。
+- GIM 补齐 DB UNIQUE 幂等、persist ACK、originating-client targeting、single writePump、createdNew duplicate suppression 与跨实例 Redis fanout。
+
+### 验收
+
+- 真实 MySQL Repository create/query/duplicate/get by ID 与 test database cleanup：PASS。
+- 50-way concurrent same clientMsgId：数据库 1 行，所有结果 same messageId，PASS。
+- lost ACK retry、offline ACK、same-instance receiver、Instance B 两设备、sender sibling no ACK、duplicate no-redelivery：PASS。
+- 完整本地 MySQL/Redis/临时 etcd `go test ./... -count=1`：PASS；Gateway/Auth/Chat WS 与 Presence real Redis regression PASS。
+- `go vet ./...`、gofmt、diff check、Secret Scan：PASS。
+- Message coverage 69.5%；User RPC adapter coverage 71.4%。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible environment/CI PENDING。
+
+### 数据/协议
+
+- DB migration 无变化；只写 chat_messages，不写 chat_sessions/unread。
+- Redis 新增集中 Pub/Sub channel `gim:chat:delivery`；不是持久消息源。
+- 正式启用 private chat send/ack/message/error envelope。
+
+### Git / 下一步
+
+- implementation commit：`6da24e4e161d5fc66c7d843eb676ff367e47f431 feat(chat): add idempotent private messaging and server ack`。
+- log/status commit：本记录所在提交。
+- 下一 Checkpoint：Chat Session + Unread + Read State；本轮完成后停止。

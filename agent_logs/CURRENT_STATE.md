@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 2
-- **Current Phase:** PHASE 2 COMPLETED / PHASE 3 READY
-- **Current Checkpoint:** CHAT PRESENCE COMPLETED
-- **Last Completed Checkpoint:** Chat Presence
-- **Working Tree:** CLEAN（本状态随 Checkpoint 3 日志提交并推送后）
-- **Last Stable Business Baseline:** `6bd5c4506bdccf237c3652d0af1e06587a691c41` — `feat(chat): add redis backed user presence`
-- **Last Push:** Checkpoint 3 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Private Message Persistence + clientMsgId + ACK（等待下一 Checkpoint 指令）
-- **Next Planned Work:** DAY 2 - PHASE 3 PRIVATE CHAT RELIABILITY
+- **Current Phase:** PHASE 3 PRIVATE MESSAGE RELIABILITY IN PROGRESS
+- **Current Checkpoint:** PRIVATE MESSAGE PERSISTENCE + CLIENTMSGID + SERVER ACK COMPLETED
+- **Last Completed Checkpoint:** Private Message Persistence + clientMsgId + Server ACK
+- **Working Tree:** CLEAN（本状态随 Checkpoint 4 日志提交并推送后）
+- **Last Stable Business Baseline:** `6da24e4e161d5fc66c7d843eb676ff367e47f431` — `feat(chat): add idempotent private messaging and server ack`
+- **Last Push:** Checkpoint 4 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Chat Session + Unread + Read State（等待下一 Checkpoint 明确指令）
+- **Next Planned Work:** DAY 2 - PHASE 3 SESSION / UNREAD / READ STATE
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -38,10 +38,15 @@
 - 同用户多设备独立 heartbeat 生命周期、total/user connection count 和可等待的 graceful shutdown。
 - Redis-backed Chat Presence、集中 key helper、本实例 `0->1` / `1->0` transition 与多设备安全语义。
 - 多 Chat API instance ZSET contribution、TTL/独立 refresh crash recovery、context timeout/retry 和 shutdown cleanup。
+- typed `chat.send` / `chat.ack` / `chat.message` / `error`，可信 connection sender identity 与正文/payload 限制。
+- Chat Message Service、MySQL Repository、User RPC receiver validation、curtail_chat 与好友 policy validation。
+- MySQL `(send_user_id, client_msg_id)` 最终幂等、并发 duplicate 收敛、lost ACK retry 返回同一 messageId。
+- Server persist ACK 只回 originating Client；offline receiver 不影响 ACK。
+- Redis Pub/Sub 跨实例 best-effort realtime fanout；same-instance 统一走 bus，createdNew 防 duplicate delivery，多设备全投。
 
 ## In Progress
 
-- 无；Checkpoint 3 已完成并停止，等待下一 Checkpoint 指令。
+- 无；Checkpoint 4 已完成并停止，等待下一 Checkpoint 指令。
 
 ## Authorization
 
@@ -49,11 +54,11 @@ Day 2:
 AUTHORIZED
 
 Next Checkpoint:
-Private Message Persistence + clientMsgId + ACK
+Chat Session + Unread + Read State
 
 ## Not Started
 
-- Day 2 后续：正式消息 pipeline、ACK/clientMsgId 处理、持久化、session/unread 和前端 socket 尚未开始。
+- Day 2 后续：chat session、unread、mark read、history API 和前端 socket manager 尚未开始。
 - Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
@@ -73,16 +78,17 @@ Private Message Persistence + clientMsgId + ACK
 - Day 2 / Checkpoint 1：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Hub/Client/slow-client/Origin 集成和真实 Gateway/Auth/Chat WebSocket tunnel 全部 PASS；Chat foundation coverage 78.6%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 2：全量测试、vet、gofmt、diff check、Secret Scan、heartbeat/lifecycle 10 轮稳定性和真实 Gateway Ping/Pong tunnel 全部 PASS；Chat heartbeat/lifecycle coverage 81.5%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 3：全量测试、vet、gofmt、diff check、Secret Scan、Presence 75.8% coverage、关键 transition/heartbeat/slow/shutdown/Redis failure 10 轮稳定性、真实 Redis 多实例/TTL 与 Gateway/Auth/Chat Presence tunnel 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
+- Day 2 / Checkpoint 4：全量测试、vet、gofmt、diff check、Secret Scan、Message 69.5% / User RPC adapter 71.4% coverage、真实 MySQL 50-way 并发幂等、lost ACK retry、offline/online/multi-device/multi-instance Redis Pub/Sub、duplicate no-redelivery、Gateway 与 Presence 回归全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
 - 本机只有 MinGW.org GCC 6.3.0 `mingw32/i586` C 编译器，不支持 windows/amd64 race 构建；未发现可仅切换 `CC` 使用的本机 64 位编译器。该问题不阻塞 Day 2 开发，但 Day 2 完成前必须在兼容环境/CI 做 race 验证。
-- Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
+- Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。私聊 receiver realtime fanout 已通过 Redis Pub/Sub 跨 Chat API 实例，但不等同于通用分布式 WS router。
 - Gateway 的 Upgrade 检测、query token 认证和真实 Chat WebSocket tunnel 已验证；Chat 内部 endpoint 信任 Gateway Header，正式部署不得直接暴露公网。
 - Presence key helper 已集中建立；未来若确需 connection/device tracking key，仍必须加入 `rediskeys`，不得硬编码。
 
 ## Next Action
 
-- Chat WebSocket Foundation、Heartbeat/Lifecycle 与 Chat Presence 已完成，无 Day 2 blocker。
-- 下一入口为 **Private Message Persistence + clientMsgId + ACK**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint。
+- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence 与 Private Message Persistence/clientMsgId/Server ACK 已完成，无 Day 2 blocker。
+- 下一入口为 **Chat Session + Unread + Read State**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint。

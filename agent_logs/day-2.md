@@ -3,11 +3,12 @@
 ## 授权状态
 
 - Day 2：AUTHORIZED。
-- 当前 Checkpoint：Chat Presence COMPLETED。
+- 当前 Checkpoint：Private Message Persistence + clientMsgId + Server ACK COMPLETED。
 - 已完成：Pre-Day2 Concurrency Preflight。
 - 已完成：Chat Hub/Client、readPump/writePump、多连接模型、Chat endpoint/runtime 和 Gateway real WS tunnel。
 - 已完成：Chat WebSocket Heartbeat、deadline、dead/slow/normal/abnormal disconnect cleanup 和 multi-device lifecycle。
 - 已完成：Redis-backed Chat Presence、多设备 transition、多实例 contribution、TTL/crash recovery 与 shutdown cleanup。
+- 已完成：typed private chat send、MySQL persist、clientMsgId 幂等、Server ACK、offline/online/multi-device/multi-instance realtime delivery。
 
 ## Pre-Day2 Concurrency Preflight
 
@@ -29,6 +30,7 @@
 - `agent_logs/operations/day-2/002_checkpoint-1_chat-ws-foundation.md`
 - `agent_logs/operations/day-2/003_checkpoint-2_chat-heartbeat-lifecycle.md`
 - `agent_logs/operations/day-2/004_checkpoint-3_chat-presence.md`
+- `agent_logs/operations/day-2/005_checkpoint-4_private-message-ack.md`
 
 ## Checkpoint 1 — Chat WebSocket Hub / Client Foundation
 
@@ -71,6 +73,21 @@
 - Implementation commit：`6bd5c4506bdccf237c3652d0af1e06587a691c41`。
 - Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
 
+## Checkpoint 4 — Private Message Persistence + clientMsgId + Server ACK
+
+- 时间：2026-10-10 18:42 +08:00。
+- 正式启用 typed `chat.send`、`chat.ack`、`chat.message`、`error`；sender 只取可信 Client identity，CP4 只实现 text。
+- 接收者通过 User RPC + caller-derived timeout 校验；按 docs 校验 `curtail_chat` 与好友关系。
+- MySQL Repository 使用既有 `(send_user_id, client_msg_id)` UNIQUE 作为最终幂等保障；duplicate 查询原消息并 ACK 同一 messageId。
+- ACK 只表示 message persisted/accepted，只发 originating Client；不是 delivery/read receipt，receiver offline 仍 ACK。
+- 只有新插入消息触发 realtime delivery；重复 retry 不重投 receiver。
+- 所有私聊 realtime delivery 统一经 `gim:chat:delivery` Redis Pub/Sub，各实例只投本地 receiver Clients；同实例无第二条直投路径。
+- 真实隔离 MySQL 50 并发：1 row / same messageId；lost ACK retry、offline、same-instance、two remote devices、cross-instance、duplicate no-redelivery：PASS。
+- 完整本地 MySQL/Redis/临时 etcd `go test ./... -count=1`、vet、gofmt、Secret Scan、Gateway/Presence regressions：PASS。
+- Implementation commit：`6da24e4e161d5fc66c7d843eb676ff367e47f431`。
+- 未实现 chat_sessions、unread、mark read、history API 或前端 socket manager。
+- Race：NOT AVAILABLE；兼容环境/CI verification PENDING。
+
 ## Next Checkpoint
 
-Private Message Persistence + clientMsgId + ACK
+Chat Session + Unread + Read State
