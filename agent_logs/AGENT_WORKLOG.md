@@ -417,3 +417,39 @@
 - implementation commit：`2b90df522337932bb57dfb0889caf39f54da80d3 feat(chat): add websocket heartbeat and connection lifecycle`。
 - log/status commit：本记录所在提交。
 - 下一 Checkpoint：Chat Presence；本轮完成后停止。
+
+## 2026-10-10 Day 2 / Checkpoint 3 — Chat Presence
+
+### 目标与实现
+
+- 在既有 Hub 多连接事实源上，只对本实例 `0->1` / `1->0` 产生 local Presence contribution transition；多 tab/设备中间变化不重复上下线。
+- 新增独立 Presence Service/Store、集中 Redis key helper、`IsOnline` 查询、context timeout、dirty-state retry、独立 refresh 和有界高优先 shutdown。
+- Redis 使用用户维度 ZSET：instance ID member + expiresAt score；至少一个未过期 member 即全局 ONLINE，避免任一 Chat 实例最后连接断开误删其他实例状态。
+- Chat API 复用 discovery registration instance ID 和现有 Redis Client；Hub shutdown 后清理本实例 contribution，crash/清理失败由 TTL 兜底。
+- 同步更新 Backend/Core Flow/Redis 设计；明确 Chat WS 是唯一全局 Presence authority，Group WS 不修改 Presence。
+
+### Reference 与改进
+
+- 只读参考 FIM Chat 的多连接、Redis online Hash 和好友上线行为；没有复制代码或引入 reference 依赖。
+- GIM 避免 FIM 全局普通 map、每连接 HSet、无 TTL/多实例 contribution 及多路径并发写 Conn；未提前复制好友广播。
+
+### 验收
+
+- `0->1` online、`1->N` no duplicate、`N->1` no offline、`1->0` offline、duplicate unregister：PASS。
+- heartbeat timeout sibling survives/final offline、slow-client、shutdown、Redis timeout/unavailable/recovery：PASS；关键组合 10 轮稳定。
+- 真实 Redis 双实例、A disconnect、A crash TTL/B refresh、last B offline、测试 key cleanup：PASS。
+- 真实 etcd + Gateway/Auth/Chat/Redis：query JWT connect、双设备、唯一/最后关闭、heartbeat sibling timeout Presence：PASS。
+- `go test ./... -count=1`、vet、gofmt、diff check、Secret Scan：PASS；Presence coverage 75.8%。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；兼容环境/CI verification PENDING。
+
+### 数据/协议
+
+- DB：无；不写 users.online、message/session/unread。
+- HTTP/WS envelope：无变化；无好友广播或 Presence WS event。
+- Redis：新增 `gim:presence:user:{uid}` ZSET instance contribution 与 TTL/refresh/retry 配置。
+
+### Git / 下一步
+
+- implementation commit：`6bd5c4506bdccf237c3652d0af1e06587a691c41 feat(chat): add redis backed user presence`。
+- log/status commit：本记录所在提交。
+- 下一 Checkpoint：Private Message Persistence + clientMsgId + ACK；本轮完成后停止。

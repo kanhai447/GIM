@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 2
-- **Current Phase:** PHASE 2 AUTHORIZED / IN PROGRESS
-- **Current Checkpoint:** CHAT WEBSOCKET HEARTBEAT + CONNECTION LIFECYCLE COMPLETED
-- **Last Completed Checkpoint:** Chat WebSocket Heartbeat + Connection Lifecycle
-- **Working Tree:** CLEAN（本状态随 Checkpoint 2 日志提交并推送后）
-- **Last Stable Business Baseline:** `2b90df522337932bb57dfb0889caf39f54da80d3` — `feat(chat): add websocket heartbeat and connection lifecycle`
-- **Last Push:** Checkpoint 2 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Chat Presence
-- **Next Planned Work:** DAY 2 - PHASE 2 CHAT HUB/CLIENT + PRESENCE
+- **Current Phase:** PHASE 2 COMPLETED / PHASE 3 READY
+- **Current Checkpoint:** CHAT PRESENCE COMPLETED
+- **Last Completed Checkpoint:** Chat Presence
+- **Working Tree:** CLEAN（本状态随 Checkpoint 3 日志提交并推送后）
+- **Last Stable Business Baseline:** `6bd5c4506bdccf237c3652d0af1e06587a691c41` — `feat(chat): add redis backed user presence`
+- **Last Push:** Checkpoint 3 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Private Message Persistence + clientMsgId + ACK（等待下一 Checkpoint 指令）
+- **Next Planned Work:** DAY 2 - PHASE 3 PRIVATE CHAT RELIABILITY
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -36,10 +36,12 @@
 - 配置化精确 Origin policy、Chat API 正式入口、etcd 注册清理及 Gateway/Auth/Chat 真实 WebSocket tunnel。
 - 配置化 Ping/Pong、read/write deadline、dead connection detection、原因分类与无 zombie cleanup。
 - 同用户多设备独立 heartbeat 生命周期、total/user connection count 和可等待的 graceful shutdown。
+- Redis-backed Chat Presence、集中 key helper、本实例 `0->1` / `1->0` transition 与多设备安全语义。
+- 多 Chat API instance ZSET contribution、TTL/独立 refresh crash recovery、context timeout/retry 和 shutdown cleanup。
 
 ## In Progress
 
-- 无；Checkpoint 2 已完成并停止，等待下一 Checkpoint 指令。
+- 无；Checkpoint 3 已完成并停止，等待下一 Checkpoint 指令。
 
 ## Authorization
 
@@ -47,11 +49,11 @@ Day 2:
 AUTHORIZED
 
 Next Checkpoint:
-Chat Presence
+Private Message Persistence + clientMsgId + ACK
 
 ## Not Started
 
-- Day 2 后续：Presence/Redis online、正式消息 pipeline、ACK/clientMsgId 处理、持久化、session/unread 和前端 socket 尚未开始。
+- Day 2 后续：正式消息 pipeline、ACK/clientMsgId 处理、持久化、session/unread 和前端 socket 尚未开始。
 - Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
@@ -70,6 +72,7 @@ Chat Presence
 - Pre-Day2：`go test ./... -count=1` 及 Auth/Gateway/Redis focused tests PASS；`go test -race ./...` 在 runtime/cgo 构建阶段失败，准确错误为 `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`。Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Day 2 后续必须在兼容环境/CI 执行 race 验证。
 - Day 2 / Checkpoint 1：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Hub/Client/slow-client/Origin 集成和真实 Gateway/Auth/Chat WebSocket tunnel 全部 PASS；Chat foundation coverage 78.6%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 2：全量测试、vet、gofmt、diff check、Secret Scan、heartbeat/lifecycle 10 轮稳定性和真实 Gateway Ping/Pong tunnel 全部 PASS；Chat heartbeat/lifecycle coverage 81.5%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
+- Day 2 / Checkpoint 3：全量测试、vet、gofmt、diff check、Secret Scan、Presence 75.8% coverage、关键 transition/heartbeat/slow/shutdown/Redis failure 10 轮稳定性、真实 Redis 多实例/TTL 与 Gateway/Auth/Chat Presence tunnel 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 
 ## Known Issues
 
@@ -77,9 +80,9 @@ Chat Presence
 - 本机只有 MinGW.org GCC 6.3.0 `mingw32/i586` C 编译器，不支持 windows/amd64 race 构建；未发现可仅切换 `CC` 使用的本机 64 位编译器。该问题不阻塞 Day 2 开发，但 Day 2 完成前必须在兼容环境/CI 做 race 验证。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。
 - Gateway 的 Upgrade 检测、query token 认证和真实 Chat WebSocket tunnel 已验证；Chat 内部 endpoint 信任 Gateway Header，正式部署不得直接暴露公网。
-- Redis Client 已就绪；Presence/connection tracking key helper 尚未建立，必须在 Day 2 实现时集中加入 `rediskeys`，不得硬编码。
+- Presence key helper 已集中建立；未来若确需 connection/device tracking key，仍必须加入 `rediskeys`，不得硬编码。
 
 ## Next Action
 
-- Chat WebSocket Foundation、Heartbeat 与 Connection Lifecycle 已完成，无 Day 2 blocker。
-- 下一授权入口为 **Chat Presence**；Race 必须在兼容环境/CI 补验。本轮不进入 Presence。
+- Chat WebSocket Foundation、Heartbeat/Lifecycle 与 Chat Presence 已完成，无 Day 2 blocker。
+- 下一入口为 **Private Message Persistence + clientMsgId + ACK**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint。

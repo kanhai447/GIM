@@ -3,10 +3,11 @@
 ## 授权状态
 
 - Day 2：AUTHORIZED。
-- 当前 Checkpoint：Chat WebSocket Heartbeat + Connection Lifecycle COMPLETED。
+- 当前 Checkpoint：Chat Presence COMPLETED。
 - 已完成：Pre-Day2 Concurrency Preflight。
 - 已完成：Chat Hub/Client、readPump/writePump、多连接模型、Chat endpoint/runtime 和 Gateway real WS tunnel。
 - 已完成：Chat WebSocket Heartbeat、deadline、dead/slow/normal/abnormal disconnect cleanup 和 multi-device lifecycle。
+- 已完成：Redis-backed Chat Presence、多设备 transition、多实例 contribution、TTL/crash recovery 与 shutdown cleanup。
 
 ## Pre-Day2 Concurrency Preflight
 
@@ -27,6 +28,7 @@
 - `agent_logs/operations/day-2/001_pre-day2_concurrency-preflight.md`
 - `agent_logs/operations/day-2/002_checkpoint-1_chat-ws-foundation.md`
 - `agent_logs/operations/day-2/003_checkpoint-2_chat-heartbeat-lifecycle.md`
+- `agent_logs/operations/day-2/004_checkpoint-3_chat-presence.md`
 
 ## Checkpoint 1 — Chat WebSocket Hub / Client Foundation
 
@@ -55,6 +57,20 @@
 - Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
 - 未实现 Presence、Redis online、ACK、持久化、session/unread 或前端 socket。
 
+## Checkpoint 3 — Chat Presence
+
+- 时间：2026-10-10 10:21 +08:00。
+- Hub 只在本实例用户连接 `0->1` / `1->0` 发出 local contribution transition；`1->N` / `N->1`、duplicate unregister 不产生重复上下线。
+- 独立 Presence Service worker 管 Redis I/O、context timeout、retry、refresh 和 shutdown；Hub event loop 不执行网络调用。
+- Redis key 为集中 helper 生成的 `gim:presence:user:{uid}`；ZSET member 是稳定 `CHAT_API_INSTANCE_ID`，score 为过期毫秒时间。
+- 多实例：任一有效 contribution 即 ONLINE；A 离开或 crash/TTL 淘汰时 B 存活则保持 ONLINE；最后 contribution 删除才 OFFLINE。
+- 生产默认 TTL/refresh/retry/operation timeout 为 90s/30s/5s/1s；不按每个 WebSocket Ping 写 Redis。
+- normal、heartbeat timeout、slow client、duplicate cleanup 和 Hub shutdown 全部统一走 connection count transition。
+- Chat WS 是全局 Presence 唯一权威；Group WS 不得修改 `gim:presence:*`。本轮无好友广播、Group、DB online 或前端 Presence。
+- 全量 test/vet/gofmt/Secret Scan PASS；Presence coverage 75.8%；关键生命周期 10 轮 PASS；真实 Redis multi-instance/TTL 与 Gateway/Auth/Chat Presence tunnel PASS。
+- Implementation commit：`6bd5c4506bdccf237c3652d0af1e06587a691c41`。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
+
 ## Next Checkpoint
 
-Chat Presence
+Private Message Persistence + clientMsgId + ACK
