@@ -10,15 +10,66 @@ import (
 )
 
 type fakeSocket struct {
-	closed     chan struct{}
-	closeOnce  sync.Once
-	writes     chan []byte
-	active     atomic.Int32
-	concurrent atomic.Bool
+	closed        chan struct{}
+	closeOnce     sync.Once
+	writes        chan []byte
+	controls      chan int
+	active        atomic.Int32
+	concurrent    atomic.Bool
+	pongMu        sync.Mutex
+	pong          func(string) error
+	ping          func(string) error
+	closeHandler  func(int, string) error
+	readLimit     atomic.Int64
+	readDeadline  atomic.Int64
+	writeDeadline atomic.Int64
 }
 
 func newFakeSocket(writeCapacity int) *fakeSocket {
-	return &fakeSocket{closed: make(chan struct{}), writes: make(chan []byte, writeCapacity)}
+	return &fakeSocket{closed: make(chan struct{}), writes: make(chan []byte, writeCapacity), controls: make(chan int, 128)}
+}
+
+func (connection *fakeSocket) WriteControl(messageType int, _ []byte, _ time.Time) error {
+	if connection.active.Add(1) != 1 {
+		connection.concurrent.Store(true)
+	}
+	defer connection.active.Add(-1)
+	select {
+	case <-connection.closed:
+		return errors.New("closed")
+	case connection.controls <- messageType:
+		return nil
+	}
+}
+
+func (connection *fakeSocket) SetReadLimit(limit int64) { connection.readLimit.Store(limit) }
+
+func (connection *fakeSocket) SetReadDeadline(deadline time.Time) error {
+	connection.readDeadline.Store(deadline.UnixNano())
+	return nil
+}
+
+func (connection *fakeSocket) SetPongHandler(handler func(string) error) {
+	connection.pongMu.Lock()
+	defer connection.pongMu.Unlock()
+	connection.pong = handler
+}
+
+func (connection *fakeSocket) SetPingHandler(handler func(string) error) {
+	connection.pongMu.Lock()
+	defer connection.pongMu.Unlock()
+	connection.ping = handler
+}
+
+func (connection *fakeSocket) SetCloseHandler(handler func(int, string) error) {
+	connection.pongMu.Lock()
+	defer connection.pongMu.Unlock()
+	connection.closeHandler = handler
+}
+
+func (connection *fakeSocket) SetWriteDeadline(deadline time.Time) error {
+	connection.writeDeadline.Store(deadline.UnixNano())
+	return nil
 }
 
 func (connection *fakeSocket) ReadMessage() (int, []byte, error) {
@@ -61,7 +112,7 @@ func TestHubRegisterUnregisterMultiClientAndShutdown(t *testing.T) {
 	if count := connectionCount(t, hub, 11); count != 1 {
 		t.Fatalf("user 11 connection count = %d", count)
 	}
-	duplicate := newClient(10, "client-b", newFakeSocket(1), hub, UnavailableInboundHandler{}, 1)
+	duplicate := newClient(10, "client-b", newFakeSocket(1), hub, UnavailableInboundHandler{}, 1, testHeartbeat(), nil)
 	if err := hub.Register(context.Background(), duplicate); !errors.Is(err, ErrDuplicateClient) {
 		t.Fatalf("duplicate Register() error = %v", err)
 	}
@@ -120,7 +171,7 @@ func TestConcurrentLogicalSendsUseSingleWriter(t *testing.T) {
 	hub, cancel := runningHub(t)
 	defer cancel()
 	connection := newFakeSocket(128)
-	client := newClient(30, "writer", connection, hub, UnavailableInboundHandler{}, 128)
+	client := newClient(30, "writer", connection, hub, UnavailableInboundHandler{}, 128, testHeartbeat(), nil)
 	if err := hub.Register(context.Background(), client); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +231,7 @@ func runningHub(t *testing.T) (*Hub, context.CancelFunc) {
 }
 
 func testClient(hub *Hub, userID uint64, clientID string, buffer int) *Client {
-	return newClient(userID, clientID, newFakeSocket(1), hub, UnavailableInboundHandler{}, buffer)
+	return newClient(userID, clientID, newFakeSocket(1), hub, UnavailableInboundHandler{}, buffer, testHeartbeat(), nil)
 }
 
 func connectionCount(t *testing.T, hub *Hub, userID uint64) int {

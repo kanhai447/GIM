@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,7 +31,10 @@ func TestChatEndpointMultiClientOutboundAndCleanup(t *testing.T) {
 		_, deliveryErr := hub.SendToClient(ctx, identity.UserID, identity.ClientID, response)
 		return deliveryErr
 	})
-	handler := NewHandler(hub, inbound, 8, policy)
+	handler, err := NewHandler(hub, inbound, 8, policy, testHeartbeat(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/api/chat/ws/chat", handler)
 	server := httptest.NewServer(mux)
@@ -79,7 +84,10 @@ func TestChatEndpointMultiClientOutboundAndCleanup(t *testing.T) {
 func TestChatEndpointOriginAndIdentityPolicy(t *testing.T) {
 	hub, _ := runningHub(t)
 	policy, _ := NewOriginPolicy([]string{testOrigin})
-	handler := NewHandler(hub, UnavailableInboundHandler{}, 4, policy)
+	handler, err := NewHandler(hub, UnavailableInboundHandler{}, 4, policy, testHeartbeat(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -121,6 +129,190 @@ func TestChatEndpointOriginAndIdentityPolicy(t *testing.T) {
 	}
 }
 
+func TestHeartbeatTimeoutKeepsHealthySiblingConnected(t *testing.T) {
+	heartbeat := HeartbeatConfig{ReadLimit: 1 << 20, PongWait: 300 * time.Millisecond, PingPeriod: 60 * time.Millisecond, WriteWait: 40 * time.Millisecond}
+	hub, server, observer := heartbeatServer(t, heartbeat)
+	dead := dialChat(t, server.URL, testOrigin, "61", "2")
+	healthy := dialChat(t, server.URL, testOrigin, "61", "2")
+	pingSeen, readerDone := startPongingReader(healthy)
+	if count := waitForCount(t, hub, 61, 2); count != 2 {
+		t.Fatalf("initial user connection count = %d", count)
+	}
+	if total := totalConnectionCount(t, hub); total != 2 {
+		t.Fatalf("initial total connection count = %d", total)
+	}
+	select {
+	case <-pingSeen:
+	case <-time.After(time.Second):
+		t.Fatal("healthy client did not receive Ping")
+	}
+	if count := waitForCount(t, hub, 61, 1); count != 1 {
+		t.Fatalf("connection count after sibling timeout = %d", count)
+	}
+	time.Sleep(heartbeat.PongWait + heartbeat.PingPeriod)
+	if count := waitForCount(t, hub, 61, 1); count != 1 {
+		t.Fatalf("healthy sibling did not remain connected: %d", count)
+	}
+	timeoutEvent := waitLifecycleEvent(t, observer, time.Second)
+	if timeoutEvent.reason != DisconnectTimeout {
+		t.Fatalf("dead client reason = %s", timeoutEvent.reason)
+	}
+	if err := healthy.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "test complete"), time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("send normal close: %v", err)
+	}
+	if count := waitForCount(t, hub, 61, 0); count != 0 {
+		t.Fatalf("final user connection count = %d", count)
+	}
+	normalEvent := waitLifecycleEvent(t, observer, time.Second)
+	if normalEvent.reason != DisconnectNormal {
+		t.Fatalf("healthy client reason = %s", normalEvent.reason)
+	}
+	_ = dead.Close()
+	_ = healthy.Close()
+	waitChannel(t, readerDone, time.Second, "healthy client reader")
+}
+
+func TestAbnormalCloseRemovesClient(t *testing.T) {
+	hub, server, observer := heartbeatServer(t, shortHeartbeat())
+	connection := dialChat(t, server.URL, testOrigin, "62", "2")
+	if count := waitForCount(t, hub, 62, 1); count != 1 {
+		t.Fatalf("connection count = %d", count)
+	}
+	if err := connection.UnderlyingConn().Close(); err != nil {
+		t.Fatalf("abrupt close: %v", err)
+	}
+	if count := waitForCount(t, hub, 62, 0); count != 0 {
+		t.Fatalf("connection count after abrupt close = %d", count)
+	}
+	event := waitLifecycleEvent(t, observer, time.Second)
+	if event.reason != DisconnectAbnormal {
+		t.Fatalf("disconnect reason = %s", event.reason)
+	}
+}
+
+func TestHubShutdownClosesHeartbeatConnection(t *testing.T) {
+	hub, server, observer := heartbeatServer(t, shortHeartbeat())
+	connection := dialChat(t, server.URL, testOrigin, "63", "2")
+	_, readerDone := startPongingReader(connection)
+	if count := waitForCount(t, hub, 63, 1); count != 1 {
+		t.Fatalf("connection count = %d", count)
+	}
+	shutdownContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := hub.Shutdown(shutdownContext); err != nil {
+		t.Fatalf("Hub.Shutdown() error = %v", err)
+	}
+	waitChannel(t, readerDone, time.Second, "client reader")
+	event := waitLifecycleEvent(t, observer, time.Second)
+	if event.reason != DisconnectShutdown {
+		t.Fatalf("disconnect reason = %s", event.reason)
+	}
+	_ = connection.Close()
+}
+
+func TestServerAndHubGracefulShutdownLifecycle(t *testing.T) {
+	hub := NewHub()
+	hubContext, cancelHub := context.WithCancel(context.Background())
+	defer cancelHub()
+	go hub.Run(hubContext)
+	policy, err := NewOriginPolicy([]string{testOrigin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer := newRecordingLifecycleObserver()
+	handler, err := NewHandler(hub, UnavailableInboundHandler{}, 8, policy, shortHeartbeat(), observer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second}
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- server.Serve(listener) }()
+	serverURL := "http://" + listener.Addr().String()
+	connection := dialChat(t, serverURL, testOrigin, "64", "2")
+	_, readerDone := startPongingReader(connection)
+	if count := waitForCount(t, hub, 64, 1); count != 1 {
+		t.Fatalf("connection count = %d", count)
+	}
+	shutdownContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownContext); err != nil {
+		t.Fatalf("server shutdown: %v", err)
+	}
+	if err := hub.Shutdown(shutdownContext); err != nil {
+		t.Fatalf("hub shutdown: %v", err)
+	}
+	select {
+	case err := <-serverDone:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Fatalf("server exit: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("server did not exit")
+	}
+	waitChannel(t, readerDone, time.Second, "client reader")
+	if event := waitLifecycleEvent(t, observer, time.Second); event.reason != DisconnectShutdown {
+		t.Fatalf("disconnect reason = %s", event.reason)
+	}
+	header := http.Header{"Origin": []string{testOrigin}, "User-ID": []string{"64"}, "Role": []string{"2"}}
+	retry, response, dialErr := websocket.DefaultDialer.Dial(websocketURL(serverURL), header)
+	if retry != nil {
+		_ = retry.Close()
+	}
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if dialErr == nil {
+		t.Fatal("server accepted a new connection after shutdown")
+	}
+	_ = connection.Close()
+}
+
+func heartbeatServer(t *testing.T, heartbeat HeartbeatConfig) (*Hub, *httptest.Server, *recordingLifecycleObserver) {
+	t.Helper()
+	hub, _ := runningHub(t)
+	policy, err := NewOriginPolicy([]string{testOrigin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer := newRecordingLifecycleObserver()
+	handler, err := NewHandler(hub, UnavailableInboundHandler{}, 8, policy, heartbeat, observer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return hub, server, observer
+}
+
+func startPongingReader(connection *websocket.Conn) (<-chan struct{}, <-chan struct{}) {
+	pingSeen := make(chan struct{}, 16)
+	done := make(chan struct{})
+	connection.SetPingHandler(func(payload string) error {
+		select {
+		case pingSeen <- struct{}{}:
+		default:
+		}
+		return connection.WriteControl(websocket.PongMessage, []byte(payload), time.Now().Add(time.Second))
+	})
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := connection.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	return pingSeen, done
+}
+
+func testHeartbeat() HeartbeatConfig {
+	return HeartbeatConfig{ReadLimit: 1 << 20, PongWait: time.Second, PingPeriod: 250 * time.Millisecond, WriteWait: 100 * time.Millisecond}
+}
+
 func dialChat(t *testing.T, serverURL, origin, userID, role string) *websocket.Conn {
 	t.Helper()
 	header := http.Header{}
@@ -154,6 +346,17 @@ func waitForCount(t *testing.T, hub *Hub, userID uint64, expected int) int {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+func totalConnectionCount(t *testing.T, hub *Hub) int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	count, err := hub.TotalConnectionCount(ctx)
+	if err != nil {
+		t.Fatalf("TotalConnectionCount() error = %v", err)
+	}
+	return count
 }
 
 func responseStatus(response *http.Response) int {

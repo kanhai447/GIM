@@ -32,6 +32,7 @@ type registerCommand struct {
 
 type unregisterCommand struct {
 	client *Client
+	reason DisconnectReason
 	result chan bool
 }
 
@@ -39,6 +40,8 @@ type countCommand struct {
 	userID uint64
 	result chan int
 }
+
+type totalCountCommand struct{ result chan int }
 
 type routeCommand struct {
 	userID   uint64
@@ -60,7 +63,7 @@ func (hub *Hub) run(ctx context.Context) {
 	defer func() {
 		for _, userClients := range clients {
 			for _, client := range userClients {
-				client.stop()
+				client.stop(DisconnectShutdown)
 			}
 		}
 		close(hub.done)
@@ -76,9 +79,11 @@ func (hub *Hub) run(ctx context.Context) {
 			case registerCommand:
 				current.result <- registerClient(clients, current.client)
 			case unregisterCommand:
-				current.result <- removeClient(clients, current.client)
+				current.result <- removeClient(clients, current.client, current.reason)
 			case countCommand:
 				current.result <- len(clients[current.userID])
+			case totalCountCommand:
+				current.result <- totalConnections(clients)
 			case routeCommand:
 				current.result <- routeMessage(clients, current)
 			}
@@ -104,12 +109,16 @@ func (hub *Hub) Register(ctx context.Context, client *Client) error {
 	}
 }
 
-func (hub *Hub) Unregister(ctx context.Context, client *Client) bool {
+func (hub *Hub) Unregister(ctx context.Context, client *Client, reasons ...DisconnectReason) bool {
 	if client == nil {
 		return false
 	}
+	reason := DisconnectNormal
+	if len(reasons) > 0 {
+		reason = reasons[0]
+	}
 	result := make(chan bool, 1)
-	if err := hub.submit(ctx, unregisterCommand{client: client, result: result}); err != nil {
+	if err := hub.submit(ctx, unregisterCommand{client: client, reason: reason, result: result}); err != nil {
 		return false
 	}
 	select {
@@ -119,6 +128,21 @@ func (hub *Hub) Unregister(ctx context.Context, client *Client) bool {
 		return false
 	case <-ctx.Done():
 		return false
+	}
+}
+
+func (hub *Hub) TotalConnectionCount(ctx context.Context) (int, error) {
+	result := make(chan int, 1)
+	if err := hub.submit(ctx, totalCountCommand{result: result}); err != nil {
+		return 0, err
+	}
+	select {
+	case count := <-result:
+		return count, nil
+	case <-hub.done:
+		return 0, ErrHubClosed
+	case <-ctx.Done():
+		return 0, ctx.Err()
 	}
 }
 
@@ -204,10 +228,11 @@ func registerClient(clients map[uint64]map[string]*Client, client *Client) error
 		return ErrDuplicateClient
 	}
 	userClients[client.ClientID] = client
+	client.connected()
 	return nil
 }
 
-func removeClient(clients map[uint64]map[string]*Client, client *Client) bool {
+func removeClient(clients map[uint64]map[string]*Client, client *Client, reasons ...DisconnectReason) bool {
 	userClients := clients[client.UserID]
 	if userClients == nil || userClients[client.ClientID] != client {
 		return false
@@ -216,8 +241,20 @@ func removeClient(clients map[uint64]map[string]*Client, client *Client) bool {
 	if len(userClients) == 0 {
 		delete(clients, client.UserID)
 	}
-	client.stop()
+	reason := DisconnectNormal
+	if len(reasons) > 0 {
+		reason = reasons[0]
+	}
+	client.stop(reason)
 	return true
+}
+
+func totalConnections(clients map[uint64]map[string]*Client) int {
+	total := 0
+	for _, userClients := range clients {
+		total += len(userClients)
+	}
+	return total
 }
 
 func routeMessage(clients map[uint64]map[string]*Client, command routeCommand) DeliveryResult {
@@ -232,7 +269,7 @@ func routeMessage(clients map[uint64]map[string]*Client, command routeCommand) D
 			result.Delivered++
 		default:
 			result.Dropped++
-			removeClient(clients, client)
+			removeClient(clients, client, DisconnectSlow)
 		}
 	}
 	return result

@@ -1,7 +1,9 @@
-// Package chat assembles the Chat WebSocket foundation.
+// Package chat assembles the Chat WebSocket connection runtime.
 package chat
 
 import (
+	"log"
+
 	chatconfig "github.com/kanhai447/GIM/server/internal/chat/config"
 	platformconfig "github.com/kanhai447/GIM/server/internal/platform/config"
 )
@@ -22,6 +24,19 @@ func New(values platformconfig.Values) (*Module, error) {
 		return nil, err
 	}
 	hub := NewHub()
-	handler := NewHandler(hub, UnavailableInboundHandler{}, configuration.SendBuffer, origins)
+	handler, err := NewHandler(
+		hub,
+		UnavailableInboundHandler{},
+		configuration.SendBuffer,
+		origins,
+		HeartbeatConfig{
+			ReadLimit: configuration.ReadLimit, PongWait: configuration.PongWait,
+			PingPeriod: configuration.PingPeriod, WriteWait: configuration.WriteWait,
+		},
+		NewStandardLifecycleObserver(log.Default()),
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &Module{Config: configuration, Hub: hub, Handler: handler}, nil
 }

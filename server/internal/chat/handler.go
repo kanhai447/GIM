@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -8,20 +9,33 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 )
 
-const maxInboundFrameBytes = 1 << 20
-
 type Handler struct {
 	hub        *Hub
 	inbound    InboundHandler
 	sendBuffer int
+	heartbeat  HeartbeatConfig
+	observer   LifecycleObserver
 	upgrader   websocket.Upgrader
 }
 
-func NewHandler(hub *Hub, inbound InboundHandler, sendBuffer int, origins *OriginPolicy) *Handler {
-	return &Handler{
-		hub: hub, inbound: inbound, sendBuffer: sendBuffer,
-		upgrader: websocket.Upgrader{CheckOrigin: origins.Allows},
+func NewHandler(
+	hub *Hub,
+	inbound InboundHandler,
+	sendBuffer int,
+	origins *OriginPolicy,
+	heartbeat HeartbeatConfig,
+	observer LifecycleObserver,
+) (*Handler, error) {
+	if hub == nil || inbound == nil || sendBuffer < 1 || origins == nil || !heartbeat.valid() {
+		return nil, errors.New("invalid chat websocket handler configuration")
 	}
+	if observer == nil {
+		observer = noopLifecycleObserver{}
+	}
+	return &Handler{
+		hub: hub, inbound: inbound, sendBuffer: sendBuffer, heartbeat: heartbeat, observer: observer,
+		upgrader: websocket.Upgrader{CheckOrigin: origins.Allows},
+	}, nil
 }
 
 func RegisterRoute(server *rest.Server, path string, handler *Handler) {
@@ -38,13 +52,12 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 	if err != nil {
 		return
 	}
-	connection.SetReadLimit(maxInboundFrameBytes)
 	clientID, err := newClientID()
 	if err != nil {
 		_ = connection.Close()
 		return
 	}
-	client := newClient(userID, clientID, connection, handler.hub, handler.inbound, handler.sendBuffer)
+	client := newClient(userID, clientID, connection, handler.hub, handler.inbound, handler.sendBuffer, handler.heartbeat, handler.observer)
 	if err := handler.hub.Register(request.Context(), client); err != nil {
 		_ = connection.Close()
 		return

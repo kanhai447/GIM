@@ -77,7 +77,17 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create origin policy: %v", err)
 	}
-	chatHandler := chat.NewHandler(hub, chat.UnavailableInboundHandler{}, 8, origins)
+	chatHandler, err := chat.NewHandler(
+		hub,
+		chat.UnavailableInboundHandler{},
+		8,
+		origins,
+		chat.HeartbeatConfig{ReadLimit: 1 << 20, PongWait: 800 * time.Millisecond, PingPeriod: 200 * time.Millisecond, WriteWait: 100 * time.Millisecond},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create Chat handler: %v", err)
+	}
 	chatServerURL := startChatAPI(t, chatHandler)
 
 	registry, err := discovery.NewRegistry(etcdClient.Raw(), 10*time.Second)
@@ -112,11 +122,26 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 	connection := dialGatewayChat(t, gatewayServer.URL, rawToken, http.StatusSwitchingProtocols)
+	pingSeen, readerDone := keepGatewayConnectionAlive(connection)
 	if count := waitForGatewayChatCount(t, hub, 72, 1); count != 1 {
 		t.Fatalf("valid-token connection count = %d", count)
 	}
+	select {
+	case <-pingSeen:
+	case <-time.After(2 * time.Second):
+		t.Fatal("heartbeat Ping did not survive Gateway tunnel")
+	}
+	time.Sleep(900 * time.Millisecond)
+	if count := waitForGatewayChatCount(t, hub, 72, 1); count != 1 {
+		t.Fatalf("Gateway heartbeat connection did not remain alive: %d", count)
+	}
 	if err := connection.Close(); err != nil {
 		t.Fatalf("close valid connection: %v", err)
+	}
+	select {
+	case <-readerDone:
+	case <-time.After(time.Second):
+		t.Fatal("Gateway client reader did not exit")
 	}
 	if count := waitForGatewayChatCount(t, hub, 72, 0); count != 0 {
 		t.Fatalf("closed connection count = %d", count)
@@ -141,6 +166,27 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 		t.Fatal("logout did not revoke token")
 	}
 	dialGatewayChat(t, gatewayServer.URL, rawToken, http.StatusUnauthorized)
+}
+
+func keepGatewayConnectionAlive(connection *websocket.Conn) (<-chan struct{}, <-chan struct{}) {
+	pingSeen := make(chan struct{}, 16)
+	done := make(chan struct{})
+	connection.SetPingHandler(func(payload string) error {
+		select {
+		case pingSeen <- struct{}{}:
+		default:
+		}
+		return connection.WriteControl(websocket.PongMessage, []byte(payload), time.Now().Add(time.Second))
+	})
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := connection.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	return pingSeen, done
 }
 
 func startChatAPI(t *testing.T, handler *chat.Handler) string {
