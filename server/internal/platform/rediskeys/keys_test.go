@@ -16,3 +16,9 @@ func TestAuthLogoutDoesNotContainRawToken(t *testing.T) {
 		t.Fatal("blacklist key contains the raw token")
 	}
 }
+
+func TestPresenceUserUsesStableNamespace(t *testing.T) {
+	if key := PresenceUser(42); key != "gim:presence:user:42" {
+		t.Fatalf("PresenceUser() = %q", key)
+	}
+}

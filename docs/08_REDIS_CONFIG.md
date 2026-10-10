@@ -8,7 +8,7 @@
 
 ```text
 gim:auth:logout:{tokenHash}          -> 1, TTL=JWT remaining
-gim:presence:user:{uid}              -> metadata/count, TTL refreshed by Chat WS
+gim:presence:user:{uid}              -> ZSET(instanceID -> expiresAtMillis), key TTL
 gim:group:prohibition:{memberId}     -> 1, TTL=mute duration
 ```
 
@@ -24,12 +24,14 @@ GIM Auth V1 选择 SHA-256 token fingerprint 作为 `tokenHash`：Logout 写入 
 
 ## 2. Presence 规则
 
-- Chat WS register 首连接写/刷新；
-- Chat WS 心跳刷新 TTL；
-- 最后连接 unregister 删除，或异常情况下依赖 TTL 兜底；
-- Group WS 不修改 `gim:presence:*`。
+- Hub 只在本 Chat API 实例的用户连接 `0->1` 时提交 online transition，在 `1->0` 时提交 offline transition；`1->N` / `N->1` 不产生用户级 transition。
+- Presence worker 将 instance ID 作为 ZSET member，score 为该 contribution 的过期毫秒时间；至少一个未过期 member 即全局在线。
+- Presence worker 使用独立合理周期刷新活跃 contribution，不把每个 WebSocket Ping 直接变成 Redis 写入。
+- 正常 shutdown 在 Hub 清空连接后删除本实例 contribution；进程 crash 或清理失败时由 member 过期时间和 key TTL 兜底。
+- Redis 操作带 context timeout；故障时保留最终期望状态并重试，不在 Hub event loop 中执行无界 Redis I/O。
+- Group WS 不修改 `gim:presence:*`；Chat WS 是全局 Presence 唯一权威来源。
 
-V1 单 Chat WS 实例。未来多实例时 Presence 和消息路由需要 Redis Pub/Sub/Stream 或独立 gateway，但不在 V1。
+多实例 Presence contribution 已覆盖，但跨实例 WebSocket 消息路由仍属于 V2，需要 Redis Pub/Sub/Stream 或独立 gateway，不由 Presence key 承担。
 
 ## 3. 配置
 

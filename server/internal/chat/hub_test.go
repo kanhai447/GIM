@@ -3,10 +3,14 @@ package chat
 import (
 	"context"
 	"errors"
+	"io"
+	"log"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kanhai447/GIM/server/internal/chat/presence"
 )
 
 type fakeSocket struct {
@@ -23,6 +27,51 @@ type fakeSocket struct {
 	readLimit     atomic.Int64
 	readDeadline  atomic.Int64
 	writeDeadline atomic.Int64
+}
+
+type recordingTransitionObserver struct {
+	mu      sync.Mutex
+	online  []uint64
+	offline []uint64
+}
+
+type timeoutPresenceStore struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (store *timeoutPresenceStore) MarkOnline(ctx context.Context, _ uint64, _ string, _ time.Time, _ time.Duration) error {
+	store.once.Do(func() { close(store.started) })
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (store *timeoutPresenceStore) MarkOffline(ctx context.Context, _ uint64, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (store *timeoutPresenceStore) IsOnline(ctx context.Context, _ uint64, _ time.Time) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func (observer *recordingTransitionObserver) LocalUserOnline(userID uint64) {
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	observer.online = append(observer.online, userID)
+}
+
+func (observer *recordingTransitionObserver) LocalUserOffline(userID uint64) {
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	observer.offline = append(observer.offline, userID)
+}
+
+func (observer *recordingTransitionObserver) counts() (int, int) {
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	return len(observer.online), len(observer.offline)
 }
 
 func newFakeSocket(writeCapacity int) *fakeSocket {
@@ -136,6 +185,131 @@ func TestHubRegisterUnregisterMultiClientAndShutdown(t *testing.T) {
 		default:
 			t.Fatalf("client %s connection was not closed", client.ClientID)
 		}
+	}
+}
+
+func TestHubPresenceTransitionsFollowUserConnectionCount(t *testing.T) {
+	observer := &recordingTransitionObserver{}
+	hub := NewHub(observer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go hub.Run(ctx)
+	clientA := testClient(hub, 12, "device-a", 2)
+	clientB := testClient(hub, 12, "device-b", 2)
+
+	if err := hub.Register(context.Background(), clientA); err != nil {
+		t.Fatal(err)
+	}
+	if online, offline := observer.counts(); online != 1 || offline != 0 {
+		t.Fatalf("0->1 transitions online=%d offline=%d", online, offline)
+	}
+	if err := hub.Register(context.Background(), clientB); err != nil {
+		t.Fatal(err)
+	}
+	if online, offline := observer.counts(); online != 1 || offline != 0 {
+		t.Fatalf("1->2 duplicated transition online=%d offline=%d", online, offline)
+	}
+	if !hub.Unregister(context.Background(), clientA, DisconnectTimeout) {
+		t.Fatal("first device was not removed")
+	}
+	if online, offline := observer.counts(); online != 1 || offline != 0 {
+		t.Fatalf("2->1 emitted offline online=%d offline=%d", online, offline)
+	}
+	if !hub.Unregister(context.Background(), clientB, DisconnectNormal) {
+		t.Fatal("final device was not removed")
+	}
+	if online, offline := observer.counts(); online != 1 || offline != 1 {
+		t.Fatalf("1->0 transitions online=%d offline=%d", online, offline)
+	}
+	if hub.Unregister(context.Background(), clientB, DisconnectAbnormal) {
+		t.Fatal("duplicate unregister removed client")
+	}
+	if online, offline := observer.counts(); online != 1 || offline != 1 {
+		t.Fatalf("duplicate unregister changed transitions online=%d offline=%d", online, offline)
+	}
+}
+
+func TestSlowClientAndShutdownUseSamePresenceTransitions(t *testing.T) {
+	observer := &recordingTransitionObserver{}
+	hub := NewHub(observer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go hub.Run(ctx)
+	slow := testClient(hub, 13, "slow", 1)
+	healthy := testClient(hub, 13, "healthy", 2)
+	other := testClient(hub, 14, "other", 2)
+	for _, client := range []*Client{slow, healthy, other} {
+		if err := hub.Register(context.Background(), client); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := hub.SendToClient(context.Background(), 13, "slow", []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := hub.SendToClient(context.Background(), 13, "slow", []byte("second")); err != nil || result.Dropped != 1 {
+		t.Fatalf("slow removal = %#v, %v", result, err)
+	}
+	if online, offline := observer.counts(); online != 2 || offline != 0 {
+		t.Fatalf("slow sibling removal changed user Presence online=%d offline=%d", online, offline)
+	}
+	shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
+	defer shutdownCancel()
+	if err := hub.Shutdown(shutdownContext); err != nil {
+		t.Fatal(err)
+	}
+	if online, offline := observer.counts(); online != 2 || offline != 2 {
+		t.Fatalf("shutdown transitions online=%d offline=%d", online, offline)
+	}
+}
+
+func TestRedisTimeoutDoesNotBlockHubRegisterOrUnregister(t *testing.T) {
+	store := &timeoutPresenceStore{started: make(chan struct{})}
+	presenceService, err := presence.NewService(store, presence.Config{
+		InstanceID: "chat-timeout", TTL: time.Second, RefreshInterval: 300 * time.Millisecond,
+		RetryInterval: 100 * time.Millisecond, OperationTimeout: 300 * time.Millisecond,
+	}, log.New(io.Discard, "", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	presenceContext, presenceCancel := context.WithCancel(context.Background())
+	go presenceService.Run(presenceContext)
+	defer presenceCancel()
+	hub := NewHub(presenceService)
+	hubContext, hubCancel := context.WithCancel(context.Background())
+	go hub.Run(hubContext)
+	defer hubCancel()
+
+	client := testClient(hub, 15, "redis-timeout", 2)
+	started := time.Now()
+	if err := hub.Register(context.Background(), client); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("Hub Register blocked on Redis for %v", elapsed)
+	}
+	select {
+	case <-store.started:
+	case <-time.After(time.Second):
+		t.Fatal("Presence worker did not attempt Redis operation")
+	}
+	started = time.Now()
+	if !hub.Unregister(context.Background(), client, DisconnectTimeout) {
+		t.Fatal("Hub Unregister did not remove client")
+	}
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("Hub Unregister blocked on Redis for %v", elapsed)
+	}
+	shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
+	defer shutdownCancel()
+	if err := hub.Shutdown(shutdownContext); err != nil {
+		t.Fatal(err)
+	}
+	started = time.Now()
+	if err := presenceService.Shutdown(shutdownContext); err == nil {
+		t.Fatal("Presence shutdown unexpectedly succeeded against timed-out Redis")
+	}
+	if elapsed := time.Since(started); elapsed > 750*time.Millisecond {
+		t.Fatalf("Presence shutdown blocked too long: %v", elapsed)
 	}
 }
 

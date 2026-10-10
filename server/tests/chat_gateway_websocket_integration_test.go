@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +21,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/auth/token"
 	authhttp "github.com/kanhai447/GIM/server/internal/auth/transport/http"
 	"github.com/kanhai447/GIM/server/internal/chat"
+	"github.com/kanhai447/GIM/server/internal/chat/presence"
 	"github.com/kanhai447/GIM/server/internal/gateway"
 	"github.com/kanhai447/GIM/server/internal/gateway/authclient"
 	"github.com/kanhai447/GIM/server/internal/gateway/proxy"
@@ -26,6 +29,8 @@ import (
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
 	serviceruntime "github.com/kanhai447/GIM/server/internal/platform/process"
+	platformredis "github.com/kanhai447/GIM/server/internal/platform/redis"
+	"github.com/kanhai447/GIM/server/internal/platform/rediskeys"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/rest"
 )
@@ -50,6 +55,17 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 		t.Fatalf("open etcd client: %v", err)
 	}
 	t.Cleanup(func() { _ = etcdClient.Close() })
+	redisConfig, err := platformredis.FromValues(values)
+	if err != nil {
+		t.Fatalf("build Redis configuration: %v", err)
+	}
+	startupContext, startupCancel = context.WithTimeout(context.Background(), 5*time.Second)
+	redisClient, err := platformredis.Open(startupContext, redisConfig)
+	startupCancel()
+	if err != nil {
+		t.Fatalf("open Redis client: %s", redisErrorCategory(err))
+	}
+	t.Cleanup(func() { _ = redisClient.Close() })
 
 	tokenManager, err := token.NewManager(bytes.Repeat([]byte{0x71}, 32), time.Hour)
 	if err != nil {
@@ -64,14 +80,31 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 	authServer := httptest.NewServer(authMux)
 	t.Cleanup(authServer.Close)
 
-	hub := chat.NewHub()
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	presenceService, err := presence.NewService(
+		presence.NewRedisStore(redisClient.Raw()),
+		presence.Config{
+			InstanceID: "gateway-chat-" + suffix, TTL: 1500 * time.Millisecond,
+			RefreshInterval: 300 * time.Millisecond, RetryInterval: 100 * time.Millisecond, OperationTimeout: 200 * time.Millisecond,
+		},
+		log.New(io.Discard, "", 0),
+	)
+	if err != nil {
+		t.Fatalf("create Presence service: %v", err)
+	}
+	presenceContext, presenceCancel := context.WithCancel(context.Background())
+	go presenceService.Run(presenceContext)
+	hub := chat.NewHub(presenceService)
 	hubContext, hubCancel := context.WithCancel(context.Background())
 	go hub.Run(hubContext)
 	t.Cleanup(func() {
-		hubCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		_ = hub.Shutdown(ctx)
+		_ = presenceService.Shutdown(ctx)
+		hubCancel()
+		presenceCancel()
+		_ = redisClient.Raw().Del(context.Background(), rediskeys.PresenceUser(72), rediskeys.PresenceUser(73)).Err()
 	})
 	origins, err := chat.NewOriginPolicy([]string{"http://localhost:5173"})
 	if err != nil {
@@ -95,7 +128,6 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 		t.Fatalf("create registry: %v", err)
 	}
 	lifecycleContext, lifecycleCancel := context.WithCancel(context.Background())
-	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 	authRegistration := registerTestService(t, registry, lifecycleContext, "auth_api", "a-000-day2-auth-"+suffix, authServer.URL)
 	chatRegistration := registerTestService(t, registry, lifecycleContext, "chat_api", "a-000-day2-chat-"+suffix, chatServerURL)
 	t.Cleanup(func() {
@@ -126,13 +158,19 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 	if count := waitForGatewayChatCount(t, hub, 72, 1); count != 1 {
 		t.Fatalf("valid-token connection count = %d", count)
 	}
+	waitForGatewayPresence(t, presenceService, 72, true)
+	secondConnection := dialGatewayChat(t, gatewayServer.URL, rawToken, http.StatusSwitchingProtocols)
+	_, secondReaderDone := keepGatewayConnectionAlive(secondConnection)
+	if count := waitForGatewayChatCount(t, hub, 72, 2); count != 2 {
+		t.Fatalf("two-device connection count = %d", count)
+	}
 	select {
 	case <-pingSeen:
 	case <-time.After(2 * time.Second):
 		t.Fatal("heartbeat Ping did not survive Gateway tunnel")
 	}
 	time.Sleep(900 * time.Millisecond)
-	if count := waitForGatewayChatCount(t, hub, 72, 1); count != 1 {
+	if count := waitForGatewayChatCount(t, hub, 72, 2); count != 2 {
 		t.Fatalf("Gateway heartbeat connection did not remain alive: %d", count)
 	}
 	if err := connection.Close(); err != nil {
@@ -143,9 +181,49 @@ func TestGatewayAuthChatWebSocketTunnel(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Gateway client reader did not exit")
 	}
-	if count := waitForGatewayChatCount(t, hub, 72, 0); count != 0 {
-		t.Fatalf("closed connection count = %d", count)
+	if count := waitForGatewayChatCount(t, hub, 72, 1); count != 1 {
+		t.Fatalf("one-device connection count = %d", count)
 	}
+	waitForGatewayPresence(t, presenceService, 72, true)
+	if err := secondConnection.Close(); err != nil {
+		t.Fatalf("close second connection: %v", err)
+	}
+	select {
+	case <-secondReaderDone:
+	case <-time.After(time.Second):
+		t.Fatal("second Gateway client reader did not exit")
+	}
+	if count := waitForGatewayChatCount(t, hub, 72, 0); count != 0 {
+		t.Fatalf("closed final connection count = %d", count)
+	}
+	waitForGatewayPresence(t, presenceService, 72, false)
+
+	heartbeatToken, _, err := tokenManager.Issue(73, 2)
+	if err != nil {
+		t.Fatalf("issue heartbeat token: %v", err)
+	}
+	deadConnection := dialGatewayChat(t, gatewayServer.URL, heartbeatToken, http.StatusSwitchingProtocols)
+	healthyConnection := dialGatewayChat(t, gatewayServer.URL, heartbeatToken, http.StatusSwitchingProtocols)
+	_, healthyReaderDone := keepGatewayConnectionAlive(healthyConnection)
+	if count := waitForGatewayChatCount(t, hub, 73, 2); count != 2 {
+		t.Fatalf("heartbeat device count = %d", count)
+	}
+	waitForGatewayPresence(t, presenceService, 73, true)
+	if count := waitForGatewayChatCount(t, hub, 73, 1); count != 1 {
+		t.Fatalf("heartbeat sibling timeout count = %d", count)
+	}
+	waitForGatewayPresence(t, presenceService, 73, true)
+	_ = deadConnection.Close()
+	_ = healthyConnection.Close()
+	select {
+	case <-healthyReaderDone:
+	case <-time.After(time.Second):
+		t.Fatal("healthy heartbeat reader did not exit")
+	}
+	if count := waitForGatewayChatCount(t, hub, 73, 0); count != 0 {
+		t.Fatalf("heartbeat final connection count = %d", count)
+	}
+	waitForGatewayPresence(t, presenceService, 73, false)
 
 	dialGatewayChat(t, gatewayServer.URL, "", http.StatusUnauthorized)
 
@@ -289,6 +367,23 @@ func waitForGatewayChatCount(t *testing.T, hub *chat.Hub, userID uint64, expecte
 		}
 		if time.Now().After(deadline) {
 			return count
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func waitForGatewayPresence(t *testing.T, service *presence.Service, userID uint64, expected bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		online, err := service.IsOnline(ctx, userID)
+		cancel()
+		if err == nil && online == expected {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Presence user %d online=%t err=%v expected=%t", userID, online, err, expected)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

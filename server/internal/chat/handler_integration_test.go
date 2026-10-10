@@ -131,7 +131,8 @@ func TestChatEndpointOriginAndIdentityPolicy(t *testing.T) {
 
 func TestHeartbeatTimeoutKeepsHealthySiblingConnected(t *testing.T) {
 	heartbeat := HeartbeatConfig{ReadLimit: 1 << 20, PongWait: 300 * time.Millisecond, PingPeriod: 60 * time.Millisecond, WriteWait: 40 * time.Millisecond}
-	hub, server, observer := heartbeatServer(t, heartbeat)
+	transitions := &recordingTransitionObserver{}
+	hub, server, observer := heartbeatServer(t, heartbeat, transitions)
 	dead := dialChat(t, server.URL, testOrigin, "61", "2")
 	healthy := dialChat(t, server.URL, testOrigin, "61", "2")
 	pingSeen, readerDone := startPongingReader(healthy)
@@ -149,6 +150,9 @@ func TestHeartbeatTimeoutKeepsHealthySiblingConnected(t *testing.T) {
 	if count := waitForCount(t, hub, 61, 1); count != 1 {
 		t.Fatalf("connection count after sibling timeout = %d", count)
 	}
+	if online, offline := transitions.counts(); online != 1 || offline != 0 {
+		t.Fatalf("sibling timeout changed Presence online=%d offline=%d", online, offline)
+	}
 	time.Sleep(heartbeat.PongWait + heartbeat.PingPeriod)
 	if count := waitForCount(t, hub, 61, 1); count != 1 {
 		t.Fatalf("healthy sibling did not remain connected: %d", count)
@@ -163,6 +167,9 @@ func TestHeartbeatTimeoutKeepsHealthySiblingConnected(t *testing.T) {
 	if count := waitForCount(t, hub, 61, 0); count != 0 {
 		t.Fatalf("final user connection count = %d", count)
 	}
+	if online, offline := transitions.counts(); online != 1 || offline != 1 {
+		t.Fatalf("final timeout lifecycle transitions online=%d offline=%d", online, offline)
+	}
 	normalEvent := waitLifecycleEvent(t, observer, time.Second)
 	if normalEvent.reason != DisconnectNormal {
 		t.Fatalf("healthy client reason = %s", normalEvent.reason)
@@ -170,6 +177,29 @@ func TestHeartbeatTimeoutKeepsHealthySiblingConnected(t *testing.T) {
 	_ = dead.Close()
 	_ = healthy.Close()
 	waitChannel(t, readerDone, time.Second, "healthy client reader")
+}
+
+func TestFinalHeartbeatTimeoutEmitsOfflineOnce(t *testing.T) {
+	transitions := &recordingTransitionObserver{}
+	hub, server, observer := heartbeatServer(t, shortHeartbeat(), transitions)
+	first := dialChat(t, server.URL, testOrigin, "65", "2")
+	second := dialChat(t, server.URL, testOrigin, "65", "2")
+	if count := waitForCount(t, hub, 65, 2); count != 2 {
+		t.Fatalf("initial user connection count = %d", count)
+	}
+	if count := waitForCount(t, hub, 65, 0); count != 0 {
+		t.Fatalf("final timeout connection count = %d", count)
+	}
+	for index := 0; index < 2; index++ {
+		if event := waitLifecycleEvent(t, observer, time.Second); event.reason != DisconnectTimeout {
+			t.Fatalf("timeout %d reason = %s", index, event.reason)
+		}
+	}
+	if online, offline := transitions.counts(); online != 1 || offline != 1 {
+		t.Fatalf("heartbeat timeout transitions online=%d offline=%d", online, offline)
+	}
+	_ = first.Close()
+	_ = second.Close()
 }
 
 func TestAbnormalCloseRemovesClient(t *testing.T) {
@@ -271,9 +301,17 @@ func TestServerAndHubGracefulShutdownLifecycle(t *testing.T) {
 	_ = connection.Close()
 }
 
-func heartbeatServer(t *testing.T, heartbeat HeartbeatConfig) (*Hub, *httptest.Server, *recordingLifecycleObserver) {
+func heartbeatServer(t *testing.T, heartbeat HeartbeatConfig, transitions ...LocalConnectionTransitionObserver) (*Hub, *httptest.Server, *recordingLifecycleObserver) {
 	t.Helper()
-	hub, _ := runningHub(t)
+	hub := NewHub(transitions...)
+	hubContext, hubCancel := context.WithCancel(context.Background())
+	go hub.Run(hubContext)
+	t.Cleanup(func() {
+		hubCancel()
+		shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
+		defer shutdownCancel()
+		_ = hub.Shutdown(shutdownContext)
+	})
 	policy, err := NewOriginPolicy([]string{testOrigin})
 	if err != nil {
 		t.Fatal(err)

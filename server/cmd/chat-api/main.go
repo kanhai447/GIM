@@ -9,9 +9,11 @@ import (
 	"syscall"
 
 	"github.com/kanhai447/GIM/server/internal/chat"
+	"github.com/kanhai447/GIM/server/internal/chat/presence"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
 	serviceruntime "github.com/kanhai447/GIM/server/internal/platform/process"
+	platformredis "github.com/kanhai447/GIM/server/internal/platform/redis"
 	"github.com/zeromicro/go-zero/rest"
 )
 
@@ -43,7 +45,26 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	chatModule, err := chat.New(values)
+	redisConfig, err := platformredis.FromValues(values)
+	if err != nil {
+		return err
+	}
+	presenceConfig, err := presence.FromValues(values, registrationConfig.InstanceID)
+	if err != nil {
+		return err
+	}
+	startupContext, startupCancel := context.WithTimeout(context.Background(), runtimeConfig.StartupTimeout)
+	redisClient, err := platformredis.Open(startupContext, redisConfig)
+	startupCancel()
+	if err != nil {
+		return err
+	}
+	defer redisClient.Close()
+	presenceService, err := presence.NewService(presence.NewRedisStore(redisClient.Raw()), presenceConfig, log.Default())
+	if err != nil {
+		return err
+	}
+	chatModule, err := chat.New(values, presenceService)
 	if err != nil {
 		return err
 	}
@@ -53,7 +74,7 @@ func run(args []string) error {
 	}
 	chat.RegisterRoute(server, chatModule.Config.Path, chatModule.Handler)
 
-	startupContext, startupCancel := context.WithTimeout(context.Background(), runtimeConfig.StartupTimeout)
+	startupContext, startupCancel = context.WithTimeout(context.Background(), runtimeConfig.StartupTimeout)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
 	startupCancel()
 	if err != nil {
@@ -80,6 +101,12 @@ func run(args []string) error {
 	}()
 
 	hubDone := make(chan struct{})
+	presenceContext, presenceCancel := context.WithCancel(context.Background())
+	presenceDone := make(chan struct{})
+	go func() {
+		presenceService.Run(presenceContext)
+		close(presenceDone)
+	}()
 	go func() {
 		chatModule.Hub.Run(lifecycleContext)
 		close(hubDone)
@@ -95,5 +122,16 @@ func run(args []string) error {
 			hubErr = shutdownContext.Err()
 		}
 	}
-	return errors.Join(serveErr, hubErr)
+	presenceShutdownContext, presenceShutdownCancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
+	presenceErr := presenceService.Shutdown(presenceShutdownContext)
+	presenceCancel()
+	select {
+	case <-presenceDone:
+	case <-presenceShutdownContext.Done():
+		if presenceErr == nil {
+			presenceErr = presenceShutdownContext.Err()
+		}
+	}
+	presenceShutdownCancel()
+	return errors.Join(serveErr, hubErr, presenceErr)
 }

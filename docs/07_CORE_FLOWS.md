@@ -37,7 +37,7 @@ A ChatSocket
 
 ## 4. 断线与重连
 
-read/write error 或 Pong 超时 -> unregister -> 若该用户 Chat 连接数 1->0，删除/等待 Presence TTL 并通知好友离线。前端退避重连；成功后重新拉 session/history/unread，不依赖服务端重放内存消息。
+read/write error 或 Pong 超时 -> unregister -> 若该用户在本 Chat 实例连接数 1->0，删除本实例 Presence contribution；其他实例仍有未过期 contribution 时用户保持全局在线。进程崩溃则由 Presence TTL 淘汰 stale contribution。前端退避重连；成功后重新拉 session/history/unread，不依赖服务端重放内存消息。
 
 ## 5. 群聊发送
 

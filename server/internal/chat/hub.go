@@ -18,12 +18,26 @@ type DeliveryResult struct {
 }
 
 type Hub struct {
-	commands chan any
-	stop     chan struct{}
-	done     chan struct{}
-	runOnce  sync.Once
-	stopOnce sync.Once
+	commands    chan any
+	stop        chan struct{}
+	done        chan struct{}
+	transitions LocalConnectionTransitionObserver
+	runOnce     sync.Once
+	stopOnce    sync.Once
 }
+
+// LocalConnectionTransitionObserver receives user-level local connection changes.
+// Implementations must return quickly; the Hub event loop never performs
+// external I/O while it owns the connection map.
+type LocalConnectionTransitionObserver interface {
+	LocalUserOnline(uint64)
+	LocalUserOffline(uint64)
+}
+
+type noopLocalConnectionTransitionObserver struct{}
+
+func (noopLocalConnectionTransitionObserver) LocalUserOnline(uint64)  {}
+func (noopLocalConnectionTransitionObserver) LocalUserOffline(uint64) {}
 
 type registerCommand struct {
 	client *Client
@@ -50,8 +64,12 @@ type routeCommand struct {
 	result   chan DeliveryResult
 }
 
-func NewHub() *Hub {
-	return &Hub{commands: make(chan any, 64), stop: make(chan struct{}), done: make(chan struct{})}
+func NewHub(observers ...LocalConnectionTransitionObserver) *Hub {
+	var observer LocalConnectionTransitionObserver = noopLocalConnectionTransitionObserver{}
+	if len(observers) > 0 && observers[0] != nil {
+		observer = observers[0]
+	}
+	return &Hub{commands: make(chan any, 64), stop: make(chan struct{}), done: make(chan struct{}), transitions: observer}
 }
 
 func (hub *Hub) Run(ctx context.Context) {
@@ -61,10 +79,11 @@ func (hub *Hub) Run(ctx context.Context) {
 func (hub *Hub) run(ctx context.Context) {
 	clients := make(map[uint64]map[string]*Client)
 	defer func() {
-		for _, userClients := range clients {
+		for userID, userClients := range clients {
 			for _, client := range userClients {
 				client.stop(DisconnectShutdown)
 			}
+			hub.transitions.LocalUserOffline(userID)
 		}
 		close(hub.done)
 	}()
@@ -77,15 +96,15 @@ func (hub *Hub) run(ctx context.Context) {
 		case command := <-hub.commands:
 			switch current := command.(type) {
 			case registerCommand:
-				current.result <- registerClient(clients, current.client)
+				current.result <- registerClient(clients, current.client, hub.transitions)
 			case unregisterCommand:
-				current.result <- removeClient(clients, current.client, current.reason)
+				current.result <- removeClient(clients, current.client, hub.transitions, current.reason)
 			case countCommand:
 				current.result <- len(clients[current.userID])
 			case totalCountCommand:
 				current.result <- totalConnections(clients)
 			case routeCommand:
-				current.result <- routeMessage(clients, current)
+				current.result <- routeMessage(clients, hub.transitions, current)
 			}
 		}
 	}
@@ -218,8 +237,9 @@ func (hub *Hub) submit(ctx context.Context, command any) error {
 	}
 }
 
-func registerClient(clients map[uint64]map[string]*Client, client *Client) error {
+func registerClient(clients map[uint64]map[string]*Client, client *Client, transitions LocalConnectionTransitionObserver) error {
 	userClients := clients[client.UserID]
+	firstConnection := len(userClients) == 0
 	if userClients == nil {
 		userClients = make(map[string]*Client)
 		clients[client.UserID] = userClients
@@ -229,10 +249,13 @@ func registerClient(clients map[uint64]map[string]*Client, client *Client) error
 	}
 	userClients[client.ClientID] = client
 	client.connected()
+	if firstConnection {
+		transitions.LocalUserOnline(client.UserID)
+	}
 	return nil
 }
 
-func removeClient(clients map[uint64]map[string]*Client, client *Client, reasons ...DisconnectReason) bool {
+func removeClient(clients map[uint64]map[string]*Client, client *Client, transitions LocalConnectionTransitionObserver, reasons ...DisconnectReason) bool {
 	userClients := clients[client.UserID]
 	if userClients == nil || userClients[client.ClientID] != client {
 		return false
@@ -240,6 +263,7 @@ func removeClient(clients map[uint64]map[string]*Client, client *Client, reasons
 	delete(userClients, client.ClientID)
 	if len(userClients) == 0 {
 		delete(clients, client.UserID)
+		transitions.LocalUserOffline(client.UserID)
 	}
 	reason := DisconnectNormal
 	if len(reasons) > 0 {
@@ -257,7 +281,7 @@ func totalConnections(clients map[uint64]map[string]*Client) int {
 	return total
 }
 
-func routeMessage(clients map[uint64]map[string]*Client, command routeCommand) DeliveryResult {
+func routeMessage(clients map[uint64]map[string]*Client, transitions LocalConnectionTransitionObserver, command routeCommand) DeliveryResult {
 	var result DeliveryResult
 	userClients := clients[command.userID]
 	for id, client := range userClients {
@@ -269,7 +293,7 @@ func routeMessage(clients map[uint64]map[string]*Client, command routeCommand) D
 			result.Delivered++
 		default:
 			result.Dropped++
-			removeClient(clients, client, DisconnectSlow)
+			removeClient(clients, client, transitions, DisconnectSlow)
 		}
 	}
 	return result

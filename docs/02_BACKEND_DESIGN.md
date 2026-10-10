@@ -71,14 +71,15 @@ Chat user local connections: 0 -> 1 : online
 Chat user local connections: 1 -> 0 : offline
 ```
 
-V1 单实例 Chat WS 时，Redis 记录：
+Redis 按用户记录各 Chat API 实例的 Presence contribution：
 
 ```text
-gim:presence:user:{uid} = client-count/metadata
-TTL = heartbeat-renewed
+gim:presence:user:{uid} = ZSET(instanceID -> expiresAt)
 ```
 
-Group Hub 不写这个 key。好友列表从 Redis 查询 Presence；好友上线提醒只在 Chat Hub 的 0->1 触发。
+Hub 仍以本实例 `userID -> clientID -> Client` 为连接计数真相；本实例 `0->1` 新增/续租 contribution，`1->0` 删除 contribution。全局在线等价于至少存在一个未过期 contribution。独立 Presence worker 负责合理周期刷新并在 Redis 故障时重试，避免在 Hub event loop 中执行网络 I/O；进程崩溃后的 stale contribution 由过期时间清理。
+
+Group Hub 不写这个 key，也不参与全局 Presence。好友列表从 Redis 查询 Presence；好友上线提醒只允许基于 Chat Hub 的真实用户级 transition 扩展，本阶段不实现通知广播。
 
 ## 5. 私聊发送 Service
 

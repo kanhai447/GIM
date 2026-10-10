@@ -14,7 +14,7 @@ type Module struct {
 	Handler *Handler
 }
 
-func New(values platformconfig.Values) (*Module, error) {
+func New(values platformconfig.Values, transitions ...LocalConnectionTransitionObserver) (*Module, error) {
 	configuration, err := chatconfig.FromValues(values)
 	if err != nil {
 		return nil, err
@@ -23,7 +23,7 @@ func New(values platformconfig.Values) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	hub := NewHub()
+	hub := NewHub(transitions...)
 	handler, err := NewHandler(
 		hub,
 		UnavailableInboundHandler{},
