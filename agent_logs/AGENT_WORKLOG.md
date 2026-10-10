@@ -386,3 +386,34 @@
 - implementation commit：`b2e6f8cc2b10bc9cff834e0bf45e92cf7eacd932 feat(chat): add websocket hub and client foundation`。
 - log/status commit：本记录所在提交。
 - 下一 Checkpoint：Chat WebSocket Heartbeat + Connection Lifecycle；本轮完成后停止。
+
+## 2026-10-10 Day 2 / Checkpoint 2 — Chat WebSocket Heartbeat + Connection Lifecycle
+
+### 目标与实现
+
+- 增加配置化 read limit、pong wait、ping period、write wait；安全默认 1 MiB / 60s / 50s / 10s。
+- readPump 设置 initial deadline、Pong refresh、无写 Ping/Close handlers；writePump 独占 data/Ping/Pong control 写和 ticker。
+- Hub 新增 total connection count；disconnect reason 区分 normal/timeout/abnormal/slow/shutdown，安全日志只记录 userID/opaque ClientID/reason。
+- Hub 触发唯一 `Client.stop` 关闭 Send/Conn；stopOnce、幂等 unregister 和不关闭的有界 control queue 避免 double close/send-on-closed。
+- 未实现 Presence、Redis online、ACK、消息持久化、session/unread 或前端 socket。
+
+### FIM reference / 改进
+
+- 只读确认 FIM 无 Ping/Pong、deadline/dead detection，仍有全局 map 与多路径直接写 Conn；未复制实现。
+- GIM 使用 Hub event loop、单 writePump、配置化 heartbeat、原因分类和可等待的 pump/ticker 生命周期测试。
+
+### 验收
+
+- Pong refresh、missing Pong timeout、normal/abnormal close、slow client、double cleanup、shutdown：PASS。
+- 同用户两个连接 timeout-one/keep-sibling，connection count `2 -> 1 -> 0`：PASS。
+- 9 个核心 heartbeat/lifecycle 测试组合连续 10 轮：PASS。
+- 真实 etcd Gateway/Auth/Chat tunnel：Ping/Pong 保持超过 pongWait、关闭清理、missing/logout token 回归 PASS。
+- `go test ./... -count=1`、vet、gofmt、diff check、Secret Scan：PASS。
+- Chat heartbeat/lifecycle coverage：81.5% statements。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；兼容环境/CI verification PENDING。
+
+### Git / 下一步
+
+- implementation commit：`2b90df522337932bb57dfb0889caf39f54da80d3 feat(chat): add websocket heartbeat and connection lifecycle`。
+- log/status commit：本记录所在提交。
+- 下一 Checkpoint：Chat Presence；本轮完成后停止。

@@ -3,9 +3,10 @@
 ## 授权状态
 
 - Day 2：AUTHORIZED。
-- 当前 Checkpoint：Chat WebSocket Foundation COMPLETED。
+- 当前 Checkpoint：Chat WebSocket Heartbeat + Connection Lifecycle COMPLETED。
 - 已完成：Pre-Day2 Concurrency Preflight。
 - 已完成：Chat Hub/Client、readPump/writePump、多连接模型、Chat endpoint/runtime 和 Gateway real WS tunnel。
+- 已完成：Chat WebSocket Heartbeat、deadline、dead/slow/normal/abnormal disconnect cleanup 和 multi-device lifecycle。
 
 ## Pre-Day2 Concurrency Preflight
 
@@ -25,6 +26,7 @@
 
 - `agent_logs/operations/day-2/001_pre-day2_concurrency-preflight.md`
 - `agent_logs/operations/day-2/002_checkpoint-1_chat-ws-foundation.md`
+- `agent_logs/operations/day-2/003_checkpoint-2_chat-heartbeat-lifecycle.md`
 
 ## Checkpoint 1 — Chat WebSocket Hub / Client Foundation
 
@@ -40,6 +42,19 @@
 - Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
 - 未实现 Heartbeat、Presence、ACK、clientMsgId 业务、消息持久化、session/unread 或前端 socket。
 
+## Checkpoint 2 — Chat WebSocket Heartbeat + Connection Lifecycle
+
+- 时间：2026-10-10 10:01 +08:00。
+- 生产默认：read limit 1 MiB、pong wait 60s、ping period 50s、write wait 10s；配置强制 `pingPeriod < pongWait`。
+- readPump 设置 read deadline/PongHandler；writePump 独占 data、Ping 及 peer-Ping 的 Pong 写入和 heartbeat ticker。
+- missing Pong timeout、normal/abnormal close、slow client、double cleanup 与 server/Hub shutdown 均完成清理测试。
+- 同用户两个设备 `2 -> 1 -> 0`；一个 timeout 不影响健康 sibling。
+- Hub 新增 total connection count，但未产生 Redis/Presence 副作用。
+- Gateway heartbeat tunnel 在真实临时 etcd 下保持超过 pongWait：PASS。
+- 全量测试、vet、gofmt、diff check、Secret Scan PASS；Chat heartbeat/lifecycle coverage 81.5%。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
+- 未实现 Presence、Redis online、ACK、持久化、session/unread 或前端 socket。
+
 ## Next Checkpoint
 
-Chat WebSocket Heartbeat + Connection Lifecycle
+Chat Presence

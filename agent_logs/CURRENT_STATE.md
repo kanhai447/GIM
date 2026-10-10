@@ -2,12 +2,12 @@
 
 - **Current Day:** DAY 2
 - **Current Phase:** PHASE 2 AUTHORIZED / IN PROGRESS
-- **Current Checkpoint:** CHAT WEBSOCKET FOUNDATION COMPLETED
-- **Last Completed Checkpoint:** Chat WebSocket Hub / Client Foundation
-- **Working Tree:** CLEAN（本状态随 Checkpoint 1 日志提交并推送后）
-- **Last Stable Business Baseline:** `b2e6f8cc2b10bc9cff834e0bf45e92cf7eacd932` — `feat(chat): add websocket hub and client foundation`
-- **Last Push:** Checkpoint 1 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Chat WebSocket Heartbeat + Connection Lifecycle
+- **Current Checkpoint:** CHAT WEBSOCKET HEARTBEAT + CONNECTION LIFECYCLE COMPLETED
+- **Last Completed Checkpoint:** Chat WebSocket Heartbeat + Connection Lifecycle
+- **Working Tree:** CLEAN（本状态随 Checkpoint 2 日志提交并推送后）
+- **Last Stable Business Baseline:** `2b90df522337932bb57dfb0889caf39f54da80d3` — `feat(chat): add websocket heartbeat and connection lifecycle`
+- **Last Push:** Checkpoint 2 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Chat Presence
 - **Next Planned Work:** DAY 2 - PHASE 2 CHAT HUB/CLIENT + PRESENCE
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
@@ -34,10 +34,12 @@
 - 真实多进程 Register/Login/Gateway/Auth/User/Logout、Header 防伪造、lease keepalive 与 immediate cleanup 最终验收。
 - Chat Hub event loop、Client、readPump/唯一 writePump、同用户多连接、bounded Send/backpressure 与 shutdown。
 - 配置化精确 Origin policy、Chat API 正式入口、etcd 注册清理及 Gateway/Auth/Chat 真实 WebSocket tunnel。
+- 配置化 Ping/Pong、read/write deadline、dead connection detection、原因分类与无 zombie cleanup。
+- 同用户多设备独立 heartbeat 生命周期、total/user connection count 和可等待的 graceful shutdown。
 
 ## In Progress
 
-- 无；Checkpoint 1 已完成并停止，等待下一 Checkpoint 指令。
+- 无；Checkpoint 2 已完成并停止，等待下一 Checkpoint 指令。
 
 ## Authorization
 
@@ -45,11 +47,11 @@ Day 2:
 AUTHORIZED
 
 Next Checkpoint:
-Chat WebSocket Heartbeat + Connection Lifecycle
+Chat Presence
 
 ## Not Started
 
-- Day 2 后续：Heartbeat/Ping/Pong/deadline、Presence/Redis online、正式消息 pipeline、ACK/clientMsgId 处理、持久化、session/unread 和前端 socket 尚未开始。
+- Day 2 后续：Presence/Redis online、正式消息 pipeline、ACK/clientMsgId 处理、持久化、session/unread 和前端 socket 尚未开始。
 - Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
@@ -67,6 +69,7 @@ Chat WebSocket Heartbeat + Connection Lifecycle
 - Checkpoint 9：正式四进程 smoke、Auth/Gateway 异常与 Header 防伪造、etcd lease/keepalive/revoke、migration dirty/UP/DOWN/RE-UP、非缓存全量测试、vet、gofmt、76.7% 核心 coverage、Web/Admin test/type-check/build、Secret Scan 与 reference independence 全部 PASS；race 为 NOT RUN。
 - Pre-Day2：`go test ./... -count=1` 及 Auth/Gateway/Redis focused tests PASS；`go test -race ./...` 在 runtime/cgo 构建阶段失败，准确错误为 `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`。Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Day 2 后续必须在兼容环境/CI 执行 race 验证。
 - Day 2 / Checkpoint 1：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Hub/Client/slow-client/Origin 集成和真实 Gateway/Auth/Chat WebSocket tunnel 全部 PASS；Chat foundation coverage 78.6%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
+- Day 2 / Checkpoint 2：全量测试、vet、gofmt、diff check、Secret Scan、heartbeat/lifecycle 10 轮稳定性和真实 Gateway Ping/Pong tunnel 全部 PASS；Chat heartbeat/lifecycle coverage 81.5%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 
 ## Known Issues
 
@@ -78,5 +81,5 @@ Chat WebSocket Heartbeat + Connection Lifecycle
 
 ## Next Action
 
-- Chat WebSocket Hub / Client Foundation 已完成，无 Day 2 blocker。
-- 下一授权入口为 **Chat WebSocket Heartbeat + Connection Lifecycle**；Race 必须在兼容环境/CI 补验。本轮不进入下一 Checkpoint。
+- Chat WebSocket Foundation、Heartbeat 与 Connection Lifecycle 已完成，无 Day 2 blocker。
+- 下一授权入口为 **Chat Presence**；Race 必须在兼容环境/CI 补验。本轮不进入 Presence。
