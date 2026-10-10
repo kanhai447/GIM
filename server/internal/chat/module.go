@@ -2,6 +2,7 @@
 package chat
 
 import (
+	"errors"
 	"log"
 
 	chatconfig "github.com/kanhai447/GIM/server/internal/chat/config"
@@ -14,7 +15,18 @@ type Module struct {
 	Handler *Handler
 }
 
+type InboundFactory func(*Hub) (InboundHandler, error)
+
 func New(values platformconfig.Values, transitions ...LocalConnectionTransitionObserver) (*Module, error) {
+	return NewWithInboundFactory(values, func(*Hub) (InboundHandler, error) {
+		return UnavailableInboundHandler{}, nil
+	}, transitions...)
+}
+
+func NewWithInboundFactory(values platformconfig.Values, factory InboundFactory, transitions ...LocalConnectionTransitionObserver) (*Module, error) {
+	if factory == nil {
+		return nil, errors.New("chat inbound factory is required")
+	}
 	configuration, err := chatconfig.FromValues(values)
 	if err != nil {
 		return nil, err
@@ -24,9 +36,13 @@ func New(values platformconfig.Values, transitions ...LocalConnectionTransitionO
 		return nil, err
 	}
 	hub := NewHub(transitions...)
+	inbound, err := factory(hub)
+	if err != nil {
+		return nil, err
+	}
 	handler, err := NewHandler(
 		hub,
-		UnavailableInboundHandler{},
+		inbound,
 		configuration.SendBuffer,
 		origins,
 		HeartbeatConfig{

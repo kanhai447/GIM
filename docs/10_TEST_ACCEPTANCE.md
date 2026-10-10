@@ -13,10 +13,13 @@
 2. B 离线，A 发消息；B 上线后历史和未读正确。
 3. A 同时 3-5 个标签页，多端同步且上线只触发一次。
 4. 同一个 clientMsgId 连续发送两次，只有一条 DB 消息。
-5. 断网/浏览器强关，心跳超时后 Presence 清理。
-6. 多用户同时给同一用户发消息，无 concurrent write。
-7. 群聊多人同时发；禁言用户被拒绝；管理员权限正确。
-8. 前端 WS 自动重连后 session 与未读重新同步。
+5. 同一 sender 的 50 个并发相同 clientMsgId 由真实 MySQL UNIQUE 收敛到一行，所有成功结果返回同一 messageId。
+6. ACK 丢失后重连重试返回同一 messageId，receiver 不重复收到 realtime event。
+7. receiver 离线仍持久化并 ACK；在线多设备与跨实例连接各收到一次。
+8. 断网/浏览器强关，心跳超时后 Presence 清理。
+9. 多用户同时给同一用户发消息，无 concurrent write。
+10. 群聊多人同时发；禁言用户被拒绝；管理员权限正确。
+11. 前端 WS 自动重连后 session 与未读重新同步。
 
 ## 3. 文件场景
 

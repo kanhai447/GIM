@@ -9,6 +9,7 @@
 ```text
 gim:auth:logout:{tokenHash}          -> 1, TTL=JWT remaining
 gim:presence:user:{uid}              -> ZSET(instanceID -> expiresAtMillis), key TTL
+gim:chat:delivery                    -> Pub/Sub channel, private message realtime fanout
 gim:group:prohibition:{memberId}     -> 1, TTL=mute duration
 ```
 
@@ -31,7 +32,7 @@ GIM Auth V1 选择 SHA-256 token fingerprint 作为 `tokenHash`：Logout 写入 
 - Redis 操作带 context timeout；故障时保留最终期望状态并重试，不在 Hub event loop 中执行无界 Redis I/O。
 - Group WS 不修改 `gim:presence:*`；Chat WS 是全局 Presence 唯一权威来源。
 
-多实例 Presence contribution 已覆盖，但跨实例 WebSocket 消息路由仍属于 V2，需要 Redis Pub/Sub/Stream 或独立 gateway，不由 Presence key 承担。
+多实例 Presence contribution 与私聊 realtime fanout 已分离：Presence 使用 ZSET；私聊持久化后统一发布 `gim:chat:delivery`，所有 Chat 实例订阅并只投递本实例 receiver Clients。同实例不再额外直投，避免重复。Pub/Sub 是 best-effort 通知而不是消息存储；publish 失败不撤销 MySQL 持久化或 Server ACK，history 才是恢复路径。Group/更通用的跨实例 WebSocket routing 仍留待对应 Checkpoint/V2。
 
 ## 3. 配置
 
@@ -45,6 +46,7 @@ JWT secret + expiry
 Gateway route/service names
 WS allowed origins
 WS ping/pong durations
+Chat text/payload limits, dependency/delivery timeout
 upload root/max size/allowed mime
 frontend public base url
 ```

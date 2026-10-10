@@ -18,16 +18,24 @@ const (
 	defaultPingPeriod    = 50 * time.Second
 	defaultWriteWait     = 10 * time.Second
 	maximumHeartbeatWait = 10 * time.Minute
+	defaultMaxTextBytes  = 4096
+	defaultMaxPayload    = 16 * 1024
+	defaultDependency    = 2 * time.Second
+	defaultDelivery      = time.Second
 )
 
 type Config struct {
-	Path           string
-	SendBuffer     int
-	AllowedOrigins []string
-	ReadLimit      int64
-	PongWait       time.Duration
-	PingPeriod     time.Duration
-	WriteWait      time.Duration
+	Path              string
+	SendBuffer        int
+	AllowedOrigins    []string
+	ReadLimit         int64
+	PongWait          time.Duration
+	PingPeriod        time.Duration
+	WriteWait         time.Duration
+	MaxTextBytes      int
+	MaxPayloadBytes   int
+	DependencyTimeout time.Duration
+	DeliveryTimeout   time.Duration
 }
 
 func FromValues(values platformconfig.Values) (Config, error) {
@@ -62,9 +70,26 @@ func FromValues(values platformconfig.Values) (Config, error) {
 	if err != nil || writeWait <= 0 || writeWait > maximumHeartbeatWait {
 		return Config{}, errors.New("configuration key CHAT_WS_WRITE_WAIT must be a positive duration no greater than 10m")
 	}
+	maxTextBytes, err := optionalInt(values, "CHAT_MESSAGE_MAX_TEXT_BYTES", defaultMaxTextBytes)
+	if err != nil || maxTextBytes < 1 || maxTextBytes > 64*1024 {
+		return Config{}, errors.New("configuration key CHAT_MESSAGE_MAX_TEXT_BYTES must be between 1 and 65536")
+	}
+	maxPayloadBytes, err := optionalInt(values, "CHAT_MESSAGE_MAX_PAYLOAD_BYTES", defaultMaxPayload)
+	if err != nil || maxPayloadBytes < maxTextBytes || maxPayloadBytes > int(maximumReadLimit) {
+		return Config{}, errors.New("configuration key CHAT_MESSAGE_MAX_PAYLOAD_BYTES must contain text and not exceed the WebSocket read limit maximum")
+	}
+	dependencyTimeout, err := optionalDuration(values, "CHAT_MESSAGE_DEPENDENCY_TIMEOUT", defaultDependency)
+	if err != nil || dependencyTimeout <= 0 || dependencyTimeout > 30*time.Second {
+		return Config{}, errors.New("configuration key CHAT_MESSAGE_DEPENDENCY_TIMEOUT must be positive and no greater than 30s")
+	}
+	deliveryTimeout, err := optionalDuration(values, "CHAT_DELIVERY_OPERATION_TIMEOUT", defaultDelivery)
+	if err != nil || deliveryTimeout <= 0 || deliveryTimeout > 30*time.Second {
+		return Config{}, errors.New("configuration key CHAT_DELIVERY_OPERATION_TIMEOUT must be positive and no greater than 30s")
+	}
 	return Config{
 		Path: path, SendBuffer: buffer, AllowedOrigins: origins, ReadLimit: int64(readLimit),
-		PongWait: pongWait, PingPeriod: pingPeriod, WriteWait: writeWait,
+		PongWait: pongWait, PingPeriod: pingPeriod, WriteWait: writeWait, MaxTextBytes: maxTextBytes,
+		MaxPayloadBytes: maxPayloadBytes, DependencyTimeout: dependencyTimeout, DeliveryTimeout: deliveryTimeout,
 	}, nil
 }
 

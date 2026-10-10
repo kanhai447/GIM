@@ -19,17 +19,18 @@ A ChatSocket
  -> check friendship
  -> lookup (A, clientMsgId)
     -> exists: return original ACK
- -> DB transaction
-    -> insert chat message
-    -> upsert A->B session
-    -> upsert B->A session + unread
- -> commit
- -> ACK A
- -> if B online locally: Hub.SendToUser(B)
- -> B writePump -> chat.message
+ -> INSERT chat message (DB UNIQUE is final idempotency guard)
+    -> duplicate key: query original message and return original ACK
+ -> ACK originating Client A
+ -> if createdNew: publish gim:chat:delivery
+ -> every Chat instance receives event
+ -> instance(s) with B Clients: Hub.SendToUser(B)
+ -> B writePump -> chat.message (all active Chat Clients)
 ```
 
-关键顺序：**先成功落库，再 ACK/推送**。这样推送失败不会造成消息丢失，B 可从历史恢复。
+关键顺序：**先成功落库，再 ACK，再 best-effort 推送**。Redis publish/receiver backpressure 失败不会回滚消息或把 ACK 变成失败；B 后续可从历史恢复。幂等重试 `createdNew=false`，只重发同一 messageId 的 ACK，不再次推送 receiver。
+
+Checkpoint 4 的 ACK 只基于 `chat_messages` 成功持久化。Checkpoint 5 再把 `insert chat message + upsert A->B session + upsert B->A session/unread` 收敛为同一事务；本阶段不得提前写 `chat_sessions`。
 
 ## 3. 私聊已读
 

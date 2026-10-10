@@ -17,7 +17,9 @@ func TestFromValues(t *testing.T) {
 	}
 	if configuration.Path != "/api/chat/ws/chat" || configuration.SendBuffer != 32 || len(configuration.AllowedOrigins) != 2 ||
 		configuration.ReadLimit != 2<<20 || configuration.PongWait != 45*time.Second ||
-		configuration.PingPeriod != 30*time.Second || configuration.WriteWait != 5*time.Second {
+		configuration.PingPeriod != 30*time.Second || configuration.WriteWait != 5*time.Second ||
+		configuration.MaxTextBytes != 4096 || configuration.MaxPayloadBytes != 16*1024 ||
+		configuration.DependencyTimeout != 2*time.Second || configuration.DeliveryTimeout != time.Second {
 		t.Fatalf("FromValues() = %#v", configuration)
 	}
 }
@@ -40,6 +42,10 @@ func TestFromValuesRejectsUnsafeConfiguration(t *testing.T) {
 		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_WS_READ_LIMIT_BYTES=16777217\n",
 		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_WS_PONG_WAIT=30s\nCHAT_WS_PING_PERIOD=30s\n",
 		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_WS_WRITE_WAIT=0s\n",
+		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_MESSAGE_MAX_TEXT_BYTES=0\n",
+		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_MESSAGE_MAX_TEXT_BYTES=4096\nCHAT_MESSAGE_MAX_PAYLOAD_BYTES=100\n",
+		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_MESSAGE_DEPENDENCY_TIMEOUT=0s\n",
+		"CHAT_WS_PATH=/api/chat/ws/chat\nCHAT_WS_ALLOWED_ORIGINS=http://localhost:5173\nCHAT_DELIVERY_OPERATION_TIMEOUT=31s\n",
 	} {
 		if _, err := FromValues(loadValues(t, content)); err == nil {
 			t.Fatalf("FromValues() accepted unsafe configuration %q", content)

@@ -4,8 +4,9 @@ package rediskeys
 import "strconv"
 
 const (
-	authLogoutPrefix   = "gim:auth:logout:"
-	presenceUserPrefix = "gim:presence:user:"
+	authLogoutPrefix    = "gim:auth:logout:"
+	presenceUserPrefix  = "gim:presence:user:"
+	chatDeliveryChannel = "gim:chat:delivery"
 )
 
 // AuthLogout returns the key for a SHA-256 token fingerprint. Callers must
@@ -13,6 +14,10 @@ const (
 func AuthLogout(tokenFingerprint string) string {
 	return authLogoutPrefix + tokenFingerprint
 }
+
+// ChatDeliveryChannel is the cluster-wide best-effort private message fanout
+// channel. MySQL, not this channel, remains the message source of truth.
+func ChatDeliveryChannel() string { return chatDeliveryChannel }
 
 // PresenceUser returns the global Presence key for one user. The key contains
 // only the stable numeric user ID; per-device IDs and credentials never belong

@@ -89,9 +89,11 @@ WebSocket Handler 只负责 envelope 解析和调用：
 HandleChatSend(ctx, userID, clientMsgId, payload)
 ```
 
-Service 负责：参数验证 -> 限制聊天检查 -> 好友校验 -> 幂等检查 -> 构造消息 -> 事务落库 -> 更新双方 session -> ACK -> 尝试推送接收方。
+Service 负责：参数验证 -> 接收者 RPC 校验 -> 好友校验 -> 幂等检查 -> 构造消息 -> 持久化，并返回 `createdNew`。WebSocket transport 只在 Service 成功后向发起 Client 排队 ACK；只有 `createdNew=true` 才触发 receiver realtime delivery，幂等重试只重发 ACK。
 
-ACK 只能在数据库事务成功后返回。
+ACK 只能在数据库持久化成功后返回，且仅代表服务端已接受/持久化，不代表 receiver 在线、收到或已读。ACK 只发回发起此次发送的 Client，不广播到 sender 其他设备。
+
+Checkpoint 4 只持久化 `chat_messages`；Checkpoint 5 引入 session/unread 时，必须把 message insert 与双方 session update 纳入同一事务。当前实时私聊统一发布到 `gim:chat:delivery`，各 Chat API 实例只向本实例 receiver Clients 投递；同实例也不额外直投，避免本地路径与 Pub/Sub 重复。
 
 ## 6. 群聊发送 Service
 

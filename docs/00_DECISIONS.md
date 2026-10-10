@@ -20,6 +20,7 @@
 | Presence | 只由 Chat WS 维护 | 原源码 Chat/Group 各有本地连接表；全局在线态只允许一套权威来源 |
 | 消息 ACK | 服务端持久化后 ACK | 明确“已发送到服务端” |
 | 幂等 | sender + clientMsgId 唯一 | 网络重试不重复入库 |
+| 私聊跨实例实时投递 | Redis Pub/Sub 集群 channel | 只做 best-effort fanout；MySQL 是可靠性事实源，publish 失败不撤销持久化 ACK |
 | 私聊/群聊表 | 分开 | 保留原项目服务边界 |
 | 最近会话 | chat_session/group_session | 原源码实时聚合查询复杂且存在删除语义问题；改为显式会话状态 |
 | 未读 | session 内 unread + lastReadMsgId | 查询快，便于已读 |

@@ -22,3 +22,9 @@ func TestPresenceUserUsesStableNamespace(t *testing.T) {
 		t.Fatalf("PresenceUser() = %q", key)
 	}
 }
+
+func TestChatDeliveryChannelUsesStableNamespace(t *testing.T) {
+	if channel := ChatDeliveryChannel(); channel != "gim:chat:delivery" {
+		t.Fatalf("ChatDeliveryChannel() = %q", channel)
+	}
+}

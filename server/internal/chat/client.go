@@ -26,6 +26,10 @@ type InboundHandler interface {
 	Handle(context.Context, ClientIdentity, protocol.Envelope) error
 }
 
+type MalformedInboundHandler interface {
+	HandleMalformed(context.Context, ClientIdentity) error
+}
+
 type InboundHandlerFunc func(context.Context, ClientIdentity, protocol.Envelope) error
 
 func (function InboundHandlerFunc) Handle(ctx context.Context, identity ClientIdentity, envelope protocol.Envelope) error {
@@ -141,8 +145,16 @@ func (client *Client) readPump(ctx context.Context) {
 		if messageType != websocket.TextMessage {
 			return
 		}
+		identity := ClientIdentity{UserID: client.UserID, ClientID: client.ClientID}
 		envelope, err := protocol.Decode(payload)
-		if err != nil || client.inbound.Handle(ctx, ClientIdentity{UserID: client.UserID, ClientID: client.ClientID}, envelope) != nil {
+		if err != nil {
+			malformed, ok := client.inbound.(MalformedInboundHandler)
+			if !ok || malformed.HandleMalformed(ctx, identity) != nil {
+				return
+			}
+			continue
+		}
+		if client.inbound.Handle(ctx, identity, envelope) != nil {
 			return
 		}
 	}

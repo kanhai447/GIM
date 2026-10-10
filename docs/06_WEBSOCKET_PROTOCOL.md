@@ -55,7 +55,7 @@ wss://host/.../group?token=<JWT>
 
 ### Server -> Sender `chat.ack`
 
-只有事务成功后发送：
+只有消息成功持久化或命中已持久化的同一幂等消息后发送：
 
 ```json
 {
@@ -67,9 +67,30 @@ wss://host/.../group?token=<JWT>
 
 若相同 clientMsgId 重试，返回同一 messageId，不能再次插入。
 
+`chat.ack` 是 **Server persist ACK**：只表示服务端已经接受并持久化消息；不表示 receiver 在线、收到、展示或已读。ACK 只回发到发起 `chat.send` 的 Client。
+
 ### Server -> Recipient `chat.message`
 
 `data` 使用历史消息接口同构的消息 DTO，避免前端维护两套结构。
+
+```json
+{
+  "event":"chat.message",
+  "clientMsgId":"uuid-or-ulid",
+  "data":{
+    "messageId":123,
+    "sendUserID":1001,
+    "revUserID":1002,
+    "clientMsgId":"uuid-or-ulid",
+    "msg":{"type":1,"textMsg":{"content":"你好"}},
+    "createdAt":"2026-10-06T16:00:00+08:00"
+  }
+}
+```
+
+Checkpoint 4 只接受文本 `type=1`：`clientMsgId` 为 1–64 字符且只允许字母、数字、`.`、`_`、`:`、`-`；文本 UTF-8 非空且默认最多 4096 bytes，typed message payload 默认最多 16384 bytes。senderID 只取 Gateway 注入身份，不允许客户端提交。
+
+receiver 离线不影响持久化和 ACK；在线 receiver 的所有 Chat Clients best-effort 收到一次 `chat.message`。跨实例统一走 Redis Pub/Sub；publish/本地队列失败不改变 ACK 语义，未来由 history 恢复。幂等重试不再次发布 `chat.message`。
 
 ### Presence
 
@@ -83,6 +104,16 @@ wss://host/.../group?token=<JWT>
 ### 错误
 
 `error` 事件要带 `clientMsgId`（若有关），使前端能把 sending 改 failed。
+
+```json
+{
+  "event":"error",
+  "clientMsgId":"uuid-or-ulid",
+  "error":{"code":2201,"message":"消息格式无效"}
+}
+```
+
+错误只返回稳定业务 code/message，不返回 SQL、DSN、RPC endpoint 或内部 `err.Error()`。单次 malformed JSON 优先返回 typed error，连接可继续处理后续合法 frame。
 
 ## 4. 群聊事件
 
