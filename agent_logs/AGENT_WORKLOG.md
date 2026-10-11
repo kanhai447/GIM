@@ -571,3 +571,26 @@
 - log/status commit：本记录所在提交。
 - Private Chat V1：FUNCTIONAL。
 - 下一 Checkpoint：Day 2 Final Private Chat Acceptance；本轮不进入 Group/File/Admin/Day 3。
+
+## 2026-10-11 Day 2 / Checkpoint 7 — Private Chat Final Acceptance & Freeze
+
+### Scope / Changes
+
+- 只做 Private Chat V1 最终 regression、真实浏览器、失败场景、并发、生命周期与安全验收；未进入 Group、File、Admin Chat 或 Day 3。
+- 无业务 production code、migration、HTTP/WS/Redis protocol 变化。
+- 增强 Web 验收测试：成功重连后 backoff reset、1205/1206 auth terminal、inactive conversation 不自动 read、HTML-like text 字面渲染，以及真实浏览器双向/双设备/shared read/logout/revoked token。
+
+### Acceptance
+
+- 真实 Chrome + MySQL/Redis/etcd/User/Auth/Chat/Gateway/Vite：双向顺序、pending→sent、realtime/unread/read、刷新、双设备、20+ cursor history、Chat restart reconnect、logout/auth failure 与纯文本渲染 PASS。
+- ACK lost/same-ID retry、50 duplicate、50 distinct、partial/stale/latest/concurrent read、hidden/deletion user scope、Redis multi-instance and degraded delivery、Gateway/Auth/Origin/single-writer/Presence 全部回归 PASS。
+- Go full integration PASS；message/session 3 轮、Presence 3 轮、Hub/heartbeat/single-writer/shutdown 10 轮 PASS；vet/gofmt/diff/Secret Scan PASS。
+- Web type-check、8 files / 40 tests、production build PASS；lint NOT CONFIGURED。
+- 临时用户/业务数据、Presence contribution、服务、浏览器、bin/log/etcd data 精确清理。
+
+### Freeze
+
+- `PRIVATE CHAT V1 = COMPLETED`。
+- Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
+- V1 limitations：pending 不跨刷新；无 delivery/read receipt；当前仅 text message。
+- Next Authorized Work：NONE。Next Planned：Day 3 — Group WS + File Service + User Web protocol adaptation，等待用户明确授权。

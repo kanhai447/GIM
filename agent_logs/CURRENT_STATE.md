@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 2
-- **Current Phase:** PHASE 4 PRIVATE CHAT V1 FUNCTIONAL
-- **Current Checkpoint:** PRIVATE CHAT FRONTEND INTEGRATION COMPLETED
-- **Last Completed Checkpoint:** Private Chat Frontend Integration
-- **Working Tree:** CLEAN（本状态随 Checkpoint 6 日志提交并推送后）
+- **Current Phase:** PRIVATE CHAT V1 COMPLETED
+- **Current Checkpoint:** PRIVATE CHAT FINAL ACCEPTANCE & FREEZE COMPLETED
+- **Last Completed Checkpoint:** Day 2 / Checkpoint 7 — Private Chat Final Acceptance & Freeze
+- **Working Tree:** CLEAN（本状态随 Checkpoint 7 测试/日志提交并推送后）
 - **Last Stable Business Baseline:** `80456b3e27e2ebc0dc56d03f17c1ee58cf0c6f6d` — `feat(web): integrate reliable private chat`
-- **Last Push:** Checkpoint 6 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Day 2 Final Private Chat Acceptance（等待下一 Checkpoint 明确指令）
-- **Next Planned Work:** DAY 2 - FINAL PRIVATE CHAT ACCEPTANCE
+- **Last Push:** Checkpoint 7 tests + final acceptance state 提交后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** NONE
+- **Next Planned Work:** DAY 3 — GROUP WS + FILE SERVICE + USER WEB PROTOCOL ADAPTATION（需用户明确授权）
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -52,23 +52,26 @@
 - 私聊 text pending/sent/failed、stable clientMsgId、persist ACK mapping、ACK timeout/error retry 与 HTTP/WS/pending 去重。
 - `/chat/:peerId?` session/unread/top、current/other peer realtime、focus-aware mark read 与 message-ID cursor history/load older UI。
 - 真实双用户 Chrome + Gateway/Auth/Chat/MySQL/Redis：pending→sent、realtime/unread/read、刷新恢复、receiver 双设备、多页 history 与 Chat API 重启重连 PASS。
+- Checkpoint 7 真实双向/双设备 Chrome、ACK lost 联合证据、logout/revoked auth、共享 read、HTML 安全、并发/稳定性/生命周期/安全最终验收；`PRIVATE CHAT V1 = COMPLETED`。
 
 ## In Progress
 
-- 无；Checkpoint 6 已完成并停止，等待下一 Checkpoint 指令。
+- 无；Checkpoint 7 已完成并冻结，等待用户授权下一阶段。
 
 ## Authorization
 
 Day 2:
-AUTHORIZED
+COMPLETED
 
-Next Checkpoint:
-Day 2 Final Private Chat Acceptance
+Private Chat V1:
+COMPLETED
+
+Next Authorized Work:
+NONE
 
 ## Not Started
 
-- Day 2 后续：Final Private Chat Acceptance 尚未开始。
-- Day 3+：Group WebSocket、Group Chat、File、Presence UI、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
+- Day 3+：Group WebSocket、Group Chat、File、Presence UI、后续 Web 协议适配、Kafka/Logs 与完整 Admin 业务；均未获本轮授权。
 
 ## Test Status
 
@@ -90,11 +93,12 @@ Day 2 Final Private Chat Acceptance
 - Day 2 / Checkpoint 4：全量测试、vet、gofmt、diff check、Secret Scan、Message 69.5% / User RPC adapter 71.4% coverage、真实 MySQL 50-way 并发幂等、lost ACK retry、offline/online/multi-device/multi-instance Redis Pub/Sub、duplicate no-redelivery、Gateway 与 Presence 回归全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 5：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Message/Session/MySQL 71.1% 与 HTTP transport 56.3% coverage、真实 MySQL 50 duplicate/50 distinct、partial/stale/latest/concurrent read、session/top/hidden、history cursor/per-user deletion、三类 transaction rollback、Redis post-commit degraded delivery、Pub/Sub/Presence/Gateway regressions 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 6：Web type-check、8 files / 35 tests、production build、diff check、Secret Scan、Go 全量非缓存测试/vet PASS；真实 Chrome 双用户 pending→sent、realtime/unread/read、刷新恢复、receiver 双设备、20+ cursor history 与 Chat API 重启 reconnect 全部 PASS。lint NOT CONFIGURED。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
+- Day 2 / Checkpoint 7：真实 Chrome 双向/双设备/shared read/cursor/reconnect/logout/revoked token/HTML text PASS；Web type-check、8 files / 40 tests、build PASS；真实 Go full integration、message/session 3 轮、Presence 3 轮、Hub/heartbeat/single-writer/shutdown 10 轮、vet/gofmt/diff/Secret Scan 全部 PASS。lint NOT CONFIGURED。Race 保持 NOT AVAILABLE；兼容环境/CI PENDING。
 
 ## Known Issues
 
 - `protoc 3.9.0` 较旧，后续首次生成 RPC 代码时需要验证与当前 Go 插件兼容性。
-- 本机只有 MinGW.org GCC 6.3.0 `mingw32/i586` C 编译器，不支持 windows/amd64 race 构建；未发现可仅切换 `CC` 使用的本机 64 位编译器。该问题不阻塞 Day 2 开发，但 Day 2 完成前必须在兼容环境/CI 做 race 验证。
+- 本机只有 MinGW.org GCC 6.3.0 `mingw32/i586` C 编译器，不支持 windows/amd64 race 构建；未发现可仅切换 `CC` 使用的本机 64 位编译器。Private Chat V1 已按本地可执行范围验收，但 `go test -race ./...` 仍必须在兼容环境/CI 补验。
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。私聊 receiver realtime fanout 已通过 Redis Pub/Sub 跨 Chat API 实例，但不等同于通用分布式 WS router。
 - Gateway 的 Upgrade 检测、query token 认证和真实 Chat WebSocket tunnel 已验证；Chat 内部 endpoint 信任 Gateway Header，正式部署不得直接暴露公网。
 - Presence key helper 已集中建立；未来若确需 connection/device tracking key，仍必须加入 `rediskeys`，不得硬编码。
@@ -102,5 +106,5 @@ Day 2 Final Private Chat Acceptance
 
 ## Next Action
 
-- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence、Private Message Persistence/clientMsgId/Server ACK、Chat Session/Unread/Mark Read/History Cursor 和 Private Chat Frontend Integration 已完成；Private Chat V1 = FUNCTIONAL，无 Day 2 blocker。
-- 下一入口为 **Day 2 Final Private Chat Acceptance**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint，也不进入 Group/File/Admin/Day 3。
+- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence、Private Message Reliability、Session/Unread/Read/History、Frontend Integration 与 Final Acceptance 全部完成；`PRIVATE CHAT V1 = COMPLETED`。
+- Next Authorized Work：NONE。按四日计划，Next Planned 是 **Day 3 — Group WS + File Service + User Web protocol adaptation**；必须等待用户明确授权。本轮不进入 Group/File/Admin/Day 3。

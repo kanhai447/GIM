@@ -2,8 +2,8 @@
 
 ## 授权状态
 
-- Day 2：AUTHORIZED。
-- 当前 Checkpoint：Private Chat Frontend Integration COMPLETED。
+- Day 2：COMPLETED（按四日计划的 Chat WS + Presence + 私聊可靠性范围）。
+- 当前 Checkpoint：Private Chat Final Acceptance & Freeze COMPLETED。
 - 已完成：Pre-Day2 Concurrency Preflight。
 - 已完成：Chat Hub/Client、readPump/writePump、多连接模型、Chat endpoint/runtime 和 Gateway real WS tunnel。
 - 已完成：Chat WebSocket Heartbeat、deadline、dead/slow/normal/abnormal disconnect cleanup 和 multi-device lifecycle。
@@ -11,6 +11,7 @@
 - 已完成：typed private chat send、MySQL persist、clientMsgId 幂等、Server ACK、offline/online/multi-device/multi-instance realtime delivery。
 - 已完成：message/session transaction、unread、Mark Read、Session List/top/hidden 与 message-ID cursor History。
 - 已完成：用户端 Chat Socket/Store/API、pending/sent/failed、稳定 clientMsgId、reconnect/retry、session/unread/read/history 与真实浏览器双用户联调。
+- 已完成：Checkpoint 7 最终真实浏览器、失败场景、并发、生命周期、安全与稳定性验收；`PRIVATE CHAT V1 = COMPLETED`。
 
 ## Pre-Day2 Concurrency Preflight
 
@@ -35,6 +36,7 @@
 - `agent_logs/operations/day-2/005_checkpoint-4_private-message-ack.md`
 - `agent_logs/operations/day-2/006_checkpoint-5_chat-session-unread-read.md`
 - `agent_logs/operations/day-2/007_checkpoint-6_private-chat-frontend.md`
+- `agent_logs/operations/day-2/008_checkpoint-7_private-chat-final-acceptance.md`
 
 ## Checkpoint 1 — Chat WebSocket Hub / Client Foundation
 
@@ -124,6 +126,14 @@
 - Implementation commit：`80456b3e27e2ebc0dc56d03f17c1ee58cf0c6f6d`。
 - Private Chat V1：FUNCTIONAL。Race 仍为 NOT AVAILABLE；兼容环境/CI verification PENDING。
 
-## Next Checkpoint
+## Checkpoint 7 — Private Chat Final Acceptance & Freeze
 
-Day 2 Final Private Chat Acceptance
+- 时间：2026-10-11 21:39 +08:00。
+- Chrome 双用户双向消息、pending→ACK→sent、session/unread/read、刷新、双设备共享 read、20+ cursor history、Chat API 重启 reconnect、logout/revoked auth failure 与 HTML-like text 安全渲染全部 PASS。
+- ACK lost 由前端 same-clientMsgId Store integration + 真实后端 lost-ACK/idempotency 联合证明；50 duplicate、50 distinct、partial/stale read、new-message/read race、hidden/deletion user scope、Redis multi-instance/degraded delivery 全部 PASS。
+- 真实 MySQL/Redis/etcd 全量 Go suite PASS；核心 message/session 3 轮、Presence 3 轮、Hub/heartbeat/single-writer/shutdown 10 轮 PASS。
+- Web type-check、8 files / 40 tests、production build PASS；lint NOT CONFIGURED。Go vet/gofmt/diff check 与 Secret Scan PASS。
+- 临时用户、数据库数据、Presence contribution、进程、bin/log/etcd data 均清理；无测试端口残留。
+- 无业务 Bug 或 production code 修改；仅增加验收测试和日志。DB/API/WS/Redis protocol 无变化。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
+- `PRIVATE CHAT V1 = COMPLETED`。Next Authorized Work：NONE。Next Planned：Day 3 — Group WS + File Service + User Web protocol adaptation（等待明确授权）。
