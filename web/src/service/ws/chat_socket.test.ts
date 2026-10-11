@@ -84,6 +84,24 @@ describe('ChatSocketClient', () => {
     }
   })
 
+  it('resets exponential backoff after a successful reconnect', () => {
+    const { client, sockets } = setup()
+    client.connect()
+    sockets[0]!.open()
+
+    sockets[0]!.closed()
+    vi.advanceTimersByTime(1_000)
+    sockets[1]!.closed()
+    vi.advanceTimersByTime(2_000)
+    sockets[2]!.open()
+
+    sockets[2]!.closed()
+    vi.advanceTimersByTime(999)
+    expect(sockets).toHaveLength(3)
+    vi.advanceTimersByTime(1)
+    expect(sockets).toHaveLength(4)
+  })
+
   it('disconnect cancels reconnect and prevents a reconnect storm', () => {
     const { client, sockets, states } = setup()
     client.connect()

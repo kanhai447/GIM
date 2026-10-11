@@ -25,6 +25,20 @@ const aliceContext = await browser.newContext()
 const bobContext = await browser.newContext()
 const alice = await aliceContext.newPage()
 const bob = await bobContext.newPage()
+const aliceSockets = []
+const bobSockets = []
+alice.on('websocket', (socket) => {
+  if (new URL(socket.url()).pathname !== '/api/chat/ws/chat') return
+  const record = { socket, closed: false }
+  socket.on('close', () => { record.closed = true })
+  aliceSockets.push(record)
+})
+bob.on('websocket', (socket) => {
+  if (new URL(socket.url()).pathname !== '/api/chat/ws/chat') return
+  const record = { socket, closed: false }
+  socket.on('close', () => { record.closed = true })
+  bobSockets.push(record)
+})
 
 async function login(page, account) {
   await page.goto(`${baseURL}/login`)
@@ -48,6 +62,17 @@ async function sendAndWait(page, text) {
     text,
     { timeout: 10_000 },
   )
+}
+
+async function assertMessageOrder(page, texts) {
+  const rendered = await page.locator('.message .bubble').allTextContents()
+  let previous = -1
+  for (const text of texts) {
+    const index = rendered.indexOf(text)
+    assert(index > previous, `message order mismatch for ${text}`)
+    assert.equal(rendered.filter((item) => item === text).length, 1, `message duplicated for ${text}`)
+    previous = index
+  }
 }
 
 try {
@@ -85,15 +110,39 @@ try {
   await bob.locator('.message').filter({ hasText: firstText }).waitFor({ timeout: 10_000 })
   await bob.locator('.unread-badge').waitFor({ state: 'detached', timeout: 10_000 })
 
+  const replyText = `cp7-reply-${runID}`
+  await sendAndWait(bob, replyText)
+  await alice.locator('.message').filter({ hasText: replyText }).waitFor({ timeout: 10_000 })
+  const followupText = `cp7-followup-${runID}`
+  await sendAndWait(alice, followupText)
+  await bob.locator('.message').filter({ hasText: followupText }).waitFor({ timeout: 10_000 })
+  await Promise.all([
+    assertMessageOrder(alice, [firstText, replyText, followupText]),
+    assertMessageOrder(bob, [firstText, replyText, followupText]),
+  ])
+
+  const htmlText = `<b>hello-${runID}</b>`
+  await sendAndWait(alice, htmlText)
+  const htmlBubble = bob.locator('.message .bubble').filter({ hasText: htmlText }).last()
+  await htmlBubble.waitFor({ timeout: 10_000 })
+  assert.equal(await htmlBubble.textContent(), htmlText)
+  assert.equal(await htmlBubble.locator('b').count(), 0, 'HTML-like chat text was interpreted as markup')
+
   const bobDevice2 = await bobContext.newPage()
   await bobDevice2.goto(`${baseURL}/chat/${userA}`)
   await waitConnected(bobDevice2)
+  await bobDevice2.goto(`${baseURL}/chat`)
   const multiDeviceText = `cp6-multi-device-${runID}`
   await sendAndWait(alice, multiDeviceText)
   await Promise.all([
     bob.locator('.message').filter({ hasText: multiDeviceText }).waitFor({ timeout: 10_000 }),
-    bobDevice2.locator('.message').filter({ hasText: multiDeviceText }).waitFor({ timeout: 10_000 }),
+    bobDevice2.locator('.session-item').filter({ hasText: multiDeviceText }).waitFor({ timeout: 10_000 }),
   ])
+  await bob.locator('.unread-badge').waitFor({ state: 'detached', timeout: 10_000 })
+  await bobDevice2.reload()
+  const sharedReadSession = bobDevice2.locator('.session-item').filter({ hasText: multiDeviceText })
+  await sharedReadSession.waitFor({ timeout: 10_000 })
+  assert.equal(await sharedReadSession.locator('.unread-badge').count(), 0, 'second device did not reconcile shared read state')
 
   for (let index = 0; index < 20; index += 1) {
     await sendAndWait(alice, `cp6-page-${runID}-${index.toString().padStart(2, '0')}`)
@@ -122,15 +171,44 @@ try {
   await sendAndWait(alice, reconnectText)
   await bob.locator('.message').filter({ hasText: reconnectText }).waitFor({ timeout: 10_000 })
 
+  const aliceSocketCountBeforeLogout = aliceSockets.length
+  await alice.locator('button', { hasText: '退出登录' }).click()
+  await alice.waitForURL((url) => url.pathname === '/login', { timeout: 10_000 })
+  await alice.waitForTimeout(1_500)
+  assert.equal(aliceSockets.length, aliceSocketCountBeforeLogout, 'logout created a new Chat WebSocket')
+  assert.equal(await alice.evaluate(() => localStorage.getItem('gim.web.token')), null)
+
+  const bobSocketCountBeforeRevocation = bobSockets.length
+  const revoked = await bob.evaluate(async () => {
+    const token = localStorage.getItem('gim.web.token')
+    if (!token) return false
+    const response = await fetch('/api/auth/logout', { method: 'POST', headers: { token } })
+    return response.ok
+  })
+  assert(revoked, 'failed to revoke Bob token through Auth logout')
+  await bob.reload()
+  await bob.waitForURL((url) => url.pathname === '/login', { timeout: 10_000 })
+  await bob.waitForTimeout(1_500)
+  assert.equal(await bob.evaluate(() => localStorage.getItem('gim.web.token')), null)
+  assert(bobSockets.length <= bobSocketCountBeforeRevocation + 1, 'revoked token created parallel Chat WebSockets')
+  const bobSocketCountAfterAuthFailure = bobSockets.length
+  await bob.waitForTimeout(1_500)
+  assert.equal(bobSockets.length, bobSocketCountAfterAuthFailure, 'revoked token entered a WebSocket reconnect loop')
+
   console.log(JSON.stringify({
     result: 'PASS',
     twoUserRealtime: true,
+    bidirectionalOrdering: true,
     senderPendingToSent: true,
     unreadThenRead: true,
     refreshHistory: true,
     multiDeviceReceiver: true,
+    sharedReadState: true,
     cursorPagination: true,
     reconnect: true,
+    logoutLifecycle: true,
+    revokedTokenStopsReconnect: true,
+    safeTextRendering: true,
   }))
 } finally {
   await aliceContext.close()

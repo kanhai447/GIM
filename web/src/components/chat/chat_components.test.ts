@@ -69,4 +69,14 @@ describe('private chat components', () => {
     await wrapper.get('.session-item').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[2]])
   })
+
+  it('renders HTML-like message content as literal text', () => {
+    const unsafeLooking = message('sent', '4')
+    unsafeLooking.msg.textMsg.content = '<b>hello</b>'
+    const wrapper = mount(ChatMessageList, {
+      props: { messages: [unsafeLooking], currentUserID: 1, hasMore: false, loading: false },
+    })
+    expect(wrapper.get('.bubble').text()).toBe('<b>hello</b>')
+    expect(wrapper.find('.bubble b').exists()).toBe(false)
+  })
 })

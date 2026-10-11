@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PublicApiError } from '@/api/client'
 import type { ChatConnectionState, ChatSendEnvelope, ChatServerEnvelope, ChatSession } from '@/types/chat'
 
 interface SocketCallbacks {
@@ -201,6 +202,17 @@ describe('chat store', () => {
     await vi.waitFor(() => expect(harness.markRead).toHaveBeenCalledWith(2, 21))
   })
 
+  it('does not auto-read realtime messages while the current conversation is inactive', async () => {
+    const store = await startStore()
+    await store.openConversation(2)
+    harness.markRead.mockClear()
+    store.setConversationActive(false)
+    latestSocket().options.onEnvelope({ event: 'chat.message', data: { ...firstMessage, messageId: 22, clientMsgId: 'remote-22' } })
+    await Promise.resolve()
+    expect(harness.markRead).not.toHaveBeenCalled()
+    expect(store.sessions[0]?.unreadCount).toBe(1)
+  })
+
   it('logout closes the singleton socket and clears in-memory chat state', async () => {
     const store = await startStore()
     store.stop()
@@ -217,6 +229,18 @@ describe('chat store', () => {
     await vi.waitFor(() => expect(store.sessions).toHaveLength(1))
     latestSocket().failAuthentication()
     await vi.waitFor(() => expect(onFailure).toHaveBeenCalledOnce())
+    expect(store.sessions).toEqual([])
+    expect(store.connectionState).toBe('disconnected')
+  })
+
+  it.each([1205, 1206])('treats HTTP auth code %i as terminal and stops reconnect', async (code) => {
+    const onFailure = vi.fn()
+    harness.sessions.mockRejectedValueOnce(new PublicApiError('登录状态已失效', code))
+    const store = useChatStore()
+    store.start(1, 'invalid-token', onFailure)
+    await vi.waitFor(() => expect(latestSocket().failAuthentication).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(onFailure).toHaveBeenCalledOnce())
+    expect(latestSocket().disconnect).toHaveBeenCalled()
     expect(store.sessions).toEqual([])
     expect(store.connectionState).toBe('disconnected')
   })
