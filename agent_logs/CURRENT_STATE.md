@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 2
-- **Current Phase:** PHASE 3 PRIVATE CHAT BACKEND RELIABILITY COMPLETED
-- **Current Checkpoint:** CHAT SESSION + UNREAD + READ STATE + HISTORY CURSOR COMPLETED
-- **Last Completed Checkpoint:** Chat Session + Unread + Read State + History Cursor
-- **Working Tree:** CLEAN（本状态随 Checkpoint 5 日志提交并推送后）
-- **Last Stable Business Baseline:** `3dac219ca23021aee96d0f4b824800e88b4914c4` — `feat(chat): add sessions unread and read state`
-- **Last Push:** Checkpoint 5 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Private Chat Frontend Integration（等待下一 Checkpoint 明确指令）
-- **Next Planned Work:** DAY 2 - PRIVATE CHAT FRONTEND INTEGRATION
+- **Current Phase:** PHASE 4 PRIVATE CHAT V1 FUNCTIONAL
+- **Current Checkpoint:** PRIVATE CHAT FRONTEND INTEGRATION COMPLETED
+- **Last Completed Checkpoint:** Private Chat Frontend Integration
+- **Working Tree:** CLEAN（本状态随 Checkpoint 6 日志提交并推送后）
+- **Last Stable Business Baseline:** `80456b3e27e2ebc0dc56d03f17c1ee58cf0c6f6d` — `feat(web): integrate reliable private chat`
+- **Last Push:** Checkpoint 6 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Day 2 Final Private Chat Acceptance（等待下一 Checkpoint 明确指令）
+- **Next Planned Work:** DAY 2 - FINAL PRIVATE CHAT ACCEPTANCE
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -48,10 +48,14 @@
 - 用户级 Mark Read、read cursor 单调推进、partial/stale/latest/concurrent read 正确；不发送 peer read receipt。
 - 私聊 Session List、数据库 top/time 排序、peer/last-message JOIN、用户维度 hidden 与新消息恢复可见。
 - Message-ID cursor History、双向会话隔离、limit 上限和当前用户维度 `chat_message_deletions` 过滤。
+- 用户端 typed Chat API、单例 Chat Socket、`disconnected/connecting/connected/reconnecting` 状态和 30 秒上限指数退避。
+- 私聊 text pending/sent/failed、stable clientMsgId、persist ACK mapping、ACK timeout/error retry 与 HTTP/WS/pending 去重。
+- `/chat/:peerId?` session/unread/top、current/other peer realtime、focus-aware mark read 与 message-ID cursor history/load older UI。
+- 真实双用户 Chrome + Gateway/Auth/Chat/MySQL/Redis：pending→sent、realtime/unread/read、刷新恢复、receiver 双设备、多页 history 与 Chat API 重启重连 PASS。
 
 ## In Progress
 
-- 无；Checkpoint 5 已完成并停止，等待下一 Checkpoint 指令。
+- 无；Checkpoint 6 已完成并停止，等待下一 Checkpoint 指令。
 
 ## Authorization
 
@@ -59,12 +63,12 @@ Day 2:
 AUTHORIZED
 
 Next Checkpoint:
-Private Chat Frontend Integration
+Day 2 Final Private Chat Acceptance
 
 ## Not Started
 
-- Day 2 后续：Frontend Chat Socket integration、pending/sent UI、unread UI、reconnect/retry frontend 尚未开始。
-- Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
+- Day 2 后续：Final Private Chat Acceptance 尚未开始。
+- Day 3+：Group WebSocket、Group Chat、File、Presence UI、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
 
@@ -85,6 +89,7 @@ Private Chat Frontend Integration
 - Day 2 / Checkpoint 3：全量测试、vet、gofmt、diff check、Secret Scan、Presence 75.8% coverage、关键 transition/heartbeat/slow/shutdown/Redis failure 10 轮稳定性、真实 Redis 多实例/TTL 与 Gateway/Auth/Chat Presence tunnel 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 4：全量测试、vet、gofmt、diff check、Secret Scan、Message 69.5% / User RPC adapter 71.4% coverage、真实 MySQL 50-way 并发幂等、lost ACK retry、offline/online/multi-device/multi-instance Redis Pub/Sub、duplicate no-redelivery、Gateway 与 Presence 回归全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 5：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Message/Session/MySQL 71.1% 与 HTTP transport 56.3% coverage、真实 MySQL 50 duplicate/50 distinct、partial/stale/latest/concurrent read、session/top/hidden、history cursor/per-user deletion、三类 transaction rollback、Redis post-commit degraded delivery、Pub/Sub/Presence/Gateway regressions 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
+- Day 2 / Checkpoint 6：Web type-check、8 files / 35 tests、production build、diff check、Secret Scan、Go 全量非缓存测试/vet PASS；真实 Chrome 双用户 pending→sent、realtime/unread/read、刷新恢复、receiver 双设备、20+ cursor history 与 Chat API 重启 reconnect 全部 PASS。lint NOT CONFIGURED。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 
 ## Known Issues
 
@@ -93,8 +98,9 @@ Private Chat Frontend Integration
 - Gateway 当前选择 Resolver 返回的首个有序健康注册端点；负载均衡/主动健康探测留待后续多实例阶段。私聊 receiver realtime fanout 已通过 Redis Pub/Sub 跨 Chat API 实例，但不等同于通用分布式 WS router。
 - Gateway 的 Upgrade 检测、query token 认证和真实 Chat WebSocket tunnel 已验证；Chat 内部 endpoint 信任 Gateway Header，正式部署不得直接暴露公网。
 - Presence key helper 已集中建立；未来若确需 connection/device tracking key，仍必须加入 `rediskeys`，不得硬编码。
+- V1 pending queue 仅保存在内存；刷新页面前尚未获得服务端 ACK 的消息不会跨刷新保留，已持久化消息由 history 恢复。
 
 ## Next Action
 
-- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence、Private Message Persistence/clientMsgId/Server ACK、Chat Session/Unread/Mark Read/History Cursor 已完成，无 Day 2 blocker。
-- 下一入口为 **Private Chat Frontend Integration**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint。
+- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence、Private Message Persistence/clientMsgId/Server ACK、Chat Session/Unread/Mark Read/History Cursor 和 Private Chat Frontend Integration 已完成；Private Chat V1 = FUNCTIONAL，无 Day 2 blocker。
+- 下一入口为 **Day 2 Final Private Chat Acceptance**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint，也不进入 Group/File/Admin/Day 3。

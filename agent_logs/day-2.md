@@ -3,13 +3,14 @@
 ## 授权状态
 
 - Day 2：AUTHORIZED。
-- 当前 Checkpoint：Chat Session + Unread + Read State + History Cursor COMPLETED。
+- 当前 Checkpoint：Private Chat Frontend Integration COMPLETED。
 - 已完成：Pre-Day2 Concurrency Preflight。
 - 已完成：Chat Hub/Client、readPump/writePump、多连接模型、Chat endpoint/runtime 和 Gateway real WS tunnel。
 - 已完成：Chat WebSocket Heartbeat、deadline、dead/slow/normal/abnormal disconnect cleanup 和 multi-device lifecycle。
 - 已完成：Redis-backed Chat Presence、多设备 transition、多实例 contribution、TTL/crash recovery 与 shutdown cleanup。
 - 已完成：typed private chat send、MySQL persist、clientMsgId 幂等、Server ACK、offline/online/multi-device/multi-instance realtime delivery。
 - 已完成：message/session transaction、unread、Mark Read、Session List/top/hidden 与 message-ID cursor History。
+- 已完成：用户端 Chat Socket/Store/API、pending/sent/failed、稳定 clientMsgId、reconnect/retry、session/unread/read/history 与真实浏览器双用户联调。
 
 ## Pre-Day2 Concurrency Preflight
 
@@ -33,6 +34,7 @@
 - `agent_logs/operations/day-2/004_checkpoint-3_chat-presence.md`
 - `agent_logs/operations/day-2/005_checkpoint-4_private-message-ack.md`
 - `agent_logs/operations/day-2/006_checkpoint-5_chat-session-unread-read.md`
+- `agent_logs/operations/day-2/007_checkpoint-6_private-chat-frontend.md`
 
 ## Checkpoint 1 — Chat WebSocket Hub / Client Foundation
 
@@ -107,6 +109,21 @@
 - Implementation commit：`3dac219ca23021aee96d0f4b824800e88b4914c4`。
 - Race：NOT AVAILABLE；compatible environment/CI verification PENDING。
 
+## Checkpoint 6 — Private Chat Frontend Integration
+
+- 时间：2026-10-11 18:12 +08:00。
+- 分层为 typed Chat API、无 DOM Chat Socket Client、Pinia Chat Store 和纯展示/交互组件；同一登录用户只有一条 Chat WS。
+- 连接状态为 disconnected/connecting/connected/reconnecting；1/2/4/8/16/30 秒上限 + jitter，单 reconnect timer；logout/auth failure 会停止重连并清理状态。
+- 断线发送进入内存 pending queue；UUID clientMsgId 在 ACK timeout/manual retry/reconnect retry 中保持不变，ACK 映射 server messageId 并转 sent，typed error 只失败对应消息。
+- realtime/history/pending 以 messageId/clientMsgId reconcile；duplicate ACK/message 不重复 UI。ACK 仍只代表服务端事务提交，不是 delivery/read。
+- session 以后端排序为准；其他 peer realtime 先本地 unread +1，再单 debounce refresh；当前 route 且页面 visible/focused 才自动 mark read。
+- history 使用 beforeMessageID、oldest→newest merge、load older；路由为 `/chat/:peerId?`。页面安全插值 text，不使用 v-html，不持久化 history/pending。
+- Web type-check、8 files / 35 tests、production build、Go 全量非缓存 test/vet、diff check、Secret Scan PASS；lint NOT CONFIGURED。
+- 真实 MySQL/Redis/etcd/Gateway/Auth/User/Chat/Vite + 两个隔离 Chrome context：pending→sent、B realtime/unread/read、刷新恢复、receiver 双设备、20+ cursor pagination、Chat API 重启 reconnect 全部 PASS。
+- 临时测试用户/好友/session/messages、进程、bin/log/etcd data 均精确清理，最终相关端口监听 0。
+- Implementation commit：`80456b3e27e2ebc0dc56d03f17c1ee58cf0c6f6d`。
+- Private Chat V1：FUNCTIONAL。Race 仍为 NOT AVAILABLE；兼容环境/CI verification PENDING。
+
 ## Next Checkpoint
 
-Private Chat Frontend Integration
+Day 2 Final Private Chat Acceptance

@@ -532,3 +532,42 @@
 - implementation commit：`3dac219ca23021aee96d0f4b824800e88b4914c4 feat(chat): add sessions unread and read state`。
 - log/status commit：本记录所在提交。
 - 下一 Checkpoint：Private Chat Frontend Integration；本轮完成后停止。
+
+## 2026-10-11 Day 2 / Checkpoint 6 — Private Chat Frontend Integration
+
+### 目标与实现
+
+- 新增 typed Chat API、无 DOM Chat Socket Client、Pinia Chat Store、消息 reconcile 工具和私聊组件；页面不直接持有或操作 WebSocket。
+- 单登录用户单 Chat WS，支持同源/配置化 ws/wss URL、typed server frame、安全忽略 malformed frame、四态连接与 30 秒上限指数退避。
+- login/session restore 自动连接；logout 先停 socket/reconnect/ACK timers 并清内存，再 Auth logout；auth failure 清状态并回登录页。
+- 断线发送采用内存 pending queue；每个逻辑消息只生成一次 UUID clientMsgId，ACK timeout、手动 retry 和 reconnect retry 都复用该 ID。
+- ACK 将 pending 映射 server messageId/sent；typed error 只失败相关消息；duplicate ACK/message/history page 通过 messageId/clientMsgId reconcile 不重复展示。
+- session list 信任服务端 top/time 排序；other-peer realtime 本地 unread +1 后单 debounce refresh；current route 只在 visible+focused 时自动 mark read。
+- history 使用 beforeMessageID cursor、oldest→newest merge 和 load older；UI 提供 pending/sent/failed/retry、unread/top/preview/time 和安全 text rendering。
+
+### Reference 与改进
+
+- 只读参考 FIM 的 session sidebar、history/top/text composer 与登录后 Chat WS 路径；未复制任何文件或业务实现。
+- GIM 没有延续全局 Store 中裸 WebSocket、业务直接 send、无 ACK/reconnect/pending、HTML 图文输入等模式；按 GIM 文档独立实现 typed lifecycle/reliability/reconcile。
+
+### 验收
+
+- Web `pnpm type-check`、`pnpm test`（8 files / 35 tests）、`pnpm build`：PASS；lint NOT CONFIGURED。
+- Socket/Store/component 覆盖 connect/backoff/logout/auth failure、stable ID/retry、ACK mapping、error/timeout、dedupe、unread/read、cursor merge 和 UI 状态。
+- 真实 Chrome 双用户 + MySQL/Redis/etcd/Gateway/Auth/User/Chat/Vite：pending→sent、realtime、未读→打开清零、刷新恢复、receiver 双设备、20+ 分页、Chat API 重启 reconnect：PASS。
+- `go test ./... -count=1`、`go vet ./...`、diff check、Secret Scan：PASS。
+- 测试用户/消息与全部 CP6 临时进程/文件均清理；无端口残留。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible environment/CI PENDING。
+
+### 数据/协议
+
+- DB migration、服务端 HTTP/WS、Redis：无变化。
+- 前端新增 `/chat/:peerId?`、`VITE_WS_BASE_URL`、Chat API/Socket/Store/Components 和可重复 Chrome smoke。
+- pending 不跨刷新持久化；已提交消息通过 history 恢复。这是 V1 已记录限制。
+
+### Git / 下一步
+
+- implementation commit：`80456b3e27e2ebc0dc56d03f17c1ee58cf0c6f6d feat(web): integrate reliable private chat`。
+- log/status commit：本记录所在提交。
+- Private Chat V1：FUNCTIONAL。
+- 下一 Checkpoint：Day 2 Final Private Chat Acceptance；本轮不进入 Group/File/Admin/Day 3。
