@@ -24,7 +24,7 @@ const router = createRouter({
       meta: { title: 'GIM', requiresAuth: true },
       children: [
         { path: '', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: '首页', requiresAuth: true } },
-        { path: 'chat', name: 'chat', component: () => import('@/views/ChatView.vue'), meta: { title: '私聊', requiresAuth: true } },
+        { path: 'chat/:peerId?', name: 'chat', component: () => import('@/views/ChatView.vue'), meta: { title: '私聊', requiresAuth: true } },
         { path: 'group', name: 'group', component: () => import('@/views/GroupView.vue'), meta: { title: '群聊', requiresAuth: true } },
         { path: 'files', name: 'files', component: () => import('@/views/FileView.vue'), meta: { title: '文件', requiresAuth: true } },
         { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue'), meta: { title: '个人资料', requiresAuth: true } },

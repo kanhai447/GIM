@@ -10,4 +10,4 @@ pnpm test
 pnpm build
 ```
 
-`VITE_API_BASE_URL=/` keeps browser requests same-origin. During local development, Vite proxies `/api` to the public Gateway configured by `VITE_DEV_GATEWAY_TARGET`; production should provide the same path through its edge proxy. Local `.env.local`, tokens, service credentials and signing material must never be committed. Chat, Group and File routes are intentional placeholders in Checkpoint 8; no WebSocket or upload behavior is implemented yet.
+`VITE_API_BASE_URL=/` keeps browser HTTP requests same-origin. Chat WebSocket also defaults to the current origin and converts `http/https` to `ws/wss`; `VITE_WS_BASE_URL` is only needed when the public Gateway WebSocket origin differs. During local development, Vite proxies `/api` to `VITE_DEV_GATEWAY_TARGET`, including WebSocket Upgrade. Local `.env.local`, tokens, message content, service credentials and signing material must never be committed. Private text chat is integrated; Group and File routes remain later checkpoints.

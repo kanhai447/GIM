@@ -3,12 +3,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 
 const auth = useAuthStore()
+const chat = useChatStore()
 const route = useRoute()
 const router = useRouter()
 
 async function logout(): Promise<void> {
+  chat.stop()
   try {
     await auth.logout()
     ElMessage.success('已安全退出')
@@ -24,14 +27,14 @@ async function logout(): Promise<void> {
   <el-container class="app-shell">
     <el-aside width="224px" class="sidebar">
       <router-link to="/" class="brand">GIM<span>Messaging</span></router-link>
-      <el-menu :default-active="route.path" router class="nav-menu">
+      <el-menu :default-active="route.path.startsWith('/chat') ? '/chat' : route.path" router class="nav-menu">
         <el-menu-item index="/">概览</el-menu-item>
         <el-menu-item index="/chat">私聊</el-menu-item>
         <el-menu-item index="/group">群聊</el-menu-item>
         <el-menu-item index="/files">文件</el-menu-item>
         <el-menu-item index="/profile">个人资料</el-menu-item>
       </el-menu>
-      <p class="phase-note">Day 1 · Foundation</p>
+      <p class="phase-note">Day 2 · Private Chat</p>
     </el-aside>
     <el-container>
       <el-header class="topbar">
