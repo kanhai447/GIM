@@ -21,6 +21,17 @@ const (
 	CodeMessageUnavailable  = uint32(2204)
 	CodeIdempotencyConflict = uint32(2205)
 	CodeChatRestricted      = uint32(2206)
+	CodeInvalidChatQuery    = uint32(2207)
+	CodeSessionMissing      = uint32(2208)
+	CodeInvalidCursor       = uint32(2209)
+	CodeInvalidReadMessage  = uint32(2210)
+)
+
+const (
+	DefaultHistoryLimit = 20
+	MaxHistoryLimit     = 100
+	DefaultSessionLimit = 20
+	MaxSessionLimit     = 100
 )
 
 var (
@@ -60,6 +71,9 @@ type SendResult struct {
 
 type Service struct {
 	messages   Repository
+	sends      SendRepository
+	history    HistoryRepository
+	sessions   SessionRepository
 	recipients RecipientValidator
 	friends    FriendshipRepository
 	config     Config
@@ -69,7 +83,16 @@ func NewService(messages Repository, recipients RecipientValidator, friends Frie
 	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.DependencyTimeout <= 0 {
 		return nil, errors.New("invalid chat message service configuration")
 	}
-	return &Service{messages: messages, recipients: recipients, friends: friends, config: config}, nil
+	sends, ok := messages.(SendRepository)
+	if !ok {
+		return nil, errors.New("chat message repository does not support transactional send")
+	}
+	history, _ := messages.(HistoryRepository)
+	sessions, _ := messages.(SessionRepository)
+	return &Service{
+		messages: messages, sends: sends, history: history, sessions: sessions,
+		recipients: recipients, friends: friends, config: config,
+	}, nil
 }
 
 func (service *Service) SendPrivateMessage(ctx context.Context, senderID uint64, request SendRequest) (SendResult, error) {
@@ -121,25 +144,155 @@ func (service *Service) SendPrivateMessage(ctx context.Context, senderID uint64,
 		return SendResult{}, public(CodeFriendshipRequired, "仅好友之间可以发送私聊消息", nil)
 	}
 
-	created, err := service.messages.Create(ctx, Message{
+	persisted, err := service.sends.PersistWithSessions(ctx, Message{
 		SenderID: senderID, ReceiverID: request.ReceiverID, ClientMsgID: request.ClientMsgID,
 		Type: request.Message.Type, Preview: preview(request.Message.TextMsg.Content), Payload: request.Message,
 	})
 	if err == nil {
-		return SendResult{Message: created, CreatedNew: true}, nil
+		if !sameLogicalMessage(persisted.Message, request) {
+			return SendResult{}, public(CodeIdempotencyConflict, "clientMsgId 已用于其他消息", nil)
+		}
+		return SendResult{Message: persisted.Message, CreatedNew: persisted.CreatedNew}, nil
 	}
-	if !errors.Is(err, ErrDuplicate) {
-		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	if errors.Is(err, ErrDuplicate) {
+		existing, queryErr := service.messages.GetBySenderAndClientMsgID(ctx, senderID, request.ClientMsgID)
+		if queryErr == nil && sameLogicalMessage(existing, request) {
+			return SendResult{Message: existing}, nil
+		}
 	}
+	return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+}
 
-	existing, err = service.messages.GetBySenderAndClientMsgID(ctx, senderID, request.ClientMsgID)
+type SessionList struct {
+	Items []Session
+	Count int64
+}
+
+type HistoryPage struct {
+	Items               []Message
+	NextBeforeMessageID uint64
+	HasMore             bool
+}
+
+func (service *Service) ListSessions(ctx context.Context, userID uint64, limit int) (SessionList, error) {
+	if userID == 0 || limit < 0 || limit > MaxSessionLimit {
+		return SessionList{}, public(CodeInvalidChatQuery, "会话查询参数无效", nil)
+	}
+	if limit == 0 {
+		limit = DefaultSessionLimit
+	}
+	if service.sessions == nil {
+		return SessionList{}, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	items, count, err := service.sessions.ListSessions(ctx, userID, limit)
 	if err != nil {
-		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+		return SessionList{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
 	}
-	if !sameLogicalMessage(existing, request) {
-		return SendResult{}, public(CodeIdempotencyConflict, "clientMsgId 已用于其他消息", nil)
+	return SessionList{Items: items, Count: count}, nil
+}
+
+func (service *Service) History(ctx context.Context, userID, peerID, beforeMessageID uint64, limit int) (HistoryPage, error) {
+	if userID == 0 || peerID == 0 || userID == peerID || limit < 0 || limit > MaxHistoryLimit {
+		return HistoryPage{}, public(CodeInvalidChatQuery, "历史消息查询参数无效", nil)
 	}
-	return SendResult{Message: existing}, nil
+	if limit == 0 {
+		limit = DefaultHistoryLimit
+	}
+	if service.history == nil {
+		return HistoryPage{}, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	if beforeMessageID != 0 {
+		cursor, err := service.messages.GetByID(ctx, beforeMessageID)
+		if err != nil || !belongsToConversation(cursor, userID, peerID) {
+			return HistoryPage{}, public(CodeInvalidCursor, "历史消息游标无效", err)
+		}
+	}
+	items, err := service.history.ListHistory(ctx, userID, peerID, beforeMessageID, limit+1)
+	if err != nil {
+		return HistoryPage{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	for left, right := 0, len(items)-1; left < right; left, right = left+1, right-1 {
+		items[left], items[right] = items[right], items[left]
+	}
+	var next uint64
+	if hasMore && len(items) > 0 {
+		next = items[0].ID
+	}
+	return HistoryPage{Items: items, NextBeforeMessageID: next, HasMore: hasMore}, nil
+}
+
+func (service *Service) MarkRead(ctx context.Context, userID, peerID, readThroughMessageID uint64) (Session, error) {
+	if userID == 0 || peerID == 0 || userID == peerID || readThroughMessageID == 0 {
+		return Session{}, public(CodeInvalidReadMessage, "已读消息参数无效", nil)
+	}
+	if service.sessions == nil {
+		return Session{}, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	session, err := service.sessions.MarkRead(ctx, userID, peerID, readThroughMessageID)
+	switch {
+	case err == nil:
+		return session, nil
+	case errors.Is(err, ErrSessionNotFound):
+		return Session{}, public(CodeSessionMissing, "会话不存在", nil)
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrMessageNotInConversation):
+		return Session{}, public(CodeInvalidReadMessage, "已读消息不属于当前会话", nil)
+	default:
+		return Session{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+}
+
+func (service *Service) SetSessionTop(ctx context.Context, userID, peerID uint64, isTop bool) (Session, error) {
+	if userID == 0 || peerID == 0 || userID == peerID {
+		return Session{}, public(CodeInvalidChatQuery, "会话参数无效", nil)
+	}
+	if service.sessions == nil {
+		return Session{}, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	session, err := service.sessions.SetSessionTop(ctx, userID, peerID, isTop)
+	if errors.Is(err, ErrSessionNotFound) {
+		return Session{}, public(CodeSessionMissing, "会话不存在", nil)
+	}
+	if err != nil {
+		return Session{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	return session, nil
+}
+
+func (service *Service) ToggleSessionTop(ctx context.Context, userID, peerID uint64) (Session, error) {
+	if userID == 0 || peerID == 0 || userID == peerID {
+		return Session{}, public(CodeInvalidChatQuery, "会话参数无效", nil)
+	}
+	if service.sessions == nil {
+		return Session{}, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	session, err := service.sessions.ToggleSessionTop(ctx, userID, peerID)
+	if errors.Is(err, ErrSessionNotFound) {
+		return Session{}, public(CodeSessionMissing, "会话不存在", nil)
+	}
+	if err != nil {
+		return Session{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	return session, nil
+}
+
+func (service *Service) HideSession(ctx context.Context, userID, peerID uint64) error {
+	if userID == 0 || peerID == 0 || userID == peerID {
+		return public(CodeInvalidChatQuery, "会话参数无效", nil)
+	}
+	if service.sessions == nil {
+		return public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	if err := service.sessions.HideSession(ctx, userID, peerID); err != nil {
+		if errors.Is(err, ErrSessionNotFound) {
+			return public(CodeSessionMissing, "会话不存在", nil)
+		}
+		return public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	return nil
 }
 
 func (service *Service) validate(senderID uint64, request SendRequest) error {
@@ -171,6 +324,10 @@ func sameLogicalMessage(existing Message, request SendRequest) bool {
 	return existing.ReceiverID == request.ReceiverID && existing.Type == request.Message.Type &&
 		existing.Payload.TextMsg != nil && request.Message.TextMsg != nil &&
 		existing.Payload.TextMsg.Content == request.Message.TextMsg.Content
+}
+
+func belongsToConversation(value Message, first, second uint64) bool {
+	return value.SenderID == first && value.ReceiverID == second || value.SenderID == second && value.ReceiverID == first
 }
 
 func preview(content string) string {

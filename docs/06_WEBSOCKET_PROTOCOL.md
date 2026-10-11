@@ -55,7 +55,7 @@ wss://host/.../group?token=<JWT>
 
 ### Server -> Sender `chat.ack`
 
-只有消息成功持久化或命中已持久化的同一幂等消息后发送：
+只有 `message + sender session + receiver session/unread` 事务成功提交，或命中已提交的同一幂等消息后发送：
 
 ```json
 {
@@ -91,6 +91,8 @@ wss://host/.../group?token=<JWT>
 Checkpoint 4 只接受文本 `type=1`：`clientMsgId` 为 1–64 字符且只允许字母、数字、`.`、`_`、`:`、`-`；文本 UTF-8 非空且默认最多 4096 bytes，typed message payload 默认最多 16384 bytes。senderID 只取 Gateway 注入身份，不允许客户端提交。
 
 receiver 离线不影响持久化和 ACK；在线 receiver 的所有 Chat Clients best-effort 收到一次 `chat.message`。跨实例统一走 Redis Pub/Sub；publish/本地队列失败不改变 ACK 语义，未来由 history 恢复。幂等重试不再次发布 `chat.message`。
+
+receiver 是否在线不改变 unread：每条新消息都在事务中使 receiver session unread +1，只有 `PUT /api/chat/read` 改变 read state。Mark Read 不新增 WebSocket read receipt。
 
 ### Presence
 

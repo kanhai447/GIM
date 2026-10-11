@@ -93,7 +93,9 @@ Service 负责：参数验证 -> 接收者 RPC 校验 -> 好友校验 -> 幂等�
 
 ACK 只能在数据库持久化成功后返回，且仅代表服务端已接受/持久化，不代表 receiver 在线、收到或已读。ACK 只发回发起此次发送的 Client，不广播到 sender 其他设备。
 
-Checkpoint 4 只持久化 `chat_messages`；Checkpoint 5 引入 session/unread 时，必须把 message insert 与双方 session update 纳入同一事务。当前实时私聊统一发布到 `gim:chat:delivery`，各 Chat API 实例只向本实例 receiver Clients 投递；同实例也不额外直投，避免本地路径与 Pub/Sub 重复。
+Checkpoint 5 起，message insert 与 sender/receiver 两条 session upsert 在同一 MySQL 事务中提交；ACK 只能在该事务提交后排队。双方 session 行按 `user_id` 固定顺序更新以降低反向并发死锁风险，receiver 使用数据库原子增量累计 unread，sender 不增加自己的 unread；`last_message_id/at` 只在更大 message ID 到达时推进。重复 `(sender_id, client_msg_id)` 读取原消息，不再次修改 session/unread 或投递。当前实时私聊统一发布到 `gim:chat:delivery`，各 Chat API 实例只向本实例 receiver Clients 投递；同实例也不额外直投，避免本地路径与 Pub/Sub 重复。
+
+Session list 由 Chat Repository 一次 JOIN `chat_sessions/users/chat_messages` 获取 peer 基础资料和 `last_message_id` 对应消息，避免逐会话 User RPC/Message N+1。History 使用规范化会话双方 ID + message ID cursor；当前用户的 `chat_message_deletions` 仅过滤自己的视图。Mark Read 在事务内锁定用户自己的 session，单调推进 `last_read_message_id` 并按剩余入站消息重算 unread；它不是发送给 peer 的已读回执。
 
 ## 6. 群聊发送 Service
 

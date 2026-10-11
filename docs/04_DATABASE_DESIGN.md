@@ -65,7 +65,9 @@
 
 约束：`UNIQUE(user_id, peer_user_id)`。
 
-发送 A->B：更新 A->B 和 B->A 两行；B unread +1（如果未处于已读状态）；A 不增加自己的 unread。
+发送 A->B：在消息事务中 upsert A->B 和 B->A 两行；B unread 无论在线/离线都原子 +1，A 不增加自己的 unread。只有显式 Mark Read 才推进 read cursor/减少 unread；在线不等于正在查看该会话。
+
+`last_message_id/last_message_at` 只随更大 server message ID 推进，避免并发事务完成顺序导致回退；session upsert 不覆盖用户自己的 `is_top` 和 `last_read_message_id`。`hidden_at` 只隐藏当前用户自己的 session，新消息到达或当前用户再次发送时将双方对应 session 恢复可见。
 
 原 `top_user_model` 可在迁移后由 session.is_top 取代；V1 兼容期间可双写，最终只保留一个真相源。
 

@@ -32,22 +32,66 @@ type record struct {
 func (record) TableName() string { return "chat_messages" }
 
 func (repository *Repository) Create(ctx context.Context, value message.Message) (message.Message, error) {
-	payload, err := json.Marshal(value.Payload)
+	row, err := encodeRecord(value)
 	if err != nil {
-		return message.Message{}, fmt.Errorf("encode chat message: %w", err)
-	}
-	row := record{
-		SenderID: value.SenderID, ReceiverID: value.ReceiverID, ClientMsgID: value.ClientMsgID,
-		Type: value.Type, Preview: value.Preview, Payload: payload,
+		return message.Message{}, err
 	}
 	if err := repository.db.WithContext(ctx).Create(&row).Error; err != nil {
-		var mysqlError *mysqldriver.MySQLError
-		if errors.As(err, &mysqlError) && mysqlError.Number == 1062 {
+		if isDuplicate(err) {
 			return message.Message{}, message.ErrDuplicate
 		}
 		return message.Message{}, fmt.Errorf("create chat message: %w", err)
 	}
 	return toDomain(row)
+}
+
+func (repository *Repository) PersistWithSessions(ctx context.Context, value message.Message) (message.PersistResult, error) {
+	row, err := encodeRecord(value)
+	if err != nil {
+		return message.PersistResult{}, err
+	}
+	var result message.PersistResult
+	err = repository.db.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
+		if createErr := transaction.Create(&row).Error; createErr != nil {
+			if !isDuplicate(createErr) {
+				return fmt.Errorf("create chat message: %w", createErr)
+			}
+			var existing record
+			queryErr := transaction.Where("send_user_id = ? AND client_msg_id = ?", value.SenderID, value.ClientMsgID).First(&existing).Error
+			if queryErr != nil {
+				return fmt.Errorf("query duplicate chat message: %w", queryErr)
+			}
+			domain, decodeErr := toDomain(existing)
+			if decodeErr != nil {
+				return decodeErr
+			}
+			result = message.PersistResult{Message: domain}
+			return nil
+		}
+
+		operations := []sessionUpdate{
+			{UserID: row.SenderID, PeerID: row.ReceiverID},
+			{UserID: row.ReceiverID, PeerID: row.SenderID, IncrementUnread: true},
+		}
+		if operations[0].UserID > operations[1].UserID {
+			operations[0], operations[1] = operations[1], operations[0]
+		}
+		for _, operation := range operations {
+			if updateErr := upsertSession(transaction, row, operation); updateErr != nil {
+				return updateErr
+			}
+		}
+		domain, decodeErr := toDomain(row)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		result = message.PersistResult{Message: domain, CreatedNew: true}
+		return nil
+	})
+	if err != nil {
+		return message.PersistResult{}, err
+	}
+	return result, nil
 }
 
 func (repository *Repository) GetBySenderAndClientMsgID(ctx context.Context, senderID uint64, clientMsgID string) (message.Message, error) {
@@ -81,4 +125,20 @@ func toDomain(row record) (message.Message, error) {
 		ID: row.ID, SenderID: row.SenderID, ReceiverID: row.ReceiverID, ClientMsgID: row.ClientMsgID,
 		Type: row.Type, Preview: row.Preview, Payload: payload, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}, nil
+}
+
+func encodeRecord(value message.Message) (record, error) {
+	payload, err := json.Marshal(value.Payload)
+	if err != nil {
+		return record{}, fmt.Errorf("encode chat message: %w", err)
+	}
+	return record{
+		SenderID: value.SenderID, ReceiverID: value.ReceiverID, ClientMsgID: value.ClientMsgID,
+		Type: value.Type, Preview: value.Preview, Payload: payload,
+	}, nil
+}
+
+func isDuplicate(err error) bool {
+	var mysqlError *mysqldriver.MySQLError
+	return errors.As(err, &mysqlError) && mysqlError.Number == 1062
 }

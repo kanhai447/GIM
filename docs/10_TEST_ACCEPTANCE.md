@@ -20,6 +20,10 @@
 9. 多用户同时给同一用户发消息，无 concurrent write。
 10. 群聊多人同时发；禁言用户被拒绝；管理员权限正确。
 11. 前端 WS 自动重连后 session 与未读重新同步。
+12. 真实 MySQL 下 50 个相同 clientMsgId 只有一条消息、receiver unread 只 +1，50 个不同 clientMsgId 的 unread 无丢增量且 last_message_id 不回退。
+13. Mark Read 覆盖 partial/latest/stale/duplicate cursor，并发新消息不会被旧 read cursor 清零。
+14. Session list 覆盖置顶/时间排序、peer/preview JOIN、用户维度隐藏与新消息恢复可见；History 覆盖 message-ID 两页 cursor、越权 cursor 拒绝和用户维度 deletion。
+15. 注入 message/sender-session/receiver-session 失败时事务全部回滚且无 ACK/Publish；commit 后 Redis publish 失败仍保留 DB 与 ACK。
 
 ## 3. 文件场景
 

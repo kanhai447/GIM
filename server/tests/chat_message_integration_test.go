@@ -226,9 +226,13 @@ func TestChatMessageMySQLAndWebSocketReliability(t *testing.T) {
 		}
 	})
 
-	var sessionCount int64
-	if err := database.Table("chat_sessions").Count(&sessionCount).Error; err != nil || sessionCount != 0 {
-		t.Fatalf("checkpoint 4 unexpectedly changed chat_sessions: count=%d err=%v", sessionCount, err)
+	receiverSession, err := repository.GetSession(context.Background(), receiverID, senderID)
+	if err != nil || receiverSession.UnreadCount != 3 {
+		t.Fatalf("receiver session unread = %d, err=%v", receiverSession.UnreadCount, err)
+	}
+	offlineSession, err := repository.GetSession(context.Background(), offlineID, senderID)
+	if err != nil || offlineSession.UnreadCount != 1 {
+		t.Fatalf("offline session unread = %d, err=%v", offlineSession.UnreadCount, err)
 	}
 }
 

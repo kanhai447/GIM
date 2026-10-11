@@ -19,8 +19,13 @@ A ChatSocket
  -> check friendship
  -> lookup (A, clientMsgId)
     -> exists: return original ACK
- -> INSERT chat message (DB UNIQUE is final idempotency guard)
-    -> duplicate key: query original message and return original ACK
+ -> transaction
+    -> INSERT chat message (DB UNIQUE is final idempotency guard)
+       -> duplicate key: query original message; do not mutate session
+    -> upsert A->B session（unread unchanged）
+    -> upsert B->A session（unread atomic +1）
+    -> last_message_id/at only advance for larger message ID
+ -> COMMIT
  -> ACK originating Client A
  -> if createdNew: publish gim:chat:delivery
  -> every Chat instance receives event
@@ -28,13 +33,17 @@ A ChatSocket
  -> B writePump -> chat.message (all active Chat Clients)
 ```
 
-关键顺序：**先成功落库，再 ACK，再 best-effort 推送**。Redis publish/receiver backpressure 失败不会回滚消息或把 ACK 变成失败；B 后续可从历史恢复。幂等重试 `createdNew=false`，只重发同一 messageId 的 ACK，不再次推送 receiver。
-
-Checkpoint 4 的 ACK 只基于 `chat_messages` 成功持久化。Checkpoint 5 再把 `insert chat message + upsert A->B session + upsert B->A session/unread` 收敛为同一事务；本阶段不得提前写 `chat_sessions`。
+关键顺序：**message/session 事务提交，再 ACK，再 best-effort 推送**。Redis publish/receiver backpressure 失败不会回滚消息或把 ACK 变成失败；B 后续可从 history 恢复。幂等重试 `createdNew=false`，只重发同一 messageId 的 ACK，不再次增加 unread、修改 session 或推送 receiver。
 
 ## 3. 私聊已读
 
-用户打开会话/看到指定 messageId -> HTTP `PUT /api/chat/read` -> 验证该消息属于 A/B -> 推进 A 的 lastReadMessageId -> unread 归零/重算。V1 不要求已读回执实时通知对方。
+用户打开会话/看到指定 messageId -> HTTP `PUT /api/chat/read` -> 验证该消息属于 A/B -> 锁定 A->B session -> 单调推进 A 的 lastReadMessageId -> 按 cursor 后仍存在的入站消息重算 unread -> commit。并发新消息必须在该 session 行锁之后原子增加 unread，因此不会把 read cursor 之后的新消息误清零。V1 不向对方发送已读回执。
+
+### 私聊会话与历史
+
+`GET /api/chat/session` 直接读取显式 session 状态，使用数据库索引完成置顶/最近时间排序，并在一次 JOIN 中取得 peer 基础信息和 last message。`hidden_at` 只影响当前用户；后续新消息将 session 恢复可见。
+
+`GET /api/chat/history` 使用 server message ID 作为 `beforeMessageID`，只返回当前用户与 peer 的双向消息，按 DB 降序取页后以 oldest -> newest 返回。用户维度 deletion 只过滤请求用户自己的历史，不等于 recall。
 
 ## 4. 断线与重连
 

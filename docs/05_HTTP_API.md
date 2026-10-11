@@ -52,10 +52,16 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 
 保留原接口：
 
-- `GET /api/chat/history`
-- `GET /api/chat/session`
-- `POST /api/chat/user_top`
+- `GET /api/chat/history?peerUserID=&beforeMessageID=&limit=`（兼容 `friendId`）
+- `GET /api/chat/session?limit=`
+- `POST /api/chat/user_top` `{peerUserID,isTop}`（`friendId` 可作为 peer 字段兼容）
 - `DELETE /api/chat/chat`
+
+`GET /api/chat/history` 首次不传 `beforeMessageID`，后续使用上一页返回的 `nextBeforeMessageID`；核心查询为 `id < cursor`，默认 20、最大 100。响应消息按 oldest -> newest 返回，并带 `hasMore/nextBeforeMessageID`。只查询当前可信 `User-ID` 与 peer 的双向消息，cursor 必须属于该会话；`chat_message_deletions` 只过滤当前用户自己的记录。
+
+`GET /api/chat/session` 默认 20、最大 100，按 `is_top DESC, last_message_at DESC, id DESC` 返回可见 session。每项包含 peer 的 `userID/nickname/avatar`、与 `lastMessageID` 同源的 `lastMessage`、`lastMessageAt`、`lastReadMessageID`、`unreadCount`、`isTop`。查询使用 Repository JOIN，不返回口令哈希或内部字段。
+
+`POST /api/chat/user_top` 显式 `isTop` 时设置当前用户自己的置顶状态，不修改 peer session；为兼容参考前端，只有 `friendId` 时执行一次数据库原子 toggle。
 
 新增：
 
@@ -68,6 +74,8 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 ```
 
 语义：只允许推进 lastReadMessageID，不允许倒退；更新当前用户 session unread。返回最新 session 状态或空 data。
+
+服务端验证该 message 存在且属于当前用户与 peer 的会话。读到部分历史时 unread 保留 cursor 之后的入站消息；读到最新消息时 unread 为 0。Mark Read 是用户级持久状态，不产生 peer read-receipt WebSocket 事件。
 
 会话返回至少包含：peer 基础信息、lastMessage、lastMessageAt、unreadCount、isTop。
 
@@ -98,6 +106,8 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 ## 7. 错误约定
 
 优先复用参考项目现有 code。新增错误至少区分：未认证/无权限、参数错误、好友关系不存在、群成员不存在/禁言、重复 clientMsgId（应返回原消息而非失败）、消息不存在/无权撤回、文件超限/类型不允许、系统错误。
+
+Chat Checkpoint 5 使用：`2207` 会话/历史查询参数无效、`2208` session 不存在、`2209` history cursor 无效、`2210` read-through message 无效或不属于当前会话。响应不包含 SQL、表名、DSN 或原始数据库错误。
 
 User 基础能力使用：`1001` 参数错误、`1101` 用户不存在、`1102` 账号已存在；数据库原始错误只作为服务端私有 cause，不进入 HTTP/RPC 响应。
 

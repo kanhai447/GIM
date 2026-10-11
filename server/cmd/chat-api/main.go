@@ -15,6 +15,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
 	"github.com/kanhai447/GIM/server/internal/chat/message"
 	chatmysql "github.com/kanhai447/GIM/server/internal/chat/message/repository/mysql"
+	chathttp "github.com/kanhai447/GIM/server/internal/chat/message/transport/http"
 	"github.com/kanhai447/GIM/server/internal/chat/presence"
 	chatuserclient "github.com/kanhai447/GIM/server/internal/chat/userclient"
 	platformmysql "github.com/kanhai447/GIM/server/internal/platform/database/mysql"
@@ -108,8 +109,9 @@ func run(args []string) error {
 	messageConfig.MaxTextBytes = chatConfiguration.MaxTextBytes
 	messageConfig.MaxPayloadBytes = chatConfiguration.MaxPayloadBytes
 	messageConfig.DependencyTimeout = chatConfiguration.DependencyTimeout
+	messageRepository := chatmysql.New(mysqlClient.DB())
 	messageService, err := message.NewService(
-		chatmysql.New(mysqlClient.DB()), chatuserclient.New(userv1.NewUserServiceClient(userConnection)),
+		messageRepository, chatuserclient.New(userv1.NewUserServiceClient(userConnection)),
 		chatmysql.NewFriendshipRepository(mysqlClient.DB()), messageConfig,
 	)
 	if err != nil {
@@ -131,6 +133,7 @@ func run(args []string) error {
 		return err
 	}
 	chat.RegisterRoute(server, chatModule.Config.Path, chatModule.Handler)
+	chathttp.RegisterRoutes(server, messageService)
 
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
 	if err != nil {

@@ -34,6 +34,18 @@ func (repository *memoryRepository) Create(_ context.Context, value Message) (Me
 	return value, nil
 }
 
+func (repository *memoryRepository) PersistWithSessions(ctx context.Context, value Message) (PersistResult, error) {
+	created, err := repository.Create(ctx, value)
+	if errors.Is(err, ErrDuplicate) {
+		existing, queryErr := repository.GetBySenderAndClientMsgID(ctx, value.SenderID, value.ClientMsgID)
+		return PersistResult{Message: existing}, queryErr
+	}
+	if err != nil {
+		return PersistResult{}, err
+	}
+	return PersistResult{Message: created, CreatedNew: true}, nil
+}
+
 func (repository *memoryRepository) GetBySenderAndClientMsgID(_ context.Context, senderID uint64, clientMsgID string) (Message, error) {
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
