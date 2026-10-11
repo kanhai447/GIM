@@ -492,3 +492,43 @@
 - implementation commit：`6da24e4e161d5fc66c7d843eb676ff367e47f431 feat(chat): add idempotent private messaging and server ack`。
 - log/status commit：本记录所在提交。
 - 下一 Checkpoint：Chat Session + Unread + Read State；本轮完成后停止。
+
+## 2026-10-11 Day 2 / Checkpoint 5 — Chat Session + Unread + Read State + History Cursor
+
+### 目标与实现
+
+- 将 message INSERT、sender session、receiver session/unread 收敛为单一 MySQL transaction；固定 session 行更新顺序，ACK/publish 只发生在 commit 后。
+- receiver 在线/离线统一 unread 原子 +1；重复 clientMsgId 读取原消息，不重复 unread/session/publish；last message 只随更大 server ID 推进。
+- 新增 Session Repository：list/get/mark read/set/toggle top/hide；新消息恢复 hidden session，send 不覆盖 isTop/read cursor。
+- 新增 History Repository：规范化双方 ID + server message-ID cursor + current-user deletion filter；API oldest→newest，默认 20/最大 100。
+- 新增 Chat HTTP transport：`GET /api/chat/session`、`GET /api/chat/history`、`PUT /api/chat/read`、`POST /api/chat/user_top`；身份只取 Gateway Header。
+- Session list 使用一次 `chat_sessions/users/chat_messages` JOIN，避免 N+1；未新增 User RPC batch 或跨服务协议。
+
+### Reference 与改进
+
+- 参考 FIM 路径、双向历史、批量用户信息意图、top 与个人删除行为；未复制源码。
+- GIM 用显式 session 支持 unread/read/top/hidden 与索引排序，理由是复杂度、查询成本和用户状态语义；没有把 FIM 最新 preview 子查询错误描述为 `MAX(msg_preview)` bug。
+- deletion 严格绑定当前 user；Mark Read 是用户级数据库状态，不是 peer read receipt。
+
+### 验收
+
+- 真实 MySQL 50 same clientMsgId：message=1、receiver unread +1、same messageId；50 distinct：50 messages、unread +50、last ID 最大，PASS。
+- partial/stale/latest/duplicate/concurrent read、session order/top/hidden/reappear、两页 history/no duplicate/conversation isolation/per-user deletion/limit/empty：PASS。
+- message/sender-session/receiver-session failure injection 全 transaction rollback 且 no ACK/no publish；Redis post-commit failure 保留 DB + ACK，PASS。
+- CP5 真实 MySQL suite 连续 3 次 PASS；CP4 Redis Pub/Sub、Presence、Gateway/Auth/Chat tunnel 与 migration 回归 PASS。
+- `go test ./... -count=1`、`go vet ./...`、gofmt、diff check、Secret Scan：PASS。
+- Message/Session/MySQL coverage 71.1%；Chat HTTP transport coverage 56.3%。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible environment/CI verification PENDING。
+
+### 数据/协议
+
+- DB migration：无；开始使用既有 chat_sessions/chat_message_deletions。
+- HTTP：启用 session/history/read/user_top。
+- WS：无新增 event；ACK 语义收紧为 message/session transaction committed，仍非 delivered/read。
+- Redis：无 key 变化；delivery 继续 commit 后 best-effort Pub/Sub。
+
+### Git / 下一步
+
+- implementation commit：`3dac219ca23021aee96d0f4b824800e88b4914c4 feat(chat): add sessions unread and read state`。
+- log/status commit：本记录所在提交。
+- 下一 Checkpoint：Private Chat Frontend Integration；本轮完成后停止。

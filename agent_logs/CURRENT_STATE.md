@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 2
-- **Current Phase:** PHASE 3 PRIVATE MESSAGE RELIABILITY IN PROGRESS
-- **Current Checkpoint:** PRIVATE MESSAGE PERSISTENCE + CLIENTMSGID + SERVER ACK COMPLETED
-- **Last Completed Checkpoint:** Private Message Persistence + clientMsgId + Server ACK
-- **Working Tree:** CLEAN（本状态随 Checkpoint 4 日志提交并推送后）
-- **Last Stable Business Baseline:** `6da24e4e161d5fc66c7d843eb676ff367e47f431` — `feat(chat): add idempotent private messaging and server ack`
-- **Last Push:** Checkpoint 4 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
-- **Next Authorized Work:** Chat Session + Unread + Read State（等待下一 Checkpoint 明确指令）
-- **Next Planned Work:** DAY 2 - PHASE 3 SESSION / UNREAD / READ STATE
+- **Current Phase:** PHASE 3 PRIVATE CHAT BACKEND RELIABILITY COMPLETED
+- **Current Checkpoint:** CHAT SESSION + UNREAD + READ STATE + HISTORY CURSOR COMPLETED
+- **Last Completed Checkpoint:** Chat Session + Unread + Read State + History Cursor
+- **Working Tree:** CLEAN（本状态随 Checkpoint 5 日志提交并推送后）
+- **Last Stable Business Baseline:** `3dac219ca23021aee96d0f4b824800e88b4914c4` — `feat(chat): add sessions unread and read state`
+- **Last Push:** Checkpoint 5 implementation + 日志提交完成后推送 `origin/main`，实际结果见本轮最终 Git 复核
+- **Next Authorized Work:** Private Chat Frontend Integration（等待下一 Checkpoint 明确指令）
+- **Next Planned Work:** DAY 2 - PRIVATE CHAT FRONTEND INTEGRATION
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -43,10 +43,15 @@
 - MySQL `(send_user_id, client_msg_id)` 最终幂等、并发 duplicate 收敛、lost ACK retry 返回同一 messageId。
 - Server persist ACK 只回 originating Client；offline receiver 不影响 ACK。
 - Redis Pub/Sub 跨实例 best-effort realtime fanout；same-instance 统一走 bus，createdNew 防 duplicate delivery，多设备全投。
+- 私聊 message + sender session + receiver session/unread 原子 transaction；ACK 只在 commit 后返回。
+- receiver 在线/离线统一 unread 原子 +1；50 duplicate 只 +1，50 distinct 无 lost update，last message 不倒退。
+- 用户级 Mark Read、read cursor 单调推进、partial/stale/latest/concurrent read 正确；不发送 peer read receipt。
+- 私聊 Session List、数据库 top/time 排序、peer/last-message JOIN、用户维度 hidden 与新消息恢复可见。
+- Message-ID cursor History、双向会话隔离、limit 上限和当前用户维度 `chat_message_deletions` 过滤。
 
 ## In Progress
 
-- 无；Checkpoint 4 已完成并停止，等待下一 Checkpoint 指令。
+- 无；Checkpoint 5 已完成并停止，等待下一 Checkpoint 指令。
 
 ## Authorization
 
@@ -54,11 +59,11 @@ Day 2:
 AUTHORIZED
 
 Next Checkpoint:
-Chat Session + Unread + Read State
+Private Chat Frontend Integration
 
 ## Not Started
 
-- Day 2 后续：chat session、unread、mark read、history API 和前端 socket manager 尚未开始。
+- Day 2 后续：Frontend Chat Socket integration、pending/sent UI、unread UI、reconnect/retry frontend 尚未开始。
 - Day 3+：Group WebSocket、File、完整 Web 协议适配、Kafka/Logs 与完整 Admin 业务。
 
 ## Test Status
@@ -79,6 +84,7 @@ Chat Session + Unread + Read State
 - Day 2 / Checkpoint 2：全量测试、vet、gofmt、diff check、Secret Scan、heartbeat/lifecycle 10 轮稳定性和真实 Gateway Ping/Pong tunnel 全部 PASS；Chat heartbeat/lifecycle coverage 81.5%。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 3：全量测试、vet、gofmt、diff check、Secret Scan、Presence 75.8% coverage、关键 transition/heartbeat/slow/shutdown/Redis failure 10 轮稳定性、真实 Redis 多实例/TTL 与 Gateway/Auth/Chat Presence tunnel 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 4：全量测试、vet、gofmt、diff check、Secret Scan、Message 69.5% / User RPC adapter 71.4% coverage、真实 MySQL 50-way 并发幂等、lost ACK retry、offline/online/multi-device/multi-instance Redis Pub/Sub、duplicate no-redelivery、Gateway 与 Presence 回归全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
+- Day 2 / Checkpoint 5：非缓存全量测试、vet、gofmt、diff check、Secret Scan、Message/Session/MySQL 71.1% 与 HTTP transport 56.3% coverage、真实 MySQL 50 duplicate/50 distinct、partial/stale/latest/concurrent read、session/top/hidden、history cursor/per-user deletion、三类 transaction rollback、Redis post-commit degraded delivery、Pub/Sub/Presence/Gateway regressions 全部 PASS。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 
 ## Known Issues
 
@@ -90,5 +96,5 @@ Chat Session + Unread + Read State
 
 ## Next Action
 
-- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence 与 Private Message Persistence/clientMsgId/Server ACK 已完成，无 Day 2 blocker。
-- 下一入口为 **Chat Session + Unread + Read State**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint。
+- Chat WebSocket Foundation、Heartbeat/Lifecycle、Presence、Private Message Persistence/clientMsgId/Server ACK、Chat Session/Unread/Mark Read/History Cursor 已完成，无 Day 2 blocker。
+- 下一入口为 **Private Chat Frontend Integration**；Race 必须在兼容环境/CI 补验。本轮不进入该 Checkpoint。

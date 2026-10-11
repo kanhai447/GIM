@@ -3,12 +3,13 @@
 ## 授权状态
 
 - Day 2：AUTHORIZED。
-- 当前 Checkpoint：Private Message Persistence + clientMsgId + Server ACK COMPLETED。
+- 当前 Checkpoint：Chat Session + Unread + Read State + History Cursor COMPLETED。
 - 已完成：Pre-Day2 Concurrency Preflight。
 - 已完成：Chat Hub/Client、readPump/writePump、多连接模型、Chat endpoint/runtime 和 Gateway real WS tunnel。
 - 已完成：Chat WebSocket Heartbeat、deadline、dead/slow/normal/abnormal disconnect cleanup 和 multi-device lifecycle。
 - 已完成：Redis-backed Chat Presence、多设备 transition、多实例 contribution、TTL/crash recovery 与 shutdown cleanup。
 - 已完成：typed private chat send、MySQL persist、clientMsgId 幂等、Server ACK、offline/online/multi-device/multi-instance realtime delivery。
+- 已完成：message/session transaction、unread、Mark Read、Session List/top/hidden 与 message-ID cursor History。
 
 ## Pre-Day2 Concurrency Preflight
 
@@ -31,6 +32,7 @@
 - `agent_logs/operations/day-2/003_checkpoint-2_chat-heartbeat-lifecycle.md`
 - `agent_logs/operations/day-2/004_checkpoint-3_chat-presence.md`
 - `agent_logs/operations/day-2/005_checkpoint-4_private-message-ack.md`
+- `agent_logs/operations/day-2/006_checkpoint-5_chat-session-unread-read.md`
 
 ## Checkpoint 1 — Chat WebSocket Hub / Client Foundation
 
@@ -88,6 +90,23 @@
 - 未实现 chat_sessions、unread、mark read、history API 或前端 socket manager。
 - Race：NOT AVAILABLE；兼容环境/CI verification PENDING。
 
+## Checkpoint 5 — Chat Session + Unread + Read State + History Cursor
+
+- 时间：2026-10-11 09:21 +08:00。
+- message insert、sender session 和 receiver session/unread 在同一 MySQL transaction；ACK/publish 均只发生在 commit 后。
+- 两条 session 固定锁顺序，last message 只前进，receiver 在线/离线统一数据库 unread 原子 +1；重复 clientMsgId 不重复 session/unread/publish。
+- 真实 MySQL 50 duplicate：1 message、unread +1、same messageId；50 distinct：50 messages、unread +50、last ID 最大且无 lost update。
+- Mark Read 验证会话归属并单调推进 read cursor；partial/stale/latest/duplicate/concurrent new-message 均保持 unread 一致；不实现 peer read receipt。
+- `GET /api/chat/session` 单 JOIN 返回 peer/last message/unread/read/top，数据库完成 top/time 排序；hidden 只影响当前用户，新消息恢复可见。
+- `GET /api/chat/history` 使用 server message-ID cursor、默认 20/最大 100、oldest→newest 返回；当前用户 deletion 不影响 peer，个人删除不等于 recall。
+- `PUT /api/chat/read` 与 `POST /api/chat/user_top` 使用 Gateway 可信身份；top 支持显式 set 和 legacy `friendId` atomic toggle。
+- message/sender-session/receiver-session failure injection 全部回滚且无 ACK/publish；Redis publish after commit failure 保留 DB 与 ACK。
+- 无 migration 变化；复用 Day 1 `003_chat` schema/index。Session list EXPLAIN 选择设计排序索引；history/unread 小数据 optimizer 选择更窄 PK/unique，同时列出设计 cursor 索引为 possible keys，未新增无意义索引。
+- 非缓存全量测试、真实 MySQL/Redis/临时 etcd、CP4 Pub/Sub、Presence/Gateway、vet、gofmt、diff check 与 Secret Scan PASS；CP5 真实 MySQL 套件连续 3 次 PASS。
+- Message/Session/MySQL coverage 71.1%，Chat HTTP transport 56.3%。
+- Implementation commit：`3dac219ca23021aee96d0f4b824800e88b4914c4`。
+- Race：NOT AVAILABLE；compatible environment/CI verification PENDING。
+
 ## Next Checkpoint
 
-Chat Session + Unread + Read State
+Private Chat Frontend Integration
