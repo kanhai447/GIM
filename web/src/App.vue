@@ -4,22 +4,37 @@ import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { useGroupStore } from '@/stores/group'
 
 const auth = useAuthStore()
 const chat = useChatStore()
+const group = useGroupStore()
 const router = useRouter()
+let invalidatingAuthentication = false
+
+async function invalidateAuthentication(): Promise<void> {
+  if (invalidatingAuthentication) return
+  invalidatingAuthentication = true
+  try {
+    chat.stop()
+    group.stop()
+    auth.reset()
+    await router.replace({ name: 'login', query: { reason: 'session-expired' } })
+  } finally {
+    invalidatingAuthentication = false
+  }
+}
 
 watch(
   () => [auth.authenticated, auth.user?.userID, auth.token] as const,
   ([authenticated, userID, token]) => {
     if (!authenticated || !userID || !token) {
       chat.stop()
+      group.stop()
       return
     }
-    chat.start(userID, token, async () => {
-      auth.reset()
-      await router.replace({ name: 'login', query: { reason: 'session-expired' } })
-    })
+    chat.start(userID, token, invalidateAuthentication)
+    group.start(userID, token, invalidateAuthentication)
   },
   { immediate: true },
 )
