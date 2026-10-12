@@ -28,3 +28,9 @@ func TestChatDeliveryChannelUsesStableNamespace(t *testing.T) {
 		t.Fatalf("ChatDeliveryChannel() = %q", channel)
 	}
 }
+
+func TestGroupProhibitionUsesMembershipNamespace(t *testing.T) {
+	if key := GroupProhibition(42); key != "gim:group:prohibition:42" {
+		t.Fatalf("GroupProhibition() = %q", key)
+	}
+}

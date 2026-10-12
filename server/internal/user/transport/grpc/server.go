@@ -19,6 +19,19 @@ type Application interface {
 	CreateUser(ctx context.Context, input userservice.CreateUserInput) (domain.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (domain.User, error)
 	GetUserByAccount(ctx context.Context, account string) (domain.User, error)
+	BatchGetUsers(ctx context.Context, userIDs []uint64) ([]domain.User, error)
+}
+
+func (server *Server) BatchGetUsers(ctx context.Context, request *userv1.BatchGetUsersRequest) (*userv1.BatchGetUsersResponse, error) {
+	users, err := server.users.BatchGetUsers(ctx, request.GetUserIds())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	response := &userv1.BatchGetUsersResponse{Users: make([]*userv1.UserInfo, 0, len(users))}
+	for _, user := range users {
+		response.Users = append(response.Users, publicUser(user))
+	}
+	return response, nil
 }
 
 type Server struct {

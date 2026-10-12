@@ -83,6 +83,24 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 
 保持参考项目已有 group 路由：创建/更新/删除、成员、角色、邀请、验证、搜索、禁言、历史、session、top、my 等。
 
+Day 3 / Checkpoint 1 已实现的基础路由如下；所有操作者 ID 只取 Gateway 注入的可信 `User-ID`，请求体中的 `ownerId/operatorId/userId` 不作为当前操作者身份：
+
+- `POST /api/group/group`：创建群。兼容 `mode/name/size/isSearch/userIdList`，也接受 `title/avatar/abstract/joinPolicy`；未显式提交加群策略时默认需要审批。`groups + owner group_members + 创建时邀请成员` 同事务提交。
+- `GET /api/group/group/:id`：成员读取群基础资料、当前角色和成员数；已解散群按不存在处理。
+- `DELETE /api/group/group/:id`：仅 owner 解散群，群状态和 membership 同事务更新。
+- `GET /api/group/my?limit=`：按当前用户 `group_members.user_id` 查询，SQL JOIN/聚合一次返回群资料、当前角色和成员数。
+- `GET /api/group/member?id=&limit=`：仅群成员可读；成员关系一次查询，用户资料通过 User `BatchGetUsers` RPC 一次补齐，不逐成员调用 RPC。
+- `POST /api/group/member` `{id,memberIdList}`：邀请成员；owner/admin 始终允许，普通成员服从 `allow_member_invite`。
+- `DELETE /api/group/member?id=&memberId=`：未传 `memberId` 或目标为自己时退出；owner 不允许普通退出。owner 可移除 admin/member，admin 只能移除 member。
+- `PUT /api/group/member/role` `{id,memberId,role}`：仅 owner 可在 admin/member 之间调整，不能修改 owner。
+- `POST /api/group/valid` `{groupID,verify}`：开放群在同一事务记录 accepted request 并建立 member；需要审批的群创建唯一 pending request；关闭群拒绝。
+- `PUT /api/group/valid/status` `{validId,status}`：status 仅允许 `1=accepted`、`2=rejected`；owner/admin 可处理。accepted 状态变更与 member insert 同事务。
+- `PUT /api/group/member/prohibition` `{groupId,memberId,prohibitionTime}`：分钟数存在时设置临时禁言，省略/null 时解除；权限矩阵与踢人一致，不能禁言 owner。
+
+Group 内部 RPC 只提供后续 Group WS/消息服务需要的最小边界：`GetGroup`、`IsMember`、`GetMemberRole`、`IsMuted`。本 Checkpoint 不提供 Group WebSocket、群消息、ACK、history/session/read 实现。
+
+Group 基础业务错误码：`2301` 参数错误、`2302` 群不存在、`2303` 已是成员、`2304` 不是成员、`2305` 无权限、`2306` 重复 pending request、`2307` request 不存在、`2308` request 状态无效、`2309` 目标用户不存在、`2310` owner 不能退出、`2311` 禁言状态服务暂不可用、`2312` 群禁止加入、`2313` 成员达到上限。数据库/Redis/RPC 原始错误不进入响应。
+
 新增：
 
 ### `PUT /api/group/read`

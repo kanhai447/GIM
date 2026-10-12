@@ -460,6 +460,22 @@ func (repositoryMemory *memoryUserRepository) GetByAccount(ctx context.Context, 
 	return repositoryMemory.byID[userID], nil
 }
 
+func (repositoryMemory *memoryUserRepository) GetByIDs(ctx context.Context, userIDs []uint64) ([]domain.User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	repositoryMemory.mutex.Lock()
+	defer repositoryMemory.mutex.Unlock()
+	users := make([]domain.User, 0, len(userIDs))
+	for _, userID := range userIDs {
+		user, exists := repositoryMemory.byID[userID]
+		if exists {
+			users = append(users, user)
+		}
+	}
+	return users, nil
+}
+
 type memoryRevocations struct {
 	mutex sync.Mutex
 	items map[string]time.Time

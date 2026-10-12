@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package gim.group.v1;
+
+option go_package = "github.com/kanhai447/GIM/server/api/group/v1;groupv1";
+
+service GroupService {
+  rpc GetGroup(GetGroupRequest) returns (GetGroupResponse);
+  rpc IsMember(IsMemberRequest) returns (IsMemberResponse);
+  rpc GetMemberRole(GetMemberRoleRequest) returns (GetMemberRoleResponse);
+  rpc IsMuted(IsMutedRequest) returns (IsMutedResponse);
+}
+
+message GetGroupRequest { uint64 group_id = 1; }
+
+message GetGroupResponse {
+  uint64 group_id = 1;
+  uint64 owner_id = 2;
+  int32 status = 3;
+  bool is_all_muted = 4;
+}
+
+message IsMemberRequest {
+  uint64 group_id = 1;
+  uint64 user_id = 2;
+}
+
+message IsMemberResponse { bool is_member = 1; }
+
+message GetMemberRoleRequest {
+  uint64 group_id = 1;
+  uint64 user_id = 2;
+}
+
+message GetMemberRoleResponse { int32 role = 1; }
+
+message IsMutedRequest {
+  uint64 group_id = 1;
+  uint64 user_id = 2;
+}
+
+message IsMutedResponse { bool is_muted = 1; }

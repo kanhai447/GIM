@@ -46,6 +46,21 @@ func (repo *Repository) GetByAccount(ctx context.Context, account string) (domai
 	return record.toDomain(), nil
 }
 
+func (repo *Repository) GetByIDs(ctx context.Context, userIDs []uint64) ([]domain.User, error) {
+	if len(userIDs) == 0 {
+		return []domain.User{}, nil
+	}
+	var records []userRecord
+	if err := repo.db.WithContext(ctx).Where("id IN ?", userIDs).Find(&records).Error; err != nil {
+		return nil, mapError("get by ids", err)
+	}
+	users := make([]domain.User, 0, len(records))
+	for _, record := range records {
+		users = append(users, record.toDomain())
+	}
+	return users, nil
+}
+
 type userRecord struct {
 	ID             uint64    `gorm:"column:id;type:bigint unsigned;primaryKey;autoIncrement"`
 	Account        string    `gorm:"column:account;type:varchar(64);not null;uniqueIndex:ux_users_account"`

@@ -21,6 +21,14 @@ type fakeApplication struct {
 	create       func(context.Context, userservice.CreateUserInput) (domain.User, error)
 	getByID      func(context.Context, uint64) (domain.User, error)
 	getByAccount func(context.Context, string) (domain.User, error)
+	batchGet     func(context.Context, []uint64) ([]domain.User, error)
+}
+
+func (app fakeApplication) BatchGetUsers(ctx context.Context, userIDs []uint64) ([]domain.User, error) {
+	if app.batchGet == nil {
+		return nil, nil
+	}
+	return app.batchGet(ctx, userIDs)
 }
 
 func (app fakeApplication) CreateUser(ctx context.Context, input userservice.CreateUserInput) (domain.User, error) {
@@ -78,6 +86,16 @@ func TestRPCErrorDoesNotLeakRepositoryDetails(t *testing.T) {
 	_, err := NewServer(app).GetUserByID(context.Background(), &userv1.GetUserByIDRequest{UserId: 44})
 	if status.Code(err) != codes.Internal || strings.Contains(err.Error(), privateDetail) {
 		t.Fatalf("GetUserByID() leaked error: %v", err)
+	}
+}
+
+func TestBatchGetUsersReturnsPublicProfiles(t *testing.T) {
+	app := fakeApplication{batchGet: func(context.Context, []uint64) ([]domain.User, error) {
+		return []domain.User{{ID: 44, Nickname: "GIM", PasswordHash: "private-hash"}}, nil
+	}}
+	response, err := NewServer(app).BatchGetUsers(context.Background(), &userv1.BatchGetUsersRequest{UserIds: []uint64{44}})
+	if err != nil || len(response.GetUsers()) != 1 || response.GetUsers()[0].GetNickname() != "GIM" {
+		t.Fatalf("BatchGetUsers() = %#v, %v", response, err)
 	}
 }
 

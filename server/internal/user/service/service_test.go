@@ -19,6 +19,14 @@ type fakeRepository struct {
 	create       func(context.Context, *domain.User) error
 	getByID      func(context.Context, uint64) (domain.User, error)
 	getByAccount func(context.Context, string) (domain.User, error)
+	getByIDs     func(context.Context, []uint64) ([]domain.User, error)
+}
+
+func (repo fakeRepository) GetByIDs(ctx context.Context, userIDs []uint64) ([]domain.User, error) {
+	if repo.getByIDs == nil {
+		return nil, nil
+	}
+	return repo.getByIDs(ctx, userIDs)
 }
 
 func (repo fakeRepository) Create(ctx context.Context, user *domain.User) error {
@@ -115,6 +123,19 @@ func TestPublicUserInfoDoesNotContainPasswordHash(t *testing.T) {
 	}
 	if strings.Contains(string(payload), testPasswordHash) || strings.Contains(strings.ToLower(string(payload)), "password") {
 		t.Fatal("public UserInfo exposed password material")
+	}
+}
+
+func TestBatchGetUsersDeduplicatesIDs(t *testing.T) {
+	service := New(fakeRepository{getByIDs: func(_ context.Context, ids []uint64) ([]domain.User, error) {
+		if len(ids) != 2 || ids[0] != 9 || ids[1] != 10 {
+			t.Fatalf("GetByIDs ids = %v", ids)
+		}
+		return []domain.User{{ID: 9}, {ID: 10}}, nil
+	}})
+	users, err := service.BatchGetUsers(context.Background(), []uint64{9, 10, 9})
+	if err != nil || len(users) != 2 {
+		t.Fatalf("BatchGetUsers() = %#v, %v", users, err)
 	}
 }
 

@@ -4,9 +4,10 @@ package rediskeys
 import "strconv"
 
 const (
-	authLogoutPrefix    = "gim:auth:logout:"
-	presenceUserPrefix  = "gim:presence:user:"
-	chatDeliveryChannel = "gim:chat:delivery"
+	authLogoutPrefix       = "gim:auth:logout:"
+	presenceUserPrefix     = "gim:presence:user:"
+	chatDeliveryChannel    = "gim:chat:delivery"
+	groupProhibitionPrefix = "gim:group:prohibition:"
 )
 
 // AuthLogout returns the key for a SHA-256 token fingerprint. Callers must
@@ -24,4 +25,10 @@ func ChatDeliveryChannel() string { return chatDeliveryChannel }
 // in the key namespace.
 func PresenceUser(userID uint64) string {
 	return presenceUserPrefix + strconv.FormatUint(userID, 10)
+}
+
+// GroupProhibition stores one temporary member mute. The stable membership ID
+// already scopes the key to exactly one group/user relation.
+func GroupProhibition(memberID uint64) string {
+	return groupProhibitionPrefix + strconv.FormatUint(memberID, 10)
 }

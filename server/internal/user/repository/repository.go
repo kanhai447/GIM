@@ -17,4 +17,5 @@ type Repository interface {
 	Create(ctx context.Context, user *domain.User) error
 	GetByID(ctx context.Context, userID uint64) (domain.User, error)
 	GetByAccount(ctx context.Context, account string) (domain.User, error)
+	GetByIDs(ctx context.Context, userIDs []uint64) ([]domain.User, error)
 }

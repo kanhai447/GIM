@@ -325,6 +325,94 @@ func (x *GetUserByAccountResponse) GetCredential() *UserCredential {
 	return nil
 }
 
+type BatchGetUsersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserIds       []uint64               `protobuf:"varint,1,rep,packed,name=user_ids,json=userIds,proto3" json:"user_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchGetUsersRequest) Reset() {
+	*x = BatchGetUsersRequest{}
+	mi := &file_api_user_v1_user_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchGetUsersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchGetUsersRequest) ProtoMessage() {}
+
+func (x *BatchGetUsersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_user_v1_user_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchGetUsersRequest.ProtoReflect.Descriptor instead.
+func (*BatchGetUsersRequest) Descriptor() ([]byte, []int) {
+	return file_api_user_v1_user_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *BatchGetUsersRequest) GetUserIds() []uint64 {
+	if x != nil {
+		return x.UserIds
+	}
+	return nil
+}
+
+type BatchGetUsersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Users         []*UserInfo            `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchGetUsersResponse) Reset() {
+	*x = BatchGetUsersResponse{}
+	mi := &file_api_user_v1_user_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchGetUsersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchGetUsersResponse) ProtoMessage() {}
+
+func (x *BatchGetUsersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_user_v1_user_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchGetUsersResponse.ProtoReflect.Descriptor instead.
+func (*BatchGetUsersResponse) Descriptor() ([]byte, []int) {
+	return file_api_user_v1_user_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *BatchGetUsersResponse) GetUsers() []*UserInfo {
+	if x != nil {
+		return x.Users
+	}
+	return nil
+}
+
 type UserInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -339,7 +427,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_api_user_v1_user_proto_msgTypes[6]
+	mi := &file_api_user_v1_user_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -351,7 +439,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_user_v1_user_proto_msgTypes[6]
+	mi := &file_api_user_v1_user_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -364,7 +452,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_api_user_v1_user_proto_rawDescGZIP(), []int{6}
+	return file_api_user_v1_user_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UserInfo) GetId() uint64 {
@@ -421,7 +509,7 @@ type UserCredential struct {
 
 func (x *UserCredential) Reset() {
 	*x = UserCredential{}
-	mi := &file_api_user_v1_user_proto_msgTypes[7]
+	mi := &file_api_user_v1_user_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -433,7 +521,7 @@ func (x *UserCredential) String() string {
 func (*UserCredential) ProtoMessage() {}
 
 func (x *UserCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_api_user_v1_user_proto_msgTypes[7]
+	mi := &file_api_user_v1_user_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -446,7 +534,7 @@ func (x *UserCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserCredential.ProtoReflect.Descriptor instead.
 func (*UserCredential) Descriptor() ([]byte, []int) {
-	return file_api_user_v1_user_proto_rawDescGZIP(), []int{7}
+	return file_api_user_v1_user_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UserCredential) GetUser() *UserInfo {
@@ -486,7 +574,11 @@ const file_api_user_v1_user_proto_rawDesc = "" +
 	"\x18GetUserByAccountResponse\x12;\n" +
 	"\n" +
 	"credential\x18\x01 \x01(\v2\x1b.gim.user.v1.UserCredentialR\n" +
-	"credential\"\x94\x01\n" +
+	"credential\"1\n" +
+	"\x14BatchGetUsersRequest\x12\x19\n" +
+	"\buser_ids\x18\x01 \x03(\x04R\auserIds\"D\n" +
+	"\x15BatchGetUsersResponse\x12+\n" +
+	"\x05users\x18\x01 \x03(\v2\x15.gim.user.v1.UserInfoR\x05users\"\x94\x01\n" +
 	"\bUserInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x1a\n" +
@@ -496,12 +588,13 @@ const file_api_user_v1_user_proto_rawDesc = "" +
 	"\x06status\x18\x06 \x01(\x05R\x06status\"`\n" +
 	"\x0eUserCredential\x12)\n" +
 	"\x04user\x18\x01 \x01(\v2\x15.gim.user.v1.UserInfoR\x04user\x12#\n" +
-	"\rpassword_hash\x18\x02 \x01(\tR\fpasswordHash2\x8f\x02\n" +
+	"\rpassword_hash\x18\x02 \x01(\tR\fpasswordHash2\xe7\x02\n" +
 	"\vUserService\x12M\n" +
 	"\n" +
 	"CreateUser\x12\x1e.gim.user.v1.CreateUserRequest\x1a\x1f.gim.user.v1.CreateUserResponse\x12P\n" +
 	"\vGetUserByID\x12\x1f.gim.user.v1.GetUserByIDRequest\x1a .gim.user.v1.GetUserByIDResponse\x12_\n" +
-	"\x10GetUserByAccount\x12$.gim.user.v1.GetUserByAccountRequest\x1a%.gim.user.v1.GetUserByAccountResponseB4Z2github.com/kanhai447/GIM/server/api/user/v1;userv1b\x06proto3"
+	"\x10GetUserByAccount\x12$.gim.user.v1.GetUserByAccountRequest\x1a%.gim.user.v1.GetUserByAccountResponse\x12V\n" +
+	"\rBatchGetUsers\x12!.gim.user.v1.BatchGetUsersRequest\x1a\".gim.user.v1.BatchGetUsersResponseB4Z2github.com/kanhai447/GIM/server/api/user/v1;userv1b\x06proto3"
 
 var (
 	file_api_user_v1_user_proto_rawDescOnce sync.Once
@@ -515,7 +608,7 @@ func file_api_user_v1_user_proto_rawDescGZIP() []byte {
 	return file_api_user_v1_user_proto_rawDescData
 }
 
-var file_api_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_api_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_api_user_v1_user_proto_goTypes = []any{
 	(*CreateUserRequest)(nil),        // 0: gim.user.v1.CreateUserRequest
 	(*CreateUserResponse)(nil),       // 1: gim.user.v1.CreateUserResponse
@@ -523,24 +616,29 @@ var file_api_user_v1_user_proto_goTypes = []any{
 	(*GetUserByIDResponse)(nil),      // 3: gim.user.v1.GetUserByIDResponse
 	(*GetUserByAccountRequest)(nil),  // 4: gim.user.v1.GetUserByAccountRequest
 	(*GetUserByAccountResponse)(nil), // 5: gim.user.v1.GetUserByAccountResponse
-	(*UserInfo)(nil),                 // 6: gim.user.v1.UserInfo
-	(*UserCredential)(nil),           // 7: gim.user.v1.UserCredential
+	(*BatchGetUsersRequest)(nil),     // 6: gim.user.v1.BatchGetUsersRequest
+	(*BatchGetUsersResponse)(nil),    // 7: gim.user.v1.BatchGetUsersResponse
+	(*UserInfo)(nil),                 // 8: gim.user.v1.UserInfo
+	(*UserCredential)(nil),           // 9: gim.user.v1.UserCredential
 }
 var file_api_user_v1_user_proto_depIdxs = []int32{
-	6, // 0: gim.user.v1.GetUserByIDResponse.user:type_name -> gim.user.v1.UserInfo
-	7, // 1: gim.user.v1.GetUserByAccountResponse.credential:type_name -> gim.user.v1.UserCredential
-	6, // 2: gim.user.v1.UserCredential.user:type_name -> gim.user.v1.UserInfo
-	0, // 3: gim.user.v1.UserService.CreateUser:input_type -> gim.user.v1.CreateUserRequest
-	2, // 4: gim.user.v1.UserService.GetUserByID:input_type -> gim.user.v1.GetUserByIDRequest
-	4, // 5: gim.user.v1.UserService.GetUserByAccount:input_type -> gim.user.v1.GetUserByAccountRequest
-	1, // 6: gim.user.v1.UserService.CreateUser:output_type -> gim.user.v1.CreateUserResponse
-	3, // 7: gim.user.v1.UserService.GetUserByID:output_type -> gim.user.v1.GetUserByIDResponse
-	5, // 8: gim.user.v1.UserService.GetUserByAccount:output_type -> gim.user.v1.GetUserByAccountResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8, // 0: gim.user.v1.GetUserByIDResponse.user:type_name -> gim.user.v1.UserInfo
+	9, // 1: gim.user.v1.GetUserByAccountResponse.credential:type_name -> gim.user.v1.UserCredential
+	8, // 2: gim.user.v1.BatchGetUsersResponse.users:type_name -> gim.user.v1.UserInfo
+	8, // 3: gim.user.v1.UserCredential.user:type_name -> gim.user.v1.UserInfo
+	0, // 4: gim.user.v1.UserService.CreateUser:input_type -> gim.user.v1.CreateUserRequest
+	2, // 5: gim.user.v1.UserService.GetUserByID:input_type -> gim.user.v1.GetUserByIDRequest
+	4, // 6: gim.user.v1.UserService.GetUserByAccount:input_type -> gim.user.v1.GetUserByAccountRequest
+	6, // 7: gim.user.v1.UserService.BatchGetUsers:input_type -> gim.user.v1.BatchGetUsersRequest
+	1, // 8: gim.user.v1.UserService.CreateUser:output_type -> gim.user.v1.CreateUserResponse
+	3, // 9: gim.user.v1.UserService.GetUserByID:output_type -> gim.user.v1.GetUserByIDResponse
+	5, // 10: gim.user.v1.UserService.GetUserByAccount:output_type -> gim.user.v1.GetUserByAccountResponse
+	7, // 11: gim.user.v1.UserService.BatchGetUsers:output_type -> gim.user.v1.BatchGetUsersResponse
+	8, // [8:12] is the sub-list for method output_type
+	4, // [4:8] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_api_user_v1_user_proto_init() }
@@ -554,7 +652,7 @@ func file_api_user_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_user_v1_user_proto_rawDesc), len(file_api_user_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -13,7 +13,7 @@ Command boundaries:
 - Settings API/RPC
 - Logs API and Kafka consumer
 
-Day 1 provides runnable Gateway, Auth API, User API and User RPC commands. Chat/Group WebSocket business behavior is not part of Day 1.
+Day 1 provides runnable Gateway, Auth API, User API and User RPC commands. Day 2 adds Chat API. Day 3 Checkpoint 1 adds Group API/RPC domain and membership commands; Group WebSocket and group messaging remain a later checkpoint.
 
 ## Layout
 
@@ -41,7 +41,10 @@ $env:GIM_ENV_FILE = '..\.env.local'
 go run ./cmd/user-rpc
 go run ./cmd/user-api
 go run ./cmd/auth-api
+go run ./cmd/chat-api
+go run ./cmd/group-rpc
+go run ./cmd/group-api
 go run ./cmd/gateway
 ```
 
-`user-api` and `auth-api` register leased endpoints in etcd and revoke them on graceful exit. Auth connects to User RPC at `INTERNAL_API_HOST:USER_RPC_PORT`; RPC is an internal configured dependency rather than a Gateway-discovered HTTP service. Only Gateway should be exposed publicly.
+`user-api`, `auth-api`, `chat-api`, and `group-api` register leased endpoints in etcd and revoke them on graceful exit. Auth, Chat, and Group connect to User RPC at `INTERNAL_API_HOST:USER_RPC_PORT`; Group also exposes the minimal internal membership RPC at `GROUP_RPC_PORT`. RPC is an internal configured dependency rather than a Gateway-discovered HTTP service. Only Gateway should be exposed publicly.

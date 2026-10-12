@@ -103,6 +103,8 @@ Session list 由 Chat Repository 一次 JOIN `chat_sessions/users/chat_messages`
 
 群成员较多时 V1 可同步更新；需把“未来异步扇出/大群优化”写入已知限制，不在 V1 提前引 Kafka。
 
+在 Group WebSocket 之前，Group foundation 先提供独立的 Domain/Repository/Service：角色枚举禁止魔法数字；创建群保证 group 与 owner membership 原子；批准申请保证 request 状态与 member 原子；owner/admin/member policy 集中测试；成员列表通过 User 批量 RPC 补齐公开资料。后续 Group Message Service 只能复用 `IsMember/GetMemberRole/IsMuted/GetGroup`，不得自行复制 membership SQL。临时个人禁言以 membership ID 为 key 使用 Redis TTL，不写 MySQL 过期时间。
+
 ## 7. Context
 
 HTTP handler 传入的 ctx 应继续传到 RPC/DB；禁止业务路径无理由 `context.Background()`。后台生命周期任务除外。

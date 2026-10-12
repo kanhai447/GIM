@@ -92,6 +92,31 @@ func (service *Service) GetUserByAccount(ctx context.Context, account string) (d
 	return user, nil
 }
 
+func (service *Service) BatchGetUsers(ctx context.Context, userIDs []uint64) ([]domain.User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(userIDs) == 0 || len(userIDs) > 500 {
+		return nil, apperror.Business(CodeInvalidArgument, "参数错误")
+	}
+	unique := make([]uint64, 0, len(userIDs))
+	seen := make(map[uint64]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		if userID == 0 {
+			return nil, apperror.Business(CodeInvalidArgument, "参数错误")
+		}
+		if _, exists := seen[userID]; !exists {
+			seen[userID] = struct{}{}
+			unique = append(unique, userID)
+		}
+	}
+	users, err := service.users.GetByIDs(ctx, unique)
+	if err != nil {
+		return nil, translateRepositoryError(err)
+	}
+	return users, nil
+}
+
 func validAccount(account string) bool {
 	if len(account) < 3 || len(account) > 64 {
 		return false

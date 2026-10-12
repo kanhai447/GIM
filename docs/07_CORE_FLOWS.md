@@ -51,6 +51,30 @@ read/write error 或 Pong 超时 -> unregister -> 若该用户在本 Chat 实例
 
 ## 5. 群聊发送
 
+### 群领域与成员基础（Day 3 / Checkpoint 1）
+
+```text
+Create Group
+ -> validate trusted operator and batch users
+ -> transaction: INSERT groups + INSERT owner/member rows
+ -> commit（任一 member 写失败则 group 不残留）
+
+Apply Join
+ -> active group + not-member + pending uniqueness
+ -> open policy: transaction accepted request + member
+ -> approval policy: create one pending request
+
+Approve Join
+ -> manager policy
+ -> lock pending request and group
+ -> transaction: INSERT member + pending -> accepted
+ -> concurrent reviewers converge to one member and one state transition
+```
+
+owner/admin/member 权限判断集中在 Group Service policy；owner 不能普通退出，admin 不能操作 owner/其他 admin。临时个人禁言仅使用 Redis TTL，Group 不读写 Presence。
+
+`My Groups` 使用 member->group JOIN 与成员数聚合；成员列表一次读取 membership，并通过 User 批量 RPC 获取公开资料，禁止逐成员 N+1。
+
 ```text
 Sender -> Group readPump -> GroupMessageService
  -> member check
