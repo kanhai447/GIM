@@ -663,3 +663,32 @@
 - log/status commit：本记录所在提交。
 - push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并执行最终等值/clean 复核。
 - Next Planned：Group Message Reliability + Session/Unread，需用户明确授权；本轮到此停止。
+## 2026-10-12 Day 3 / Checkpoint 3 — Group Message Reliability + Session / Unread / History
+
+### Scope / Changes
+
+- 只实现文本群消息 typed protocol、Group policy 复用、MySQL 幂等事务、group session/unread/read/history 与独立 Redis realtime fanout。
+- 无 migration；复用 `004_group` 的 UNIQUE/index/session/deletion schema。
+- 未进入 Group Frontend、File、Admin 或 Day 4。
+
+### Reliability / Delivery
+
+- active group shared lock + sender membership + message insert + current-member snapshot + batch session upsert 同事务；sender unread +0，其他成员 +1。
+- MySQL UNIQUE 最终幂等；duplicate transaction 结束后新事务读取胜者，避免 REPEATABLE READ 旧快照；duplicate 不修改 session/publish。
+- commit 后 originating ACK；`gim:group:delivery` 跨实例投递本地全部目标 Clients。sender sibling 与 receiver 多设备均收到 message，Redis failure 保留 DB/ACK。
+- session JOIN 无 N+1；read cursor 单调并与 send 行锁串行；history cursor/member/deletion 隔离。
+
+### Acceptance
+
+- 真实 MySQL/Redis focused integration 3 轮 PASS：50 duplicate、50 distinct、mute/membership、session/read/history、failure injection、EXPLAIN。
+- actual two-instance Group WebSocket + sender sibling + receiver two devices PASS；Presence negative PASS。
+- 临时 etcd 下 `go test ./... -count=1` PASS；Group foundation/Private Chat regression PASS。
+- `go vet ./...`、gofmt、diff、Secret Scan PASS；focused coverage 69.1%。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible CI PENDING。
+
+### Git / Next
+
+- implementation commit：`547afe835f84760adf9733f1661050706ef8b32f feat(group): add reliable group messaging and sessions`。
+- log/status commit：本记录所在提交。
+- push：implementation 与本 log/status commit 已 push `origin/main`；最终 HEAD equality/clean 已复核。
+- 下一入口：Group Frontend Integration，需新授权。
