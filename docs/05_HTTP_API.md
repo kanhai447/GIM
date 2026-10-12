@@ -105,6 +105,9 @@ Group 基础业务错误码：`2301` 参数错误、`2302` 群不存在、`2303`
 
 新增：
 
+- `GET /api/group/session?limit=`：仅返回当前仍有效 membership 的可见 session；默认 20、最大 100，按 `is_top DESC,last_message_at DESC,id DESC` 排序，一次 JOIN 返回 group 资料及 `last_message_id` 对应消息。
+- `GET /api/group/history/:id?beforeMessageID=&limit=`：仅当前成员可读；message-ID cursor 必须属于该群，DB 倒序取页后 oldest -> newest 返回，并按当前 user 过滤 `group_message_deletions`。
+
 ### `PUT /api/group/read`
 
 ```json
@@ -112,6 +115,8 @@ Group 基础业务错误码：`2301` 参数错误、`2302` 群不存在、`2303`
 ```
 
 更新当前成员 group_session。
+
+read cursor 只允许单调推进；目标消息必须属于该群。partial read 保留 cursor 后其他成员消息的 unread，latest read 清零，stale/duplicate cursor 不倒退。退出、被移除或群解散后 session/history/read 均拒绝访问。群消息新增稳定错误码：`2403` 格式/内容无效、`2404` 非成员、`2405` 禁言、`2406` 服务暂不可用、`2407` clientMsgId 冲突、`2408` 查询参数无效、`2409` cursor 无效、`2410` read message 无效、`2411` session 不存在。
 
 ## 6. File
 

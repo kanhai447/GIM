@@ -10,6 +10,7 @@
 gim:auth:logout:{tokenHash}          -> 1, TTL=JWT remaining
 gim:presence:user:{uid}              -> ZSET(instanceID -> expiresAtMillis), key TTL
 gim:chat:delivery                    -> Pub/Sub channel, private message realtime fanout
+gim:group:delivery                   -> Pub/Sub channel, group message realtime fanout
 gim:group:prohibition:{memberId}     -> 1, TTL=mute duration
 ```
 
@@ -36,7 +37,9 @@ GIM Auth V1 选择 SHA-256 token fingerprint 作为 `tokenHash`：Logout 写入 
 - Redis 操作带 context timeout；故障时保留最终期望状态并重试，不在 Hub event loop 中执行无界 Redis I/O。
 - Group WS 不修改 `gim:presence:*`；Chat WS 是全局 Presence 唯一权威来源。
 
-多实例 Presence contribution 与私聊 realtime fanout 已分离：Presence 使用 ZSET；私聊持久化后统一发布 `gim:chat:delivery`，所有 Chat 实例订阅并只投递本实例 receiver Clients。同实例不再额外直投，避免重复。Pub/Sub 是 best-effort 通知而不是消息存储；publish 失败不撤销 MySQL 持久化或 Server ACK，history 才是恢复路径。Group/更通用的跨实例 WebSocket routing 仍留待对应 Checkpoint/V2。
+多实例 Presence contribution 与私聊 realtime fanout 已分离：Presence 使用 ZSET；私聊持久化后统一发布 `gim:chat:delivery`，所有 Chat 实例订阅并只投递本实例 receiver Clients。同实例不再额外直投，避免重复。Pub/Sub 是 best-effort 通知而不是消息存储；publish 失败不撤销 MySQL 持久化或 Server ACK，history 才是恢复路径。
+
+Checkpoint 3 的群消息同样使用独立 `gim:group:delivery`，事件只包含安全消息 envelope、messageId 与事务内 target user IDs。每个 Group 实例向本地目标用户全部 Clients 各投递一次；没有本地旁路，因此不会 local + Pub/Sub 双投。该 channel 不存储消息、不写 `gim:presence:*`，publish 失败由 history 恢复。
 
 ## 3. 配置
 

@@ -107,6 +107,10 @@ Session list 由 Chat Repository 一次 JOIN `chat_sessions/users/chat_messages`
 
 群成员较多时 V1 可同步更新；需把“未来异步扇出/大群优化”写入已知限制，不在 V1 提前引 Kafka。
 
+Day 3 / Checkpoint 3 的文本群消息已按上述边界实现：Group Service 负责 active/member/all-mute/personal-mute policy，消息 Repository 在同一 MySQL 事务中锁定 active group、确认 sender membership、插入 `group_messages`，并按事务内当前成员快照批量 upsert `group_sessions`。sender unread 不增加，其他成员无论在线与否均原子 `+1`；重复 `(send_user_id, client_msg_id)` 在新事务读取胜者，不更新 session、不重复发布。
+
+事务提交后只向 originating Client 排队 persist ACK，再将携带成员快照的事件发布到独立 `gim:group:delivery`。每个 Group API 实例只向自己的本地 Clients 投递；sender 其他设备和 originating Client 都可收到 `group.message`。Redis/本地慢客户端失败不撤销 MySQL 或 ACK，history 是恢复事实源。群 session 一次 JOIN groups/last_message，history 使用 group/message-ID cursor 并按当前用户过滤 deletion；Mark Read 锁定用户自己的 session、单调推进并重算 cursor 后的他人消息 unread。
+
 在 Group WebSocket 之前，Group foundation 先提供独立的 Domain/Repository/Service：角色枚举禁止魔法数字；创建群保证 group 与 owner membership 原子；批准申请保证 request 状态与 member 原子；owner/admin/member policy 集中测试；成员列表通过 User 批量 RPC 补齐公开资料。后续 Group Message Service 只能复用 `IsMember/GetMemberRole/IsMuted/GetGroup`，不得自行复制 membership SQL。临时个人禁言以 membership ID 为 key 使用 Redis TTL，不写 MySQL 过期时间。
 
 ## 7. Context

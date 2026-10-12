@@ -7,6 +7,7 @@ const (
 	authLogoutPrefix       = "gim:auth:logout:"
 	presenceUserPrefix     = "gim:presence:user:"
 	chatDeliveryChannel    = "gim:chat:delivery"
+	groupDeliveryChannel   = "gim:group:delivery"
 	groupProhibitionPrefix = "gim:group:prohibition:"
 )
 
@@ -19,6 +20,10 @@ func AuthLogout(tokenFingerprint string) string {
 // ChatDeliveryChannel is the cluster-wide best-effort private message fanout
 // channel. MySQL, not this channel, remains the message source of truth.
 func ChatDeliveryChannel() string { return chatDeliveryChannel }
+
+// GroupDeliveryChannel is the cluster-wide best-effort group message fanout
+// channel. The event carries the transaction-time membership snapshot.
+func GroupDeliveryChannel() string { return groupDeliveryChannel }
 
 // PresenceUser returns the global Presence key for one user. The key contains
 // only the stable numeric user ID; per-device IDs and credentials never belong

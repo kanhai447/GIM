@@ -89,18 +89,25 @@ owner/admin/member 权限判断集中在 Group Service policy；owner 不能普�
 
 ```text
 Sender -> Group readPump -> GroupMessageService
- -> member check
+ -> active group + member check
  -> group all-mute check
  -> member mute check
  -> idempotency
- -> transaction insert group_message
- -> update group_session for members
+ -> transaction lock active group + resolve sender member
+ -> insert group_message（DB UNIQUE 是最终幂等屏障）
+ -> snapshot current member IDs
+ -> batch upsert group_session（sender +0；others unread atomic +1）
  -> commit
- -> ACK sender
- -> Group Hub broadcast online members
+ -> ACK originating Client
+ -> if createdNew: publish gim:group:delivery with target user IDs
+ -> every Group instance routes to its local member Clients
 ```
 
-V1 群规模按参考项目限制；大群 session 扇出成本记录为 V2 优化点。
+duplicate retry 只返回同一 ACK，不再改变 session/unread 或发布。Redis publish 失败不撤销 commit/ACK。sender sibling devices 接收 `group.message`，不接收 originating ACK。Group delivery 与生命周期均不修改 Presence。
+
+`GET /api/group/session` 通过显式 session + group + last message 一次 JOIN 返回；`GET /api/group/history/:id` 以 message ID cursor 分页并按当前用户隔离 deletion。`PUT /api/group/read` 先验证当前 membership 和目标消息所属群，再锁定当前用户 session，单调推进 read cursor 并重算 cursor 后由其他成员发送的 unread；与并发 send 通过同一 session 行锁串行化。
+
+V1 群规模按参考项目限制；同步 session 扇出成本记录为大群 V2 优化点。
 
 ## 6. 好友申请通过
 

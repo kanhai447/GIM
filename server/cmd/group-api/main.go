@@ -12,6 +12,10 @@ import (
 	userv1 "github.com/kanhai447/GIM/server/api/user/v1"
 	"github.com/kanhai447/GIM/server/internal/group"
 	groupconfig "github.com/kanhai447/GIM/server/internal/group/config"
+	"github.com/kanhai447/GIM/server/internal/group/delivery"
+	groupmessage "github.com/kanhai447/GIM/server/internal/group/message"
+	groupmessagemysql "github.com/kanhai447/GIM/server/internal/group/message/repository/mysql"
+	groupmessagehttp "github.com/kanhai447/GIM/server/internal/group/message/transport/http"
 	grouphttp "github.com/kanhai447/GIM/server/internal/group/transport/http"
 	groupws "github.com/kanhai447/GIM/server/internal/group/ws"
 	platformmysql "github.com/kanhai447/GIM/server/internal/platform/database/mysql"
@@ -98,15 +102,32 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	webSocketModule, err := groupws.New(groupWebSocketConfig)
+	deliveryBus, err := delivery.New(redisClient.Raw(), groupConfig.RedisTimeout, log.Default())
 	if err != nil {
 		return err
 	}
+	messageRepository := groupmessagemysql.New(mysqlClient.DB())
+	messageService, err := groupmessage.NewService(messageRepository, groupModule.Service, groupmessage.DefaultConfig())
+	if err != nil {
+		return err
+	}
+	webSocketModule, err := groupws.NewWithInboundFactory(groupWebSocketConfig, func(hub *groupws.Hub) (groupws.InboundHandler, error) {
+		return groupmessage.NewInbound(messageService, hub, deliveryBus, log.Default())
+	})
+	if err != nil {
+		return err
+	}
+	subscription, err := deliveryBus.Subscribe(startupContext, groupmessage.LocalDeliveryHandler(webSocketModule.Hub, groupConfig.RedisTimeout, log.Default()))
+	if err != nil {
+		return err
+	}
+	defer subscription.Close()
 	server, err := rest.NewServer(restConfig)
 	if err != nil {
 		return err
 	}
 	grouphttp.RegisterRoutes(server, groupModule.Service)
+	groupmessagehttp.RegisterRoutes(server, messageService)
 	groupws.RegisterRoute(server, groupWebSocketConfig.Path, webSocketModule.Handler)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
 	if err != nil {
@@ -132,6 +153,8 @@ func run(args []string) error {
 		}
 	}()
 	hubDone := make(chan struct{})
+	deliveryDone := make(chan struct{})
+	go func() { subscription.Run(lifecycleContext); close(deliveryDone) }()
 	go func() {
 		webSocketModule.Hub.Run(lifecycleContext)
 		close(hubDone)
@@ -146,6 +169,10 @@ func run(args []string) error {
 		if hubErr == nil {
 			hubErr = shutdownContext.Err()
 		}
+	}
+	select {
+	case <-deliveryDone:
+	case <-shutdownContext.Done():
 	}
 	return errors.Join(serveErr, hubErr)
 }

@@ -91,6 +91,8 @@
 
 约束：`UNIQUE(user_id, group_id)`。
 
+发送群消息时，`group_messages` 与事务内有效成员的全部 `group_sessions` 在一个事务提交。成员按 user ID 稳定顺序批量 upsert；sender unread 保持不变，其他成员使用数据库原子增量。`last_message_id/at` 只向更大 ID 推进，保留 `is_top/last_read_message_id`，并清空 `hidden_at`。Mark Read 锁定当前用户 session，单调推进 cursor 后按该用户未删除的、由其他成员发送的消息重算 unread。
+
 原 group top 表可迁移到 `is_top`，同样避免长期双真相。
 
 ## 5. 文件

@@ -3,10 +3,13 @@
 package ws
 
 import (
+	"errors"
 	"log"
 
 	groupconfig "github.com/kanhai447/GIM/server/internal/group/config"
 )
+
+type InboundFactory func(*Hub) (InboundHandler, error)
 
 type Module struct {
 	Hub     *Hub
@@ -14,14 +17,25 @@ type Module struct {
 }
 
 func New(configuration groupconfig.WebSocketConfig) (*Module, error) {
+	return NewWithInboundFactory(configuration, func(hub *Hub) (InboundHandler, error) { return NewFoundationInbound(hub), nil })
+}
+
+func NewWithInboundFactory(configuration groupconfig.WebSocketConfig, factory InboundFactory) (*Module, error) {
+	if factory == nil {
+		return nil, errors.New("group websocket inbound factory is required")
+	}
 	origins, err := NewOriginPolicy(configuration.AllowedOrigins)
 	if err != nil {
 		return nil, err
 	}
 	hub := NewHub()
+	inbound, err := factory(hub)
+	if err != nil {
+		return nil, err
+	}
 	handler, err := NewHandler(
 		hub,
-		NewFoundationInbound(hub),
+		inbound,
 		configuration.SendBuffer,
 		origins,
 		HeartbeatConfig{

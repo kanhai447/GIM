@@ -125,9 +125,9 @@ Day 3 / Checkpoint 2 已实现连接层 endpoint：
 /api/group/ws/chat?token=<JWT>
 ```
 
-连接经 Gateway -> Auth 后由 Group API 读取可信 `User-ID/Role`。同一用户允许多个 Client；连接本身不携带或绑定 `groupID`。应用帧严格使用本文件 Envelope；malformed payload 返回 `error` code `2401`，尚未实现的事件（包括 `group.send`）返回 code `2402`，连接可继续。错误只包含稳定 code/message，不返回内部错误。
+连接经 Gateway -> Auth 后由 Group API 读取可信 `User-ID/Role`。同一用户允许多个 Client；连接本身不携带或绑定 `groupID`。应用帧严格使用本文件 Envelope；malformed payload 返回 `error` code `2401`，未知/尚未实现的事件返回 code `2402`，连接可继续。错误只包含稳定 code/message，不返回内部错误。
 
-本 Checkpoint 只实现 readPump/writePump、控制帧 Ping/Pong、deadline、有界 Send queue、慢客户端移除和 graceful shutdown。`group.send/group.ack/group.message` 以下仅是后续协议契约，当前不持久化、不 ACK、不广播。
+Checkpoint 3 已在相同连接层启用文本 `group.send/group.ack/group.message`。sender 只取连接绑定的可信 `User-ID`；客户端不能提交 sender ID。`clientMsgId` 与私聊相同，限制为 1–64 个安全字符；当前只接受 UTF-8 非空、最多 4096 bytes 的 `type=1` 文本，typed payload 最多 16384 bytes。
 
 ### `group.send`
 
@@ -141,11 +141,23 @@ Day 3 / Checkpoint 2 已实现连接层 endpoint：
 
 ### `group.ack`
 
-事务成功后返回 messageId。
+只有 `group_messages + 当前成员 group_sessions/unread` 事务成功提交，或命中已提交的同一幂等消息后，才只向 originating Client 返回：
+
+```json
+{"event":"group.ack","clientMsgId":"...","data":{"messageId":456,"groupID":2001,"createdAt":"..."}}
+```
+
+ACK 仅表示服务端已持久化/接受，不是成员 delivery ACK 或 read receipt。重复相同逻辑消息返回同一 messageId；同一 sender/clientMsgId 复用于不同 group/type/content 返回稳定冲突错误。
 
 ### `group.message`
 
-广播给当前在线群成员；发送者可以通过 ACK 本地确认，也可以统一接收 message 事件，前端必须避免重复插入（按 server messageId/clientMsgId 去重）。
+事务内成员快照通过 `gim:group:delivery` 广播到各 Group API 实例的当前在线 Clients，消息 DTO 与 history 同构：
+
+```json
+{"event":"group.message","clientMsgId":"...","data":{"messageId":456,"groupID":2001,"sendUserID":1001,"clientMsgId":"...","msg":{"type":1,"textMsg":{"content":"hi"}},"createdAt":"..."}}
+```
+
+sender 所有设备（包括 originating Client）均可收到 message；originating Client 还单独收到 ACK，前端必须按 server messageId/clientMsgId 合并。离线不影响 unread；Redis publish/本地背压失败不改变 ACK，重连后从 session/history 恢复。幂等重试不再次发布。
 
 ## 5. 消息类型
 
