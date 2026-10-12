@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/group"
 	groupconfig "github.com/kanhai447/GIM/server/internal/group/config"
 	grouphttp "github.com/kanhai447/GIM/server/internal/group/transport/http"
+	groupws "github.com/kanhai447/GIM/server/internal/group/ws"
 	platformmysql "github.com/kanhai447/GIM/server/internal/platform/database/mysql"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
@@ -40,6 +42,10 @@ func run(args []string) error {
 		return err
 	}
 	groupConfig, err := groupconfig.FromValues(values)
+	if err != nil {
+		return err
+	}
+	groupWebSocketConfig, err := groupconfig.WebSocketFromValues(values)
 	if err != nil {
 		return err
 	}
@@ -92,11 +98,16 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	webSocketModule, err := groupws.New(groupWebSocketConfig)
+	if err != nil {
+		return err
+	}
 	server, err := rest.NewServer(restConfig)
 	if err != nil {
 		return err
 	}
 	grouphttp.RegisterRoutes(server, groupModule.Service)
+	groupws.RegisterRoute(server, groupWebSocketConfig.Path, webSocketModule.Handler)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
 	if err != nil {
 		return err
@@ -120,5 +131,21 @@ func run(args []string) error {
 			log.Printf("group api registration cleanup failed: %v", err)
 		}
 	}()
-	return serviceruntime.ServeREST(lifecycleContext, server, runtimeConfig.ShutdownTimeout)
+	hubDone := make(chan struct{})
+	go func() {
+		webSocketModule.Hub.Run(lifecycleContext)
+		close(hubDone)
+	}()
+	serveErr := serviceruntime.ServeREST(lifecycleContext, server, runtimeConfig.ShutdownTimeout)
+	shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
+	defer shutdownCancel()
+	hubErr := webSocketModule.Hub.Shutdown(shutdownContext)
+	select {
+	case <-hubDone:
+	case <-shutdownContext.Done():
+		if hubErr == nil {
+			hubErr = shutdownContext.Err()
+		}
+	}
+	return errors.Join(serveErr, hubErr)
 }

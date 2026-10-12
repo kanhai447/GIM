@@ -119,6 +119,16 @@ receiver 是否在线不改变 unread：每条新消息都在事务中使 receiv
 
 ## 4. 群聊事件
 
+Day 3 / Checkpoint 2 已实现连接层 endpoint：
+
+```text
+/api/group/ws/chat?token=<JWT>
+```
+
+连接经 Gateway -> Auth 后由 Group API 读取可信 `User-ID/Role`。同一用户允许多个 Client；连接本身不携带或绑定 `groupID`。应用帧严格使用本文件 Envelope；malformed payload 返回 `error` code `2401`，尚未实现的事件（包括 `group.send`）返回 code `2402`，连接可继续。错误只包含稳定 code/message，不返回内部错误。
+
+本 Checkpoint 只实现 readPump/writePump、控制帧 Ping/Pong、deadline、有界 Send queue、慢客户端移除和 graceful shutdown。`group.send/group.ack/group.message` 以下仅是后续协议契约，当前不持久化、不 ACK、不广播。
+
 ### `group.send`
 
 ```json
@@ -152,3 +162,5 @@ V1 可沿用“撤回是一条特殊消息”的参考模型，`withdrawMsg.msgI
 ## 8. 连接关闭
 
 服务端按标准 close code 关闭；前端非主动 logout 可重连。身份失效类 close 必须禁止无限重连并引导重新登录。
+
+Group WS 的任一设备 normal/abnormal/timeout/slow/shutdown 只移除对应 Client；同用户 sibling 保持。Group WS 不产生全局 online/offline、不得刷新或删除 `gim:presence:*`，禁言或退出某个群也不关闭这个用户级 socket。

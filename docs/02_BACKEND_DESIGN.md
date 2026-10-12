@@ -49,6 +49,8 @@ type Client struct {
 - `Send` channel 必须有有限缓冲；满时按策略断开慢客户端，不能无限阻塞 Hub。
 - `unregister` 必须幂等，重复关闭不得 panic。
 
+Day 3 / Checkpoint 2 的 Group WS 使用独立 `group/ws` Hub/Client，不重构已封板的 Chat Hub。Group Hub 只维护 `userID -> clientID -> Client` 用户级连接，不在连接时绑定单个群，也不建立未被消息业务需要的订阅索引。成员与禁言校验留在后续具体 `group.send` 处理链。Group Hub 没有 Presence observer、Redis client 或 online/offline transition；连接、超时、慢客户端和 shutdown 均不得影响全局 Presence。
+
 ## 3. 心跳
 
 采用 Gorilla Ping/Pong 控制帧：
@@ -61,6 +63,8 @@ type Client struct {
 - 超时触发 unregister。
 
 精确数值配置化，测试环境可缩短。
+
+Group WS 第一版即使用 1 MiB read limit、60s pong wait、50s ping period、10s write wait 的生产默认值。peer Ping 只向有界 control queue 排队 Pong，由同一个 writePump 写出；readPump、Hub 和 inbound handler 均不直接写连接。
 
 ## 4. Presence
 

@@ -99,6 +99,8 @@ Day 3 / Checkpoint 1 已实现的基础路由如下；所有操作者 ID 只取 
 
 Group 内部 RPC 只提供后续 Group WS/消息服务需要的最小边界：`GetGroup`、`IsMember`、`GetMemberRole`、`IsMuted`。本 Checkpoint 不提供 Group WebSocket、群消息、ACK、history/session/read 实现。
 
+Day 3 / Checkpoint 2 新增 `GET /api/group/ws/chat?token=<JWT>` WebSocket Upgrade。Gateway 先调用 Auth 并覆盖外部伪造的身份 Header，Group API 只读取可信 `User-ID/Role`。该用户级连接不绑定单个群；当前仅提供连接/心跳/typed error foundation，不处理或持久化群消息。
+
 Group 基础业务错误码：`2301` 参数错误、`2302` 群不存在、`2303` 已是成员、`2304` 不是成员、`2305` 无权限、`2306` 重复 pending request、`2307` request 不存在、`2308` request 状态无效、`2309` 目标用户不存在、`2310` owner 不能退出、`2311` 禁言状态服务暂不可用、`2312` 群禁止加入、`2313` 成员达到上限。数据库/Redis/RPC 原始错误不进入响应。
 
 新增：

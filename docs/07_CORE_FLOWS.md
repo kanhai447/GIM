@@ -51,6 +51,18 @@ read/write error 或 Pong 超时 -> unregister -> 若该用户在本 Chat 实例
 
 ## 5. 群聊发送
 
+### Group WebSocket connection foundation（Day 3 / Checkpoint 2）
+
+```text
+Client -> Gateway query token -> Auth -> trusted User-ID/Role -> Group WS
+ -> Group Hub register userID/clientID
+ -> readPump: typed envelope + Pong deadline refresh + inbound boundary
+ -> writePump: data + Ping + queued Pong（唯一连接写者）
+ -> normal/abnormal/timeout/slow/shutdown: unregister this Client only
+```
+
+一名用户只需一条 Group Socket Manager，可有多个设备/tab Client；不是一群一个 socket。当前 `group.send` 明确返回未实现错误。后续消息处理才按目标 group 调用 `IsMember/GetMemberRole/IsMuted/GetGroup`。Group Hub 没有 Presence transition，所有生命周期路径均不访问 `gim:presence:*`。
+
 ### 群领域与成员基础（Day 3 / Checkpoint 1）
 
 ```text

@@ -23,6 +23,8 @@ Token 黑名单 key 不建议直接把完整 JWT 暴露在 Redis key/log；可�
 
 Group 临时禁言只使用 `rediskeys.GroupProhibition(memberId)` 生成上述 key。`memberId` 是 `(group_id,user_id)` 唯一 membership 的稳定主键，因此天然隔离不同群关系；设置、查询、解除均传播调用方 context 并使用有界操作超时。TTL 自然过期后 `IsMuted=false`。Group 服务不得访问或修改 `gim:presence:*`。
 
+Group WebSocket connection foundation 不新增任何 Redis connection/presence key。connect、disconnect、heartbeat timeout、slow-client removal 与 shutdown 只改变 Group Hub 内存连接表；真实 Redis 负向测试以 Presence sentinel 和测试用户 key 验证前后未被创建、修改或删除。
+
 GIM Auth V1 选择 SHA-256 token fingerprint 作为 `tokenHash`：Logout 写入 `gim:auth:logout:{tokenHash}`，值为 `1`，TTL 严格使用 JWT 的剩余有效时间；authentication 先完成验签/过期校验，再查询该 key。原始 JWT 不进入 Redis key、value 或日志。
 
 ## 2. Presence 规则
