@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 3
-- **Current Phase:** GROUP FOUNDATION
-- **Current Checkpoint:** DAY 3 / CHECKPOINT 1 COMPLETED
-- **Last Completed Checkpoint:** Day 3 / Checkpoint 1 — Group Domain + Membership + API Foundation
-- **Working Tree:** CLEAN（本状态随 Checkpoint 1 实现/日志提交并推送后）
-- **Last Stable Business Baseline:** `860ba8eb16dac77ad751fecb0c62d9e509f74cb9 feat(group): add group domain and membership foundation`
-- **Last Push:** implementation commit `860ba8eb16dac77ad751fecb0c62d9e509f74cb9` 已推送；Checkpoint 1 log/status commit 随后推送至 `origin/main`
+- **Current Phase:** GROUP WEBSOCKET FOUNDATION
+- **Current Checkpoint:** DAY 3 / CHECKPOINT 2 COMPLETED
+- **Last Completed Checkpoint:** Day 3 / Checkpoint 2 — Group WebSocket Foundation
+- **Working Tree:** CLEAN（本状态随 Checkpoint 2 实现/日志提交并推送后）
+- **Last Stable Business Baseline:** `c3bb003aeb12ed7bdc06a88fea118ee3790316dd feat(group): add websocket connection foundation`
+- **Last Push:** implementation commit `c3bb003aeb12ed7bdc06a88fea118ee3790316dd` 已推送；Checkpoint 2 log/status commit 随后推送至 `origin/main`
 - **Next Authorized Work:** NONE
-- **Next Planned Work:** GROUP WEBSOCKET FOUNDATION（需用户明确授权）
+- **Next Planned Work:** GROUP MESSAGE RELIABILITY + SESSION/UNREAD（需用户明确授权）
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -58,10 +58,14 @@
 - Group Permission：集中 policy，可信 Gateway identity，稳定安全错误；owner/admin/member 权限矩阵通过。
 - Group Mute Foundation：集中 Redis membership key、TTL mute/unmute/expiry/cross-group isolation；Group 不修改 Presence。
 - Group API/RPC：基础 HTTP 路由、最小 membership RPC、User BatchGetUsers，无 Group WebSocket/message。
+- Group WS Foundation：独立用户级 Hub/Client、同用户多设备、readPump/唯一 writePump、typed inbound/error boundary。
+- Group heartbeat/lifecycle：Ping/Pong、deadline、normal/abnormal/timeout/slow/shutdown 清理与 bounded backpressure。
+- Group Gateway tunnel：Auth query token、可信身份覆盖、Origin allowlist、etcd registration 与 graceful cleanup。
+- Group Presence negative boundary：connect/disconnect/timeout/slow/shutdown 均不创建、修改或删除 `gim:presence:*`。
 
 ## In Progress
 
-- 无；Day 3 / Checkpoint 1 已完成并冻结，等待用户授权下一阶段。
+- 无；Day 3 / Checkpoint 2 已完成并冻结，等待用户授权下一阶段。
 
 ## Authorization
 
@@ -69,6 +73,9 @@ Day 2:
 COMPLETED
 
 Day 3 / Checkpoint 1:
+COMPLETED
+
+Day 3 / Checkpoint 2:
 COMPLETED
 
 Private Chat V1:
@@ -79,7 +86,7 @@ NONE
 
 ## Not Started
 
-- Group WebSocket、Group Messaging/ACK、Group Session/Unread、Group Frontend、File、Presence UI、Kafka/Logs 与完整 Admin 业务；均未获下一 Checkpoint 授权。
+- Group Message persistence/clientMsgId/ACK、Group Session/Unread/History、Group Frontend、File、Presence UI、Kafka/Logs 与完整 Admin 业务；均未获下一 Checkpoint 授权。
 
 ## Test Status
 
@@ -103,6 +110,7 @@ NONE
 - Day 2 / Checkpoint 6：Web type-check、8 files / 35 tests、production build、diff check、Secret Scan、Go 全量非缓存测试/vet PASS；真实 Chrome 双用户 pending→sent、realtime/unread/read、刷新恢复、receiver 双设备、20+ cursor history 与 Chat API 重启 reconnect 全部 PASS。lint NOT CONFIGURED。Race 未重复执行，状态保持 NOT AVAILABLE；兼容环境验证 PENDING。
 - Day 2 / Checkpoint 7：真实 Chrome 双向/双设备/shared read/cursor/reconnect/logout/revoked token/HTML text PASS；Web type-check、8 files / 40 tests、build PASS；真实 Go full integration、message/session 3 轮、Presence 3 轮、Hub/heartbeat/single-writer/shutdown 10 轮、vet/gofmt/diff/Secret Scan 全部 PASS。lint NOT CONFIGURED。Race 保持 NOT AVAILABLE；兼容环境/CI PENDING。
 - Day 3 / Checkpoint 1：真实 MySQL/Redis Group integration 连续 3 次 PASS；create/approve rollback injection、duplicate/concurrent add/approve、join/reject/invite/leave/kick/role/dissolve、TTL/expiry/cross-group mute、Presence isolation、四类 EXPLAIN PASS。Group coverpkg 67.9%、Repository 77.4%、Service 67.0%。Private Chat focused regression、`go test ./... -count=1`、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；兼容环境/CI PENDING。
+- Day 3 / Checkpoint 2：Group Hub/Client/pumps/heartbeat/multi-device/slow/shutdown/Origin/typed error PASS；真实 etcd Gateway/Auth/Group tunnel 与 Redis Presence negative PASS；正式 Group API lease/cleanup PASS；10 轮 stress PASS，Group WS 汇总 coverage 77.3%。Group API 与 Private Chat regression、真实依赖全量测试、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；Chat + Group compatible CI PENDING。
 
 ## Known Issues
 
@@ -115,5 +123,5 @@ NONE
 
 ## Next Action
 
-- Group Domain Foundation、Membership、Permission、Mute Foundation 与基础 API/RPC 已完成；`PRIVATE CHAT V1 = COMPLETED / REGRESSION PASS`。
-- Next Authorized Work：NONE。Next Planned 是 **Group WebSocket Foundation**；必须等待用户明确授权。本轮严格停止，不进入 Group Hub/Client、Group Message/ACK、Group Session/Unread、Group Frontend 或 File。
+- Group Domain/Membership 与 Group WebSocket connection foundation 已完成；Presence 仍为 Chat WS ONLY；`PRIVATE CHAT V1 = COMPLETED / REGRESSION PASS`。
+- Next Authorized Work：NONE。Next Planned 是 **Group Message Reliability + Session/Unread**；必须等待用户明确授权。本轮严格停止，不进入 Group Message persistence/clientMsgId/ACK、Session/Unread/History、Group Frontend 或 File。

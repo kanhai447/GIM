@@ -633,3 +633,33 @@
 - log/status commit：本记录所在提交。
 - push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并执行最终等值/clean 复核。
 - 下一 Checkpoint：Group WebSocket Foundation，需用户另行授权；本轮完成后停止。
+
+## 2026-10-12 Day 3 / Checkpoint 2 — Group WebSocket Foundation
+
+### 目标与范围
+
+- 实现独立 Group WebSocket endpoint、Hub/Client、多设备、readPump/唯一 writePump、heartbeat/deadline、backpressure、Origin、Gateway/Auth tunnel、etcd runtime 与 graceful shutdown。
+- 严格不实现 Group message persistence、ACK、clientMsgId 业务、session/unread/history、前端或 File；Group WS 不参与 Presence。
+
+### 修改
+
+- 新增 `server/internal/group/ws/**` 与 typed protocol/tests；Hub event loop 独占 `userID -> clientID -> Client` map。
+- Group config 增加 `/api/group/ws/chat`、有界 queue、Origin allowlist、1 MiB/60s/50s/10s heartbeat 配置。
+- `cmd/group-api` 同时注册 HTTP API/WS route，启动并等待 Group Hub，复用 `group_api` etcd lease。
+- 新增真实 Gateway/Auth/Group/Redis/etcd integration；同步 WS/core flow/Redis/README 文档。
+
+### 验证
+
+- 真实 tunnel：valid/missing/revoked JWT、spoofed identity、双设备、Ping/Pong、timeout sibling、close cleanup PASS。
+- Redis Presence sentinel：connect/disconnect/timeout/slow/shutdown 全程未修改 `gim:presence:*`，PASS。
+- Group API foundation、Private Chat message/session/Gateway 与全量真实依赖回归 PASS。
+- Group WS 10 轮 stress PASS；coverage 76.3%，protocol 100%，汇总 77.3%。
+- `go test ./... -count=1`、vet、gofmt、diff、Secret Scan PASS。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Chat + Group compatible environment/CI PENDING。
+
+### Git / 下一步
+
+- implementation commit：`c3bb003aeb12ed7bdc06a88fea118ee3790316dd feat(group): add websocket connection foundation`。
+- log/status commit：本记录所在提交。
+- push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并执行最终等值/clean 复核。
+- Next Planned：Group Message Reliability + Session/Unread，需用户明确授权；本轮到此停止。

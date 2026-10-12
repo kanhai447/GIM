@@ -4,7 +4,7 @@
 
 - Day 3：IN PROGRESS。
 - Day 3 / Checkpoint 1：COMPLETED — Group Domain + Membership + API Foundation。
-- 本轮明确未进入 Checkpoint 2。
+- Day 3 / Checkpoint 2：COMPLETED — Group WebSocket Foundation。
 
 ## Checkpoint 1 — Group Domain + Membership + API Foundation
 
@@ -23,14 +23,33 @@
 ## Operation Log
 
 - `agent_logs/operations/day-3/001_checkpoint-1_group-domain-membership.md`
+- `agent_logs/operations/day-3/002_checkpoint-2_group-ws-foundation.md`
 
-## Git
+## Checkpoint 2 — Group WebSocket Foundation
+
+- 时间：2026-10-12 16:26 +08:00。
+- 独立 Group Hub/Client event loop，用户级多设备、readPump/唯一 writePump、bounded queue/slow removal 与 graceful shutdown。
+- 第一版即具备 1 MiB read limit、60s Pong wait、50s Ping、10s write deadline；peer Ping 的 Pong 也经 writePump。
+- endpoint `/api/group/ws/chat?token=JWT` 经 Gateway/Auth；Origin allowlist、可信 Header 覆盖、missing/revoked JWT 均真实验证。
+- typed malformed/unsupported error foundation；`group.send` 明确未实现，无消息/ACK/clientMsgId/session/unread/history。
+- Group WS 无 Presence dependency；真实 Redis connect/disconnect/timeout/slow/shutdown negative test PASS。
+- Group API foundation 与 Private Chat focused/full regression PASS；Group WS 10 轮 stress PASS，汇总 coverage 77.3%。
+- 正式 Group API runtime 的 etcd lease、401 direct boundary、Ctrl+C Hub/registration/listener cleanup PASS。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Chat + Group compatible CI verification PENDING。
+
+## Git — Checkpoint 1
 
 - Implementation commit：`860ba8eb16dac77ad751fecb0c62d9e509f74cb9 feat(group): add group domain and membership foundation`。
 - Log/status commit：本记录所在提交。
 - Push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并在本轮最终复核。
 
+## Git — Checkpoint 2
+
+- Implementation commit：`c3bb003aeb12ed7bdc06a88fea118ee3790316dd feat(group): add websocket connection foundation`。
+- Log/status commit：本记录所在提交。
+- Push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并执行最终等值/clean 复核。
+
 ## 下一入口
 
-- Group WebSocket Foundation（需用户另行授权）。
-- 严格不继续 Group Hub/Client、Group Message/ACK、Group Session/Unread、Group Frontend 或 File。
+- Group Message Reliability + Session/Unread（需用户另行授权）。
+- 严格不继续 Group Message persistence/clientMsgId/ACK、Group Session/Unread/History、Group Frontend 或 File。
