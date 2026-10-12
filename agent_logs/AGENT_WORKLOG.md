@@ -692,3 +692,33 @@
 - log/status commit：本记录所在提交。
 - push：implementation 与本 log/status commit 已 push `origin/main`；最终 HEAD equality/clean 已复核。
 - 下一入口：Group Frontend Integration，需新授权。
+
+## 2026-10-13 Day 3 / Checkpoint 4 — Group Frontend Integration
+
+### Scope / Changes
+
+- 自主实现 Group typed types/API、单例 socket manager、Pinia store、reconcile、UI components、`/group/:groupId?` 和真实 Chrome smoke；未修改后端、migration 或协议。
+- Chat/Group 两条连接和 Store 保持独立；`App.vue` 统一启动、logout stop 与 auth invalidation，任一连接认证失败会清空 session 并回 Login。
+- My Groups 与 Group Sessions 分离；Group session/realtime/unread/read/history/info/member cache/minimal create/mute UX 完成。
+
+### Reliability / UX
+
+- single reconnect timer + 30s cap、stable UUID clientMsgId、pending/sent/failed、persist ACK、lost ACK same-ID retry。
+- ACK-first/message-first、duplicate realtime、history overlap 按 messageId/clientMsgId 收敛；未知事件安全忽略。
+- active route + visible + focused 才 Mark Read；inactive group 本地 unread 增加，reconnect/refresh 用后端权威 session 校准。
+- mute/all-mute 显示安全失败且 socket 继续接收；nonmember/dissolved 禁止重试并刷新/退出；文本使用 Vue 插值，无 v-html/innerHTML。
+
+### Acceptance
+
+- Web `pnpm test` 12 files / 77 tests、`pnpm type-check`、`pnpm build` PASS；lint NOT CONFIGURED。
+- 真实 Chrome A/B/C：create/invite、pending→sent、realtime/unread/read、refresh、mute/unmute、receive while muted、HTML literal、B1/B2 exact-once/shared read、20+ cursor、Group restart/reconnect、Chat unaffected、logout/revoked auth PASS。
+- Group + Private Chat 真实 MySQL/Redis focused integration 与后端 `go test ./... -count=1` PASS；vet/gofmt/diff/Secret Scan PASS。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible 64-bit toolchain/CI PENDING。
+- 测试用户/群/消息/session、浏览器、服务与临时 etcd 已清理。
+
+### Git / Freeze
+
+- implementation commit：`0a17af6 feat(web): integrate reliable group chat`，已推送 `origin/main`。
+- log/status commit：本记录所在提交，随后推送并复核 equality/clean。
+- `GROUP CHAT V1 = FUNCTIONAL`（text scope）；Private Chat regression PASS。
+- Next Authorized Work：NONE。Next Planned：File Service checkpoint；严格未进入 File、Admin 或 Day 4。

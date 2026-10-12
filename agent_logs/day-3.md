@@ -6,6 +6,7 @@
 - Day 3 / Checkpoint 1：COMPLETED — Group Domain + Membership + API Foundation。
 - Day 3 / Checkpoint 2：COMPLETED — Group WebSocket Foundation。
 - Day 3 / Checkpoint 3：COMPLETED — Group Message Reliability + Session/Unread/History。
+- Day 3 / Checkpoint 4：COMPLETED — Group Frontend Integration。
 
 ## Checkpoint 1 — Group Domain + Membership + API Foundation
 
@@ -26,6 +27,26 @@
 - `agent_logs/operations/day-3/001_checkpoint-1_group-domain-membership.md`
 - `agent_logs/operations/day-3/002_checkpoint-2_group-ws-foundation.md`
 - `agent_logs/operations/day-3/003_checkpoint-3_group-message-session.md`
+- `agent_logs/operations/day-3/004_checkpoint-4_group-frontend.md`
+
+## Checkpoint 4 — Group Frontend Integration
+
+- 时间：2026-10-13 07:50 +08:00。
+- 新增独立 Group types/API/socket/store/reconcile/components 与 `/group/:groupId?`，Chat/Group 保持两条 singleton socket 和两套 store。
+- Group socket 具备 typed protocol、单 reconnect timer、30 秒上限退避、认证终止与 logout cleanup；两条 socket 统一 auth invalidation。
+- stable clientMsgId、pending/sent/failed、ACK/message 双事件顺序、duplicate、lost ACK retry 与 history overlap 均正确合并。
+- Group Sessions 与 My Groups 分离；realtime preview/order/unread、本地 active/background read、服务端 session reconciliation 与多设备 persisted read 完成。
+- 群 info/member cache/minimal create/mute UX 完成；text-only，无伪造文件能力；HTML-like text 只作文本渲染。
+- Web `type-check`、12 files / 77 tests、production build PASS；lint NOT CONFIGURED。
+- 真实 Chrome A/B/C：pending→sent、三成员 realtime/unread/read、刷新、mute/unmute、被禁言仍接收、HTML 安全、B1/B2 exact-once/shared read、20+ cursor history、Group restart reconnect、Chat unaffected、logout/auth revoked 全部 PASS。
+- Group + Private Chat 真实 MySQL/Redis focused regression、`go test ./... -count=1`、vet/gofmt/diff/Secret Scan PASS；Race 保持 NOT AVAILABLE（32-bit MinGW）。
+- 临时浏览器/服务/etcd/测试用户与群数据已清理；数据库测试用户与群计数均为 0。
+- `GROUP CHAT V1 = FUNCTIONAL`（text scope）；未进入 File、Admin 或 Day 4。
+
+## Git — Checkpoint 4
+
+- Implementation commit：`0a17af6 feat(web): integrate reliable group chat`，已推送 `origin/main`。
+- Log/status commit：本记录所在提交，完成后推送并复核 equality/clean。
 
 ## Checkpoint 3 — Group Message Reliability + Session / Unread / History
 
@@ -70,5 +91,5 @@
 
 ## 下一入口
 
-- Group Frontend Integration（需用户另行授权）。
-- 严格不继续 Group Frontend、File、Admin 或 Day 4。
+- File Service checkpoint（需用户另行授权）。
+- 严格不继续 File、Admin 或 Day 4。

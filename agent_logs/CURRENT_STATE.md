@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 3
-- **Current Phase:** GROUP MESSAGE RELIABILITY + SESSION / UNREAD / HISTORY
-- **Current Checkpoint:** DAY 3 / CHECKPOINT 3 COMPLETED
-- **Last Completed Checkpoint:** Day 3 / Checkpoint 3 — Group Message Reliability + Session / Unread / History
-- **Working Tree:** CLEAN（本状态随 Checkpoint 3 实现/日志双提交并 push 后）
-- **Last Stable Business Baseline:** `547afe835f84760adf9733f1661050706ef8b32f feat(group): add reliable group messaging and sessions`
-- **Last Push:** Checkpoint 3 implementation 与 log/status commit 已推送 `origin/main`；最终 HEAD equality 已复核
+- **Current Phase:** GROUP FRONTEND INTEGRATION
+- **Current Checkpoint:** DAY 3 / CHECKPOINT 4 COMPLETED
+- **Last Completed Checkpoint:** Day 3 / Checkpoint 4 — Group Frontend Integration
+- **Working Tree:** CLEAN（本状态随 Checkpoint 4 实现/日志双提交并 push 后）
+- **Last Stable Business Baseline:** `0a17af6 feat(web): integrate reliable group chat`
+- **Last Push:** Checkpoint 4 implementation 已推送 `origin/main`；本 log/status commit 随后推送并复核 HEAD equality
 - **Next Authorized Work:** NONE
-- **Next Planned Work:** GROUP FRONTEND INTEGRATION（需用户明确授权）
+- **Next Planned Work:** FILE SERVICE CHECKPOINT（需用户明确授权）
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -66,6 +66,10 @@
 - Group Transaction：message + transaction-time current-member sessions/unread 原子提交；duplicate 不重复 session/publish，50 distinct 无 lost update。
 - Group Session/Read/History：JOIN session list、monotonic partial/latest/stale read、message-ID cursor、membership authorization 与 per-user deletion。
 - Group Realtime：独立 `gim:group:delivery`、actual multi-instance/multi-device WS fanout、sender sibling、Redis degraded recovery；Presence remains Chat-only。
+- Group Frontend：独立 typed API/socket/store/components，`/group/:groupId?`、My Groups/Group Sessions、info/member cache、text composer。
+- Group Client Reliability：stable clientMsgId、pending/sent/failed、ACK/message 双顺序合并、duplicate/lost ACK retry、30 秒上限退避与 auth/logout terminal lifecycle。
+- Group Web State：realtime preview/order/unread、focus-aware Mark Read、message-ID cursor history、reconnect reconciliation 与多设备 shared read。
+- Group Browser Acceptance：真实 Chrome A/B/C、mute/unmute、HTML literal、20+ history、Group restart/Chat unaffected、logout/revoked auth PASS；`GROUP CHAT V1 = FUNCTIONAL`。
 
 ## In Progress
 
@@ -85,6 +89,9 @@ COMPLETED
 Day 3 / Checkpoint 3:
 COMPLETED
 
+Day 3 / Checkpoint 4:
+COMPLETED
+
 Private Chat V1:
 COMPLETED / REGRESSION PASS
 
@@ -93,7 +100,7 @@ NONE
 
 ## Not Started
 
-- Group Frontend、File、Presence UI、Kafka/Logs 与完整 Admin 业务；均未获下一 Checkpoint 授权。
+- File、Presence UI、Kafka/Logs 与完整 Admin 业务；均未获下一 Checkpoint 授权。
 
 ## Test Status
 
@@ -119,6 +126,7 @@ NONE
 - Day 3 / Checkpoint 1：真实 MySQL/Redis Group integration 连续 3 次 PASS；create/approve rollback injection、duplicate/concurrent add/approve、join/reject/invite/leave/kick/role/dissolve、TTL/expiry/cross-group mute、Presence isolation、四类 EXPLAIN PASS。Group coverpkg 67.9%、Repository 77.4%、Service 67.0%。Private Chat focused regression、`go test ./... -count=1`、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；兼容环境/CI PENDING。
 - Day 3 / Checkpoint 2：Group Hub/Client/pumps/heartbeat/multi-device/slow/shutdown/Origin/typed error PASS；真实 etcd Gateway/Auth/Group tunnel 与 Redis Presence negative PASS；正式 Group API lease/cleanup PASS；10 轮 stress PASS，Group WS 汇总 coverage 77.3%。Group API 与 Private Chat regression、真实依赖全量测试、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；Chat + Group compatible CI PENDING。
 - Day 3 / Checkpoint 3：真实 MySQL/Redis Group message integration 连续 3 轮 PASS；50 duplicate/50 distinct、transaction failure injection、partial/latest/stale read、session/history/deletion、actual two-instance/multi-device Group WS、Redis degraded、Presence negative 与 EXPLAIN PASS。全量真实依赖测试、Private Chat regression、vet/gofmt/diff/Secret Scan PASS；focused coverpkg 69.1%。Race 保持 NOT AVAILABLE；compatible CI PENDING。
+- Day 3 / Checkpoint 4：Web 12 files / 77 tests、type-check、production build PASS；真实 Chrome A/B/C pending/ACK/realtime/unread/read/refresh/mute/multi-device/cursor/reconnect/logout/revoked auth/HTML 安全 PASS。Group + Private Chat 真实 MySQL/Redis focused integration、后端全量、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；compatible CI PENDING。
 
 ## Known Issues
 
@@ -131,5 +139,5 @@ NONE
 
 ## Next Action
 
-- Group Domain/Membership、Group WebSocket foundation 与 Group Message Reliability/Session/Unread/History 已完成；Presence 仍为 Chat WS ONLY；`PRIVATE CHAT V1 = COMPLETED / REGRESSION PASS`。
-- Next Authorized Work：NONE。Next Planned 是 **Group Frontend Integration**；必须等待用户明确授权。本轮严格停止，不进入 Group Frontend、File、Admin 或 Day 4。
+- Group Domain/Membership、Group WebSocket、Group Message Reliability/Session/Unread/History 与 Group Frontend 已完成；Presence 仍为 Chat WS ONLY；`GROUP CHAT V1 = FUNCTIONAL`，`PRIVATE CHAT V1 = COMPLETED / REGRESSION PASS`。
+- Next Authorized Work：NONE。Next Planned 是 **File Service Checkpoint**；必须等待用户明确授权。本轮严格停止，不进入 File、Admin 或 Day 4。
