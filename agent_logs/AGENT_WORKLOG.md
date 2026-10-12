@@ -594,3 +594,42 @@
 - Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；Race Verification Pending compatible environment/CI。
 - V1 limitations：pending 不跨刷新；无 delivery/read receipt；当前仅 text message。
 - Next Authorized Work：NONE。Next Planned：Day 3 — Group WS + File Service + User Web protocol adaptation，等待用户明确授权。
+
+## 2026-10-12 Day 3 / Checkpoint 1 — Group Domain + Membership + API Foundation
+
+### 目标与实现
+
+- 复用既有 `004_group` schema，自主实现 Group Domain/Repository/Service/Policy、正式 API/RPC commands 与稳定错误边界；无 migration 变化。
+- 创建群使用可信 Gateway identity，group + owner/invited memberships 同事务；open join 与 approve 保证 verify state + member 原子。
+- 实现 group info、my groups、member list、invite、apply/approve/reject、leave/kick、role、dissolve；owner/admin/member 权限集中在 policy。
+- 成员列表通过新增 User `BatchGetUsers` RPC 一次补齐公开资料；My Groups 使用 SQL JOIN + 聚合，避免明显 N+1。
+- 临时禁言使用集中 `gim:group:prohibition:{memberId}` Redis TTL；支持 mute/unmute/expiry/cross-group isolation 和 unavailable safe error；不触碰 Presence。
+- 内部 Group RPC 仅暴露 GetGroup/IsMember/GetMemberRole/IsMuted；未实现任何 Group WS 或群消息能力。
+
+### Reference 与改进
+
+- 只读参考 FIM 群创建、角色、申请审批、邀请、退出踢人、禁言与 Web API 字段；未复制文件、业务代码或依赖 reference。
+- GIM 修复 FIM 多步骤创建/审批部分成功风险，采用 transaction + row lock + unique constraint；权限集中 policy；Redis key 集中；context 贯穿 DB/RPC/Redis；成员资料改为 batch RPC。
+
+### 验收
+
+- Group 真实 MySQL/Redis integration 连续 3 次 PASS；create/approve failure injection rollback、concurrent approve/add member、duplicate pending、reject/open join、权限、TTL/expiry、Presence isolation 和四类 EXPLAIN PASS。
+- Group coverpkg 67.9%；MySQL Repository 77.4%；Service 67.0%。
+- Private Chat message/session focused regression PASS；全量 `go test ./... -count=1` PASS。
+- `go vet ./...`、`gofmt -l .`、`git diff --check`、repository safety 与 candidate secret pattern scan PASS。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible environment/CI PENDING。
+
+### 数据/协议
+
+- DB migration：无；使用现有 groups/group_members/group_verifies 与索引。
+- HTTP：启用 Group CP1 create/info/dissolve/my/member/invite/leave-kick/role/apply-review/mute。
+- RPC：新增 Group membership minimum RPC；User 新增 BatchGetUsers。
+- Redis：新增集中 Group prohibition key helper；无 Presence 写入。
+- WS/Frontend：无变化。
+
+### Git / 下一步
+
+- implementation commit：`860ba8eb16dac77ad751fecb0c62d9e509f74cb9 feat(group): add group domain and membership foundation`。
+- log/status commit：本记录所在提交。
+- push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并执行最终等值/clean 复核。
+- 下一 Checkpoint：Group WebSocket Foundation，需用户另行授权；本轮完成后停止。
