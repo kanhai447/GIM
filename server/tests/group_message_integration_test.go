@@ -211,6 +211,44 @@ func TestGroupMessageReliabilitySessionsHistoryAndDelivery(t *testing.T) {
 		if err != nil || latest.UnreadCount != 0 {
 			t.Fatalf("latest read %#v %v", latest, err)
 		}
+		baseline, err := service.Send(context.Background(), owner, groupRequest(groupID, "group-read-baseline", "baseline"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		var raceMessage groupmessage.SendResult
+		var readErr, sendErr error
+		var wait sync.WaitGroup
+		wait.Add(2)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, readErr = service.MarkRead(context.Background(), member, groupID, baseline.Message.ID)
+		}()
+		go func() {
+			defer wait.Done()
+			<-start
+			raceMessage, sendErr = service.Send(context.Background(), owner, groupRequest(groupID, "group-read-race", "arrived during read"))
+		}()
+		close(start)
+		wait.Wait()
+		if readErr != nil || sendErr != nil {
+			t.Fatalf("concurrent group read/send read=%v send=%v", readErr, sendErr)
+		}
+		var raceState struct {
+			LastMessageID     uint64  `gorm:"column:last_message_id"`
+			LastReadMessageID *uint64 `gorm:"column:last_read_message_id"`
+			UnreadCount       uint32  `gorm:"column:unread_count"`
+		}
+		if err := database.Table("group_sessions").Select("last_message_id,last_read_message_id,unread_count").Where("user_id=? AND group_id=?", member, groupID).Take(&raceState).Error; err != nil {
+			t.Fatal(err)
+		}
+		if raceState.LastMessageID != raceMessage.Message.ID || raceState.LastReadMessageID == nil || *raceState.LastReadMessageID != baseline.Message.ID || raceState.UnreadCount != 1 {
+			t.Fatalf("concurrent group read state=%#v raceMessage=%d", raceState, raceMessage.Message.ID)
+		}
+		if final, err := service.MarkRead(context.Background(), member, groupID, raceMessage.Message.ID); err != nil || final.UnreadCount != 0 {
+			t.Fatalf("final concurrent read=%#v err=%v", final, err)
+		}
 		first, err := service.History(context.Background(), member, groupID, 0, 10)
 		if err != nil || len(first.Items) != 10 || !first.HasMore {
 			t.Fatalf("history first %#v %v", first, err)
