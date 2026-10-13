@@ -770,3 +770,35 @@
 - Race 保持 NOT AVAILABLE；compatible CI PENDING。
 - `PRIVATE CHAT V1 = COMPLETED`；`GROUP CHAT V1 = COMPLETED`；`FILE V1 = COMPLETED`；`DAY 3 = COMPLETED`。
 - `DAY 4 = NOT STARTED`；Next Authorized Work：NONE。
+
+## 2026-10-13 Day 4 / Checkpoint 1 — Kafka Audit Foundation
+
+### Implementation
+
+- 新增 audit schema v1、UUID event ID、UTC timestamp、trusted request ID、严格 metadata allowlist 与业务 `audit.Publisher` abstraction。
+- 新增统一 kafka-go producer：单 topic `gim.audit.events`、process-shared client、bounded queue、单 worker、有限 timeout/retry、drop counter 与 graceful close。
+- 新增 Logs Domain/Repository/Consumer/Service/HTTP/Cmd；consumer persist/duplicate resolution 后 commit，DB/fetch/commit retry，malformed poison payload 安全跳过。
+- 新增 007 `audit_logs` 与 time/user/type/service/request indexes；新增 admin-only list/detail cursor/filter API。
+- Auth/User registration boundary、login/logout、Private Chat、Group lifecycle/message、File upload/delete接入；Gateway覆盖外部 identity/request ID。
+
+### Privacy / Reliability
+
+- 不记录 password/hash/JWT/Authorization/Cookie/Secret/DSN、request body、聊天正文、文件内容或 storage path；metadata 只接受明确 scalar allowlist。
+- Kafka failure 是 observability degradation；不会回滚业务 transaction、改变 message ACK/realtime 或 File 成功。
+- at-least-once consumer + `event_id UNIQUE` 幂等；V1 无 outbox/exactly-once，queue 满/长期 broker down 可能 audit loss。
+- Logs 服务强制有效 `User-ID` + role 1；普通用户伪造 Admin role 通过 Gateway 后仍为真实 role 2。
+
+### Acceptance
+
+- Real Kafka 4.2.2 + producer/consumer + MySQL + query 连续 3 轮 PASS；duplicate one row、consumer stop/restart recovery、unavailable broker bounded behavior PASS。
+- MySQL 001–007 EMPTY/UP/DOWN/RE-UP、schema/constraint/idempotency 与 5 audit EXPLAIN PASS。
+- Auth/Gateway、Private Chat、Group、File explicit regression 与 `go test ./... -count=1` PASS。
+- `go vet ./...`、gofmt、diff、repository safety/Secret Scan PASS；focused coverage 已记录于 operation log。
+- Race：PENDING compatible environment；未重复已知不可用的本机 Windows race。
+- 临时 Kafka/etcd 进程和本轮 runtime/data/log 已清理。
+
+### Git / Next
+
+- Implementation commit：`2ac7199ad6ee600460342c1c3cb801b893a2360e feat(logs): add kafka audit pipeline`。
+- Log/status commit：本记录所在提交，随后 push 并最终复核 equality/clean。
+- Next Planned：Admin Integration，需新授权；本轮严格未开始 Admin frontend、Compose、performance、CI 或后续 Checkpoint。
