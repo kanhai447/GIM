@@ -44,9 +44,13 @@ go run ./cmd/auth-api
 go run ./cmd/chat-api
 go run ./cmd/group-rpc
 go run ./cmd/group-api
+go run ./cmd/file-api
+go run ./cmd/logs-api
 go run ./cmd/gateway
 ```
 
 `user-api`, `auth-api`, `chat-api`, and `group-api` register leased endpoints in etcd and revoke them on graceful exit. Auth, Chat, and Group connect to User RPC at `INTERNAL_API_HOST:USER_RPC_PORT`; Group also exposes the minimal internal membership RPC at `GROUP_RPC_PORT`. RPC is an internal configured dependency rather than a Gateway-discovered HTTP service. Only Gateway should be exposed publicly.
 
 Group WebSocket uses `/api/group/ws/chat?token=<JWT>` through Gateway/Auth. Configure `GROUP_WS_ALLOWED_ORIGINS`, bounded queue and heartbeat values from `.env.example`. It is a user-level multi-device socket, does not bind to one group, and never contributes to Chat-owned global Presence.
+
+`logs-api` serves the admin-only structured audit list/detail routes and consumes `gim.audit.events` into MySQL. All business services share the same bounded producer implementation; Kafka failure degrades audit visibility but never changes committed business success. Apply migration 007 before starting Logs and configure Kafka only through deployment environment values.

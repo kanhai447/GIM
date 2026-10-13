@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kanhai447/GIM/server/internal/chat"
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
 	"github.com/kanhai447/GIM/server/internal/chat/protocol"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 )
 
 type captureSender struct{ payloads [][]byte }
@@ -21,6 +23,16 @@ func (sender *captureSender) SendToClient(_ context.Context, _ uint64, _ string,
 type capturePublisher struct {
 	events []delivery.Event
 	err    error
+}
+
+type captureAuditPublisher struct {
+	events []audit.Event
+	err    error
+}
+
+func (publisher *captureAuditPublisher) Publish(_ context.Context, event audit.Event) error {
+	publisher.events = append(publisher.events, event)
+	return publisher.err
 }
 
 func (publisher *capturePublisher) Publish(_ context.Context, event delivery.Event) error {
@@ -36,7 +48,8 @@ func TestInboundAckAfterPersistenceAndDuplicateDoesNotRepublish(t *testing.T) {
 	}
 	sender := &captureSender{}
 	publisher := &capturePublisher{err: errors.New("redis unavailable")}
-	inbound, err := NewInbound(service, sender, publisher, nil)
+	auditor := &captureAuditPublisher{err: errors.New("Kafka unavailable")}
+	inbound, err := NewInbound(service, sender, publisher, nil, auditor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +67,13 @@ func TestInboundAckAfterPersistenceAndDuplicateDoesNotRepublish(t *testing.T) {
 	}
 	if len(sender.payloads) != 2 || len(publisher.events) != 1 {
 		t.Fatalf("acks=%d delivery publishes=%d", len(sender.payloads), len(publisher.events))
+	}
+	if len(auditor.events) != 1 || auditor.events[0].EventType != audit.EventChatMessageAccepted {
+		t.Fatalf("audit events = %#v", auditor.events)
+	}
+	auditPayload, _ := json.Marshal(auditor.events[0])
+	if strings.Contains(string(auditPayload), "hello") {
+		t.Fatalf("audit leaked message content: %s", auditPayload)
 	}
 	first := decodeCapturedEnvelope(t, sender.payloads[0])
 	second := decodeCapturedEnvelope(t, sender.payloads[1])

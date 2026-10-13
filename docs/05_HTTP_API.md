@@ -185,9 +185,12 @@ Agent 不得为了“更 RESTful”随意改已有路径和字段。需要改时
 - `PUT /api/settings/admin/info`
 
 ### Logs Admin
-- `GET /api/logs/logs`
-- `GET /api/logs/logs/:id`
-- `DELETE /api/logs/logs`
+- `GET /api/logs/logs?beforeId=&limit=&from=&to=&service=&eventType=&userId=&status=&requestId=`：默认 50、最大 100，按 `occurredAt DESC,id DESC` 返回 `{list,nextBeforeId,hasMore}`。时间使用 RFC3339；`beforeId` 指向上一页最后一条持久化记录。
+- `GET /api/logs/logs/:id`：返回一条已持久化的安全结构化事件。
+
+两个接口都要求 Gateway/Auth 注入的有效 `User-ID` 且 `Role == 1`，否则 403/`2603`。外部伪造身份 Header 会被 Gateway 清除，目标 Logs 服务仍执行角色检查。非法 filter/cursor/limit 返回 `2601`，不存在的详情返回 404/`2604`。V1 Checkpoint 1 不提供删除日志接口；保留审计记录的删除/归档策略须在后续单独设计，不沿用参考项目的无条件批量删除语义。
+
+返回字段只有正式 Event schema 与 allowlist metadata；不补充 raw exception、request body、聊天正文、文件内容/路径或任何 Secret。
 
 ## 10. Admin Mock-only 接口
 

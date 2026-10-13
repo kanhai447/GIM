@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kanhai447/GIM/server/internal/gateway/authclient"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 )
 
@@ -65,6 +66,7 @@ func TestHandlerOverwritesForgedIdentityHeaders(t *testing.T) {
 	request.Header.Set("User-ID", "1")
 	request.Header.Set("Role", "1")
 	request.Header.Set("ValidPath", "/api/auth/login")
+	request.Header.Set(audit.RequestIDHeader, "attacker-controlled-request-id")
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, request)
@@ -76,6 +78,10 @@ func TestHandlerOverwritesForgedIdentityHeaders(t *testing.T) {
 	}
 	if forwarder.headers.Get("User-ID") != "42" || forwarder.headers.Get("Role") != "2" || forwarder.headers.Get("ValidPath") != "" {
 		t.Fatalf("forwarded identity headers = %#v", forwarder.headers)
+	}
+	requestID := forwarder.headers.Get(audit.RequestIDHeader)
+	if requestID == "" || requestID == "attacker-controlled-request-id" || recorder.Header().Get(audit.RequestIDHeader) != requestID {
+		t.Fatalf("request ID was not safely replaced and propagated: forwarded=%q response=%q", requestID, recorder.Header().Get(audit.RequestIDHeader))
 	}
 }
 
@@ -93,6 +99,26 @@ func TestHandlerOverwritesForgedIdentityForFileUpload(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusNoContent || resolver.service != "file_api" || forwarder.headers.Get("User-ID") != "77" || forwarder.headers.Get("Role") != "2" {
 		t.Fatalf("status=%d service=%q headers=%#v", recorder.Code, resolver.service, forwarder.headers)
+	}
+}
+
+func TestHandlerCannotForgeAdminRoleForLogs(t *testing.T) {
+	endpoint, _ := url.Parse("http://127.0.0.1:9010")
+	auth := &fakeAuthenticator{result: authclient.Result{UserID: 88, Role: 2, Authenticated: true}}
+	resolver := &fakeResolver{endpoints: []discovery.Endpoint{{URL: *endpoint}}}
+	forwarder := &fakeForwarder{}
+	handler := NewHandler(auth, resolver, forwarder, time.Second)
+	request := httptest.NewRequest(http.MethodGet, "/api/logs/logs?limit=20", nil)
+	request.Header.Set("token", "member-credential")
+	request.Header.Set("User-ID", "1")
+	request.Header.Set("Role", "1")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent || resolver.service != "logs_api" {
+		t.Fatalf("status=%d service=%q", recorder.Code, resolver.service)
+	}
+	if forwarder.headers.Get("User-ID") != "88" || forwarder.headers.Get("Role") != "2" {
+		t.Fatalf("forged admin identity was not replaced: %#v", forwarder.headers)
 	}
 }
 

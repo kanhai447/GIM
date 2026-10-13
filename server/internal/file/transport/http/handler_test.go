@@ -17,8 +17,16 @@ import (
 	filerepo "github.com/kanhai447/GIM/server/internal/file/repository"
 	fileservice "github.com/kanhai447/GIM/server/internal/file/service"
 	filestorage "github.com/kanhai447/GIM/server/internal/file/storage"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 	"github.com/zeromicro/go-zero/rest/pathvar"
 )
+
+type captureFileAuditor struct{ events []audit.Event }
+
+func (publisher *captureFileAuditor) Publish(_ context.Context, event audit.Event) error {
+	publisher.events = append(publisher.events, event)
+	return nil
+}
 
 func TestUploadListDetailDownloadDeleteAndOwnership(t *testing.T) {
 	repository := newHTTPRepository()
@@ -30,7 +38,8 @@ func TestUploadListDetailDownloadDeleteAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := &Handler{files: service, maxBytes: 1024}
+	auditor := &captureFileAuditor{}
+	handler := &Handler{files: service, maxBytes: 1024, auditor: auditor}
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", `../报告 "safe".txt`)
@@ -91,6 +100,15 @@ func TestUploadListDetailDownloadDeleteAndOwnership(t *testing.T) {
 	handler.Delete(deleteRecorder, deleteRequest)
 	if !strings.Contains(deleteRecorder.Body.String(), `"deleted":true`) {
 		t.Fatalf("delete=%s", deleteRecorder.Body.String())
+	}
+	if len(auditor.events) != 2 || auditor.events[0].EventType != audit.EventFileUploaded || auditor.events[1].EventType != audit.EventFileDeleted {
+		t.Fatalf("audit events = %#v", auditor.events)
+	}
+	payload, _ := json.Marshal(auditor.events)
+	for _, forbidden := range []string{"hello file", "objects/", "storage_path"} {
+		if strings.Contains(string(payload), forbidden) {
+			t.Fatalf("audit leaked %q: %s", forbidden, payload)
+		}
 	}
 }
 

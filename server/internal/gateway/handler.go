@@ -13,6 +13,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/gateway/proxy"
 	"github.com/kanhai447/GIM/server/internal/gateway/route"
 	"github.com/kanhai447/GIM/server/internal/platform/apperror"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	"github.com/kanhai447/GIM/server/internal/platform/httpresponse"
 )
@@ -49,6 +50,9 @@ func NewHandler(auth Authenticator, resolver Resolver, forwarder Forwarder, disc
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	scrubIdentityHeaders(request.Header)
+	requestID := audit.NewRequestID()
+	request.Header.Set(audit.RequestIDHeader, requestID)
+	writer.Header().Set(audit.RequestIDHeader, requestID)
 	if request.URL.RawPath != "" {
 		writeFailure(writer, apperror.HTTP(http.StatusBadRequest, CodeInvalidPath, "非法 API 路径"))
 		return
@@ -92,6 +96,7 @@ func scrubIdentityHeaders(header http.Header) {
 	header.Del("User-ID")
 	header.Del("Role")
 	header.Del("ValidPath")
+	header.Del(audit.RequestIDHeader)
 }
 
 func requestToken(request *http.Request) string {

@@ -21,6 +21,7 @@ import (
 	platformmysql "github.com/kanhai447/GIM/server/internal/platform/database/mysql"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
+	"github.com/kanhai447/GIM/server/internal/platform/kafkaaudit"
 	serviceruntime "github.com/kanhai447/GIM/server/internal/platform/process"
 	platformredis "github.com/kanhai447/GIM/server/internal/platform/redis"
 	"github.com/zeromicro/go-zero/rest"
@@ -45,6 +46,21 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	auditConfig, err := kafkaaudit.FromValues(values)
+	if err != nil {
+		return err
+	}
+	auditProducer, err := kafkaaudit.NewProducer(auditConfig, log.Default())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
+		defer cancel()
+		if closeErr := auditProducer.Close(ctx); closeErr != nil {
+			log.Printf("group audit producer shutdown incomplete")
+		}
+	}()
 	groupConfig, err := groupconfig.FromValues(values)
 	if err != nil {
 		return err
@@ -112,7 +128,7 @@ func run(args []string) error {
 		return err
 	}
 	webSocketModule, err := groupws.NewWithInboundFactory(groupWebSocketConfig, func(hub *groupws.Hub) (groupws.InboundHandler, error) {
-		return groupmessage.NewInbound(messageService, hub, deliveryBus, log.Default())
+		return groupmessage.NewInbound(messageService, hub, deliveryBus, log.Default(), auditProducer)
 	})
 	if err != nil {
 		return err
@@ -126,7 +142,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	grouphttp.RegisterRoutes(server, groupModule.Service)
+	grouphttp.RegisterRoutes(server, groupModule.Service, auditProducer)
 	groupmessagehttp.RegisterRoutes(server, messageService)
 	groupws.RegisterRoute(server, groupWebSocketConfig.Path, webSocketModule.Handler)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)

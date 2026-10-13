@@ -137,3 +137,20 @@ select file -> multipart upload
 ## 8. 撤回
 
 请求撤回 -> 查原消息 -> 校验发送者/管理员权限和可选时间限制 -> 生成 WithdrawMsg -> 持久化 -> ACK -> 推送。删除自己的历史记录与撤回是不同功能。
+
+## 9. 结构化审计日志
+
+```text
+business transaction commit
+ -> build schema v1 event + UUID eventId + trusted requestId
+ -> non-blocking bounded producer queue
+ -> Kafka gim.audit.events (JSON; user/resource/event partition key)
+ -> Logs Consumer validate
+ -> MySQL INSERT audit_logs (event_id UNIQUE)
+ -> commit Kafka offset only after persistence/idempotent duplicate resolution
+ -> admin-only cursor/filter query
+```
+
+登录失败属于少量高价值失败事件，只保存 `failure_category`，不会保存账号是否存在的可枚举差异、输入账号或密码。注册事件由 Auth/User 注册边界唯一拥有，User 服务不重复发送同义事件。Chat/Group message event 只在消息事务成功且 `createdNew=true` 后发送，metadata 只有消息/发送方/接收方或群/类型/大小等标识，不含 content；重复 clientMsgId 不产生第二条审计事件。File 上传/删除只在 DB/物理流程成功后发送，不含文件正文、原始磁盘路径。
+
+Kafka 故障是 observability degradation，不改变 HTTP 成功、消息 ACK、realtime delivery 或文件事务。消费者停机期间事件由 Kafka 保留；使用同 consumer group 恢复后继续持久化。Business DB 与 audit Kafka 不原子，V1 没有 outbox，长时间 broker 故障或有界队列溢出可能造成 audit loss，这是已知限制。

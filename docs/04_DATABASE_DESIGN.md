@@ -121,7 +121,7 @@
 
 ### 7.1 迁移版本与运行策略
 
-迁移版本严格连续：`001_identity`、`002_friend`、`003_chat`、`004_group`、`005_file`、`006_settings`。`schema_migrations` 记录版本、名称、应用时间和 `dirty` 状态。
+迁移版本严格连续：`001_identity`、`002_friend`、`003_chat`、`004_group`、`005_file`、`006_settings`、`007_audit_logs`。`schema_migrations` 记录版本、名称、应用时间和 `dirty` 状态。
 
 MySQL DDL 会隐式提交，无法承诺跨多个 DDL 的事务原子性。Runner 在执行前先写 dirty 状态，成功后清除；失败时后续 UP 会 fail-fast。操作员应检查失败点和备份，再运行已审阅的对应 DOWN，修复原因后重试，禁止直接删除版本记录。部署顺序为备份与兼容性确认、UP、status/健康检查；生产回滚必须先恢复兼容应用并确认可验证备份。
 
@@ -176,3 +176,9 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 - 文件入库以 SHA-256 竞争唯一键，复用物理对象后创建用户引用。
 
 真实 MySQL 验收从空库 UP，检查表/列/约束/索引与重复写入，执行关键查询 EXPLAIN，在迁移后的 Repository 上回归 User/Auth，再执行 DOWN→UP。
+
+### 7.9 Audit Logs
+
+`audit_logs` 保存 Log Service 已验证的结构化安全事件：`event_id/schema_version/event_type/service/action/user_id/role/resource_type/resource_id/request_id/trace_id/status/error_code/ip/method/path/occurred_at/metadata/created_at`。`event_id CHAR(36) UNIQUE` 是 Kafka 重投和 consumer restart 的幂等保障；metadata 为 MySQL JSON，写入前仍须通过应用 allowlist，数据库 JSON 类型本身不是脱敏边界。
+
+列表按 `(occurred_at DESC, id DESC)` 做稳定 cursor 分页。实际过滤对应的必要索引是 time、`user_id + time`、`event_type + time`、`service + time` 和 `request_id + time`；不为任意 metadata 字段建索引。007 迁移的 UP/DOWN/RE-UP 与这些查询的 EXPLAIN 都属于验收项。

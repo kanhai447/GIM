@@ -56,11 +56,14 @@ WS ping/pong durations
 Chat text/payload limits, dependency/delivery timeout
 upload root/max size/allowed mime
 frontend public base url
+Kafka audit brokers/topic/consumer group/bounded queue/timeout/retry
 ```
 
 Gateway/服务发现还使用：`GATEWAY_DISCOVERY_TIMEOUT`、`GATEWAY_AUTH_TIMEOUT`、`GATEWAY_PROXY_TIMEOUT`、`INTERNAL_API_HOST`、各 API port/instance ID、`ETCD_SERVICE_TTL`。API 服务注册 key 为 `/gim/services/{service}/{instance}`，value 为配置生成的内部 HTTP endpoint；通过 lease keepalive 维持并在优雅退出时清理。正式部署不得把内部 API endpoint 暴露公网。
 
 本地开发使用 `.env.example`/YAML example + docker-compose。任何 `192.168.x.x`、作者机器路径必须清理。
+
+Kafka 部署配置使用 `KAFKA_BROKERS`、`KAFKA_AUDIT_TOPIC`（默认 `gim.audit.events`）、`KAFKA_AUDIT_CONSUMER_GROUP`、`KAFKA_AUDIT_QUEUE_CAPACITY`、`KAFKA_AUDIT_PUBLISH_TIMEOUT`、`KAFKA_AUDIT_RETRY_BACKOFF`、`KAFKA_AUDIT_MAX_ATTEMPTS`。broker 地址属于部署配置，认证凭据/Secret 不进入 Settings DB；未配置 broker 时 producer/consumer 均禁用，核心业务仍可启动。Kafka 只承载 audit event，不承载 Chat/Group realtime、Presence、Auth 状态或数据库事务真相。
 
 ## 4. Docker Compose
 

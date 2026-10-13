@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/kanhai447/GIM/server/internal/chat"
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
 	"github.com/kanhai447/GIM/server/internal/chat/protocol"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 )
 
 type Sender interface {
@@ -25,16 +27,21 @@ type Inbound struct {
 	sender    Sender
 	publisher Publisher
 	logger    *log.Logger
+	auditor   audit.Publisher
 }
 
-func NewInbound(service *Service, sender Sender, publisher Publisher, logger *log.Logger) (*Inbound, error) {
+func NewInbound(service *Service, sender Sender, publisher Publisher, logger *log.Logger, auditors ...audit.Publisher) (*Inbound, error) {
 	if service == nil || sender == nil || publisher == nil {
 		return nil, errors.New("invalid chat message inbound configuration")
 	}
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Inbound{service: service, sender: sender, publisher: publisher, logger: logger}, nil
+	var auditor audit.Publisher
+	if len(auditors) > 0 {
+		auditor = auditors[0]
+	}
+	return &Inbound{service: service, sender: sender, publisher: publisher, logger: logger, auditor: auditor}, nil
 }
 
 func (inbound *Inbound) Handle(ctx context.Context, identity chat.ClientIdentity, envelope protocol.Envelope) error {
@@ -84,6 +91,15 @@ func (inbound *Inbound) Handle(ctx context.Context, identity chat.ClientIdentity
 					inbound.logger.Printf("chat realtime delivery degraded messageId=%d senderID=%d receiverID=%d", result.Message.ID, result.Message.SenderID, result.Message.ReceiverID)
 				}
 			}
+		}
+		metadata, metadataErr := audit.Metadata(map[string]any{
+			"message_id": result.Message.ID, "sender_id": result.Message.SenderID, "receiver_id": result.Message.ReceiverID,
+			"message_type": result.Message.Type, "client_msg_id": result.Message.ClientMsgID,
+		})
+		if metadataErr == nil {
+			event := audit.NewEvent(audit.EventChatMessageAccepted, "chat", "message.accept", audit.StatusSuccess)
+			event.UserID, event.ResourceType, event.ResourceID, event.RequestID, event.Metadata = audit.Uint64(result.Message.SenderID), "chat_message", strconv.FormatUint(result.Message.ID, 10), audit.NewRequestID(), metadata
+			audit.EmitBestEffort(ctx, inbound.auditor, event, inbound.logger)
 		}
 	}
 	return ackErr

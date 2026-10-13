@@ -24,7 +24,7 @@ import (
 	"github.com/kanhai447/GIM/server/migrations"
 )
 
-const migrationCount = 6
+const migrationCount = 7
 
 var migrationDatabasePattern = regexp.MustCompile(`^gim_migration_test_[0-9]+_[0-9]+$`)
 
@@ -152,7 +152,7 @@ func assertSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	tables := []string{
 		"users", "user_confs", "friends", "friend_verifies", "chat_messages", "chat_sessions",
 		"chat_message_deletions", "groups", "group_members", "group_verifies", "group_messages",
-		"group_sessions", "group_message_deletions", "file_objects", "user_files", "settings",
+		"group_sessions", "group_message_deletions", "file_objects", "user_files", "settings", "audit_logs",
 	}
 	for _, table := range tables {
 		var count int
@@ -176,6 +176,11 @@ func assertSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	assertIndexExists(t, ctx, db, "group_messages", "ux_group_messages_sender_client")
 	assertIndexExists(t, ctx, db, "group_sessions", "ux_group_sessions_user_group")
 	assertIndexExists(t, ctx, db, "file_objects", "ux_file_objects_sha256")
+	assertIndexExists(t, ctx, db, "audit_logs", "ux_audit_logs_event_id")
+	assertIndexExists(t, ctx, db, "audit_logs", "ix_audit_logs_user_occurred")
+	assertIndexExists(t, ctx, db, "audit_logs", "ix_audit_logs_type_occurred")
+	assertIndexExists(t, ctx, db, "audit_logs", "ix_audit_logs_service_occurred")
+	assertIndexExists(t, ctx, db, "audit_logs", "ix_audit_logs_request")
 	assertColumn(t, ctx, db, "users", "pwd_hash", columnExpectation{dataType: "varchar", columnType: "varchar(255)", nullable: false, length: 255})
 	assertColumn(t, ctx, db, "users", "role", columnExpectation{dataType: "tinyint", columnType: "tinyint unsigned", nullable: false, defaultValue: "2"})
 	assertColumn(t, ctx, db, "users", "status", columnExpectation{dataType: "tinyint", columnType: "tinyint unsigned", nullable: false, defaultValue: "1"})
@@ -190,6 +195,7 @@ func assertSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	assertColumn(t, ctx, db, "group_sessions", "unread_count", columnExpectation{dataType: "int", columnType: "int unsigned", nullable: false, defaultValue: "0"})
 	assertColumn(t, ctx, db, "file_objects", "sha256", columnExpectation{dataType: "char", columnType: "char(64)", nullable: false, length: 64})
 	assertColumn(t, ctx, db, "settings", "setting_value", columnExpectation{dataType: "json", columnType: "json", nullable: false})
+	assertColumn(t, ctx, db, "audit_logs", "metadata", columnExpectation{dataType: "json", columnType: "json", nullable: false})
 
 	var foreignKeys int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema = DATABASE()`).Scan(&foreignKeys); err != nil || foreignKeys != 0 {
@@ -269,6 +275,8 @@ func seedAndAssertConstraints(t *testing.T, ctx context.Context, db *sql.DB) {
 	mustExec(t, ctx, db, `INSERT INTO file_objects(id, uid, sha256, size, storage_path) VALUES (1, '00000000-0000-0000-0000-000000000001', ?, 12, 'objects/aa/test')`, sha)
 	assertDuplicateExec(t, ctx, db, "file sha256", `INSERT INTO file_objects(uid, sha256, size, storage_path) VALUES ('00000000-0000-0000-0000-000000000002', ?, 13, 'objects/aa/test-duplicate')`, sha)
 	mustExec(t, ctx, db, `INSERT INTO user_files(user_id, file_object_id, original_name) VALUES (1, 1, 'hello.txt')`)
+	mustExec(t, ctx, db, `INSERT INTO audit_logs(event_id, schema_version, event_type, service, action, user_id, role, resource_type, resource_id, request_id, status, occurred_at, metadata) VALUES ('00000000-0000-4000-8000-000000000001', 1, 'auth.login.success', 'auth', 'login', 1, 2, 'user', '1', 'request-1', 'success', CURRENT_TIMESTAMP(3), JSON_OBJECT())`)
+	assertDuplicateExec(t, ctx, db, "audit event idempotency", `INSERT INTO audit_logs(event_id, schema_version, event_type, service, action, status, occurred_at, metadata) VALUES ('00000000-0000-4000-8000-000000000001', 1, 'auth.login.success', 'auth', 'login', 'success', CURRENT_TIMESTAMP(3), JSON_OBJECT())`)
 }
 
 func assertDuplicateExec(t *testing.T, ctx context.Context, db *sql.DB, label, query string, args ...any) {
@@ -308,6 +316,11 @@ func assertExplainPlans(t *testing.T, ctx context.Context, db *sql.DB) {
 		{"group sessions", "ix_group_sessions_user_sort", `SELECT * FROM group_sessions WHERE user_id = 1 ORDER BY is_top DESC, last_message_at DESC, id DESC LIMIT 20`},
 		{"user files", "ix_user_files_user_created", `SELECT * FROM user_files WHERE user_id = 1 ORDER BY created_at DESC, id DESC LIMIT 20`},
 		{"file deduplication", "ux_file_objects_sha256", `SELECT * FROM file_objects WHERE sha256 = '` + strings.Repeat("a", 64) + `'`},
+		{"audit time", "ix_audit_logs_occurred", `SELECT * FROM audit_logs WHERE occurred_at >= '2020-01-01' ORDER BY occurred_at DESC, id DESC LIMIT 20`},
+		{"audit user", "ix_audit_logs_user_occurred", `SELECT * FROM audit_logs WHERE user_id = 1 ORDER BY occurred_at DESC, id DESC LIMIT 20`},
+		{"audit type", "ix_audit_logs_type_occurred", `SELECT * FROM audit_logs WHERE event_type = 'auth.login.success' ORDER BY occurred_at DESC, id DESC LIMIT 20`},
+		{"audit service", "ix_audit_logs_service_occurred", `SELECT * FROM audit_logs WHERE service = 'auth' ORDER BY occurred_at DESC, id DESC LIMIT 20`},
+		{"audit request", "ix_audit_logs_request", `SELECT * FROM audit_logs WHERE request_id = 'request-1' ORDER BY occurred_at DESC, id DESC LIMIT 20`},
 	}
 	for _, testCase := range cases {
 		plan := explainIndex(t, ctx, db, testCase.query)

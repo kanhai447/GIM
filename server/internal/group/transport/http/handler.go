@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	stdhttp "net/http"
 	"strconv"
 	"strings"
@@ -14,15 +15,24 @@ import (
 	"github.com/kanhai447/GIM/server/internal/group/domain"
 	groupservice "github.com/kanhai447/GIM/server/internal/group/service"
 	"github.com/kanhai447/GIM/server/internal/platform/apperror"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 	"github.com/kanhai447/GIM/server/internal/platform/httpresponse"
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/rest/pathvar"
 )
 
-type Handler struct{ groups *groupservice.Service }
+type Handler struct {
+	groups  *groupservice.Service
+	auditor audit.Publisher
+	logger  *log.Logger
+}
 
-func RegisterRoutes(server *rest.Server, groups *groupservice.Service) {
-	handler := &Handler{groups: groups}
+func RegisterRoutes(server *rest.Server, groups *groupservice.Service, publishers ...audit.Publisher) {
+	var publisher audit.Publisher
+	if len(publishers) > 0 {
+		publisher = publishers[0]
+	}
+	handler := &Handler{groups: groups, auditor: publisher, logger: log.Default()}
 	server.AddRoutes([]rest.Route{
 		{Method: stdhttp.MethodPost, Path: "/api/group/group", Handler: handler.Create},
 		{Method: stdhttp.MethodGet, Path: "/api/group/group/:id", Handler: handler.Info},
@@ -136,6 +146,7 @@ func (handler *Handler) Create(writer stdhttp.ResponseWriter, request *stdhttp.R
 		writeError(writer, err)
 		return
 	}
+	handler.emit(request, audit.EventGroupCreated, "create", operatorID, "group", group.ID, nil)
 	info, err := handler.groups.GroupInfo(request.Context(), operatorID, group.ID)
 	if err != nil {
 		writeError(writer, err)
@@ -170,6 +181,7 @@ func (handler *Handler) Dissolve(writer stdhttp.ResponseWriter, request *stdhttp
 		writeError(writer, err)
 		return
 	}
+	handler.emit(request, audit.EventGroupDissolved, "dissolve", operatorID, "group", groupID, nil)
 	_ = httpresponse.Success(writer, map[string]bool{"dissolved": true})
 }
 
@@ -223,6 +235,10 @@ func (handler *Handler) Invite(writer stdhttp.ResponseWriter, request *stdhttp.R
 		writeError(writer, err)
 		return
 	}
+	for _, memberID := range input.MemberIDList {
+		metadata, _ := audit.Metadata(map[string]any{"group_id": input.GroupID, "target_user_id": memberID})
+		handler.emit(request, audit.EventGroupMemberJoined, "member.join", operatorID, "group", input.GroupID, metadata)
+	}
 	_ = httpresponse.Success(writer, map[string]bool{"invited": true})
 }
 
@@ -246,6 +262,10 @@ func (handler *Handler) RemoveMember(writer stdhttp.ResponseWriter, request *std
 	if err != nil {
 		writeError(writer, err)
 		return
+	}
+	if targetID != operatorID {
+		metadata, _ := audit.Metadata(map[string]any{"group_id": groupID, "target_user_id": targetID})
+		handler.emit(request, audit.EventGroupMemberKicked, "member.kick", operatorID, "group", groupID, metadata)
 	}
 	_ = httpresponse.Success(writer, map[string]bool{"removed": true})
 }
@@ -276,6 +296,10 @@ func (handler *Handler) Apply(writer stdhttp.ResponseWriter, request *stdhttp.Re
 		writeError(writer, err)
 		return
 	}
+	if result.Status == domain.JoinRequestAccepted {
+		metadata, _ := audit.Metadata(map[string]any{"group_id": result.GroupID, "target_user_id": result.UserID})
+		handler.emit(request, audit.EventGroupMemberJoined, "member.join", operatorID, "group", result.GroupID, metadata)
+	}
 	_ = httpresponse.Success(writer, map[string]any{"validId": result.ID, "status": result.Status})
 }
 
@@ -290,6 +314,10 @@ func (handler *Handler) Review(writer stdhttp.ResponseWriter, request *stdhttp.R
 	if err != nil {
 		writeError(writer, err)
 		return
+	}
+	if result.Status == domain.JoinRequestAccepted {
+		metadata, _ := audit.Metadata(map[string]any{"group_id": result.GroupID, "target_user_id": result.UserID})
+		handler.emit(request, audit.EventGroupMemberJoined, "member.join", operatorID, "group", result.GroupID, metadata)
 	}
 	_ = httpresponse.Success(writer, map[string]any{"validId": result.ID, "status": result.Status})
 }
@@ -316,6 +344,16 @@ func (handler *Handler) Mute(writer stdhttp.ResponseWriter, request *stdhttp.Req
 
 func groupDTO(group domain.Group, role domain.GroupRole, count uint64) groupResponse {
 	return groupResponse{GroupID: group.ID, Title: group.Name, Abstract: group.Description, Avatar: group.Avatar, OwnerID: group.OwnerID, Status: uint8(group.Status), Role: uint8(role), MemberCount: count, IsSearch: group.IsSearch, JoinPolicy: uint8(group.JoinPolicy), IsProhibition: group.IsAllMuted, MemberLimit: group.MemberLimit}
+}
+
+func (handler *Handler) emit(request *stdhttp.Request, eventType, action string, userID uint64, resourceType string, resourceID uint64, metadata json.RawMessage) {
+	event := audit.NewEvent(eventType, "group", action, audit.StatusSuccess)
+	event.UserID, event.ResourceType, event.ResourceID, event.Metadata = audit.Uint64(userID), resourceType, strconv.FormatUint(resourceID, 10), metadata
+	if role, err := strconv.ParseInt(strings.TrimSpace(request.Header.Get("Role")), 10, 32); err == nil {
+		event.Role = audit.Int32(int32(role))
+	}
+	audit.EnrichHTTP(&event, request)
+	audit.EmitBestEffort(audit.HTTPContext(request), handler.auditor, event, handler.logger)
 }
 
 func trustedUserID(request *stdhttp.Request) (uint64, bool) {

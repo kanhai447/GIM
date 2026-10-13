@@ -13,6 +13,7 @@ import (
 	authhttp "github.com/kanhai447/GIM/server/internal/auth/transport/http"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
+	"github.com/kanhai447/GIM/server/internal/platform/kafkaaudit"
 	serviceruntime "github.com/kanhai447/GIM/server/internal/platform/process"
 	platformredis "github.com/kanhai447/GIM/server/internal/platform/redis"
 	"github.com/zeromicro/go-zero/rest"
@@ -37,6 +38,21 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	auditConfig, err := kafkaaudit.FromValues(values)
+	if err != nil {
+		return err
+	}
+	auditProducer, err := kafkaaudit.NewProducer(auditConfig, log.Default())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
+		defer cancel()
+		if closeErr := auditProducer.Close(ctx); closeErr != nil {
+			log.Printf("auth audit producer shutdown incomplete")
+		}
+	}()
 	redisConfig, err := platformredis.FromValues(values)
 	if err != nil {
 		return err
@@ -87,7 +103,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	authhttp.RegisterRoutes(server, authModule.Service)
+	authhttp.RegisterRoutes(server, authModule.Service, auditProducer)
 
 	registry, err := discovery.NewRegistry(etcdClient.Raw(), registrationConfig.LeaseTTL)
 	if err != nil {

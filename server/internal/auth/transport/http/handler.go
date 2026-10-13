@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	stdhttp "net/http"
+	"strconv"
 	"strings"
 
 	"github.com/kanhai447/GIM/server/internal/auth/service"
 	"github.com/kanhai447/GIM/server/internal/platform/apperror"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 	"github.com/kanhai447/GIM/server/internal/platform/httpresponse"
 	"github.com/zeromicro/go-zero/rest"
 )
@@ -24,7 +27,11 @@ type Application interface {
 	Logout(context.Context, string) error
 }
 
-type Handler struct{ auth Application }
+type Handler struct {
+	auth    Application
+	auditor audit.Publisher
+	logger  *log.Logger
+}
 
 type registerRequest struct {
 	Account  string `json:"account"`
@@ -39,10 +46,16 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-func NewHandler(auth Application) *Handler { return &Handler{auth: auth} }
+func NewHandler(auth Application, publishers ...audit.Publisher) *Handler {
+	var publisher audit.Publisher
+	if len(publishers) > 0 {
+		publisher = publishers[0]
+	}
+	return &Handler{auth: auth, auditor: publisher, logger: log.Default()}
+}
 
-func RegisterRoutes(server *rest.Server, auth Application) {
-	handler := NewHandler(auth)
+func RegisterRoutes(server *rest.Server, auth Application, publishers ...audit.Publisher) {
+	handler := NewHandler(auth, publishers...)
 	server.AddRoutes([]rest.Route{
 		{Method: stdhttp.MethodPost, Path: "/api/auth/register", Handler: handler.Register},
 		{Method: stdhttp.MethodPost, Path: "/api/auth/login", Handler: handler.Login},
@@ -57,13 +70,18 @@ func (handler *Handler) Register(writer stdhttp.ResponseWriter, request *stdhttp
 		writeInvalidArgument(writer)
 		return
 	}
-	user, err := handler.auth.Register(request.Context(), service.RegisterInput{
+	ctx := audit.HTTPContext(request)
+	user, err := handler.auth.Register(ctx, service.RegisterInput{
 		Account: input.Account, Nickname: input.Nickname, Password: input.Password, Repeat: input.Repeat,
 	})
 	if err != nil {
 		_ = httpresponse.Failure(writer, err)
 		return
 	}
+	event := audit.NewEvent(audit.EventUserRegistered, "auth", "register", audit.StatusSuccess)
+	event.UserID, event.Role, event.ResourceType, event.ResourceID = audit.Uint64(user.UserID), audit.Int32(user.Role), "user", strconv.FormatUint(user.UserID, 10)
+	audit.EnrichHTTP(&event, request)
+	audit.EmitBestEffort(ctx, handler.auditor, event, handler.logger)
 	_ = httpresponse.Success(writer, user)
 }
 
@@ -81,11 +99,17 @@ func (handler *Handler) Login(writer stdhttp.ResponseWriter, request *stdhttp.Re
 		writeInvalidArgument(writer)
 		return
 	}
-	result, err := handler.auth.Login(request.Context(), service.LoginInput{Account: account, Password: input.Password})
+	ctx := audit.HTTPContext(request)
+	result, err := handler.auth.Login(ctx, service.LoginInput{Account: account, Password: input.Password})
 	if err != nil {
+		handler.emitLoginFailure(ctx, request, err)
 		_ = httpresponse.Failure(writer, err)
 		return
 	}
+	event := audit.NewEvent(audit.EventAuthLoginSuccess, "auth", "login", audit.StatusSuccess)
+	event.UserID, event.Role, event.ResourceType, event.ResourceID = audit.Uint64(result.User.UserID), audit.Int32(result.User.Role), "user", strconv.FormatUint(result.User.UserID, 10)
+	audit.EnrichHTTP(&event, request)
+	audit.EmitBestEffort(ctx, handler.auditor, event, handler.logger)
 	_ = httpresponse.Success(writer, result)
 }
 
@@ -99,11 +123,42 @@ func (handler *Handler) Authentication(writer stdhttp.ResponseWriter, request *s
 }
 
 func (handler *Handler) Logout(writer stdhttp.ResponseWriter, request *stdhttp.Request) {
-	if err := handler.auth.Logout(request.Context(), request.Header.Get("token")); err != nil {
+	ctx := audit.HTTPContext(request)
+	if err := handler.auth.Logout(ctx, request.Header.Get("token")); err != nil {
 		_ = httpresponse.Failure(writer, err)
 		return
 	}
+	event := audit.NewEvent(audit.EventAuthLogout, "auth", "logout", audit.StatusSuccess)
+	if userID, parseErr := strconv.ParseUint(strings.TrimSpace(request.Header.Get("User-ID")), 10, 64); parseErr == nil && userID > 0 {
+		event.UserID = audit.Uint64(userID)
+	}
+	if role, parseErr := strconv.ParseInt(strings.TrimSpace(request.Header.Get("Role")), 10, 32); parseErr == nil {
+		event.Role = audit.Int32(int32(role))
+	}
+	audit.EnrichHTTP(&event, request)
+	audit.EmitBestEffort(ctx, handler.auditor, event, handler.logger)
 	_ = httpresponse.Success(writer, map[string]bool{"loggedOut": true})
+}
+
+func (handler *Handler) emitLoginFailure(ctx context.Context, request *stdhttp.Request, failure error) {
+	_, code, _ := apperror.PublicFields(failure)
+	category := "internal"
+	switch code {
+	case service.CodeInvalidCredential:
+		category = "invalid_credentials"
+	case service.CodeUserDisabled:
+		category = "user_disabled"
+	case service.CodeInvalidArgument:
+		category = "invalid_request"
+	}
+	metadata, metadataErr := audit.Metadata(map[string]any{"failure_category": category})
+	if metadataErr != nil {
+		return
+	}
+	event := audit.NewEvent(audit.EventAuthLoginFailed, "auth", "login", audit.StatusFailed)
+	event.ErrorCode, event.Metadata = code, metadata
+	audit.EnrichHTTP(&event, request)
+	audit.EmitBestEffort(ctx, handler.auditor, event, handler.logger)
 }
 
 func decodeJSON(writer stdhttp.ResponseWriter, request *stdhttp.Request, destination any) error {

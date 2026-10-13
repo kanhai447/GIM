@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	stdhttp "net/http"
 	"net/http/httptest"
@@ -9,7 +10,19 @@ import (
 	"testing"
 
 	"github.com/kanhai447/GIM/server/internal/auth/service"
+	"github.com/kanhai447/GIM/server/internal/platform/apperror"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 )
+
+type captureAuditor struct{ events []audit.Event }
+
+func (publisher *captureAuditor) Publish(_ context.Context, event audit.Event) error {
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	publisher.events = append(publisher.events, event)
+	return nil
+}
 
 type fakeApplication struct {
 	register     func(context.Context, service.RegisterInput) (service.PublicUser, error)
@@ -33,12 +46,13 @@ func (app fakeApplication) Logout(ctx context.Context, token string) error {
 
 func TestRegisterResponseDoesNotExposePasswordMaterial(t *testing.T) {
 	plaintext := "correct-password"
+	auditor := &captureAuditor{}
 	handler := NewHandler(fakeApplication{register: func(_ context.Context, input service.RegisterInput) (service.PublicUser, error) {
 		if input.Password != plaintext || input.Repeat != plaintext {
 			t.Fatalf("Register input = %#v", input)
 		}
 		return service.PublicUser{UserID: 7, Account: input.Account, Nickname: input.Nickname, Role: 2, Status: 1}, nil
-	}})
+	}}, auditor)
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/register", strings.NewReader(`{"account":"gim-user","nickname":"GIM","pwd":"correct-password","rePwd":"correct-password"}`))
 	recorder := httptest.NewRecorder()
 	handler.Register(recorder, request)
@@ -48,6 +62,9 @@ func TestRegisterResponseDoesNotExposePasswordMaterial(t *testing.T) {
 	}
 	if strings.Contains(body, plaintext) || strings.Contains(strings.ToLower(body), "password") || strings.Contains(strings.ToLower(body), "hash") {
 		t.Fatalf("register response exposed password material: %s", body)
+	}
+	if len(auditor.events) != 1 || auditor.events[0].EventType != audit.EventUserRegistered || auditor.events[0].UserID == nil || *auditor.events[0].UserID != 7 {
+		t.Fatalf("register audit = %#v", auditor.events)
 	}
 }
 
@@ -89,18 +106,26 @@ func TestAuthenticationMapsCompatibilityHeaders(t *testing.T) {
 
 func TestLogoutUsesTokenHeaderAndDoesNotEchoToken(t *testing.T) {
 	raw := "header.payload.signature"
+	auditor := &captureAuditor{}
 	handler := NewHandler(fakeApplication{logout: func(_ context.Context, token string) error {
 		if token != raw {
 			t.Fatalf("Logout token = %q", token)
 		}
 		return nil
-	}})
+	}}, auditor)
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/logout", nil)
 	request.Header.Set("token", raw)
 	recorder := httptest.NewRecorder()
 	handler.Logout(recorder, request)
 	if strings.Contains(recorder.Body.String(), raw) || !strings.Contains(recorder.Body.String(), `"loggedOut":true`) {
 		t.Fatalf("logout response = %s", recorder.Body.String())
+	}
+	if len(auditor.events) != 1 || auditor.events[0].EventType != audit.EventAuthLogout {
+		t.Fatalf("logout audit = %#v", auditor.events)
+	}
+	payload, _ := json.Marshal(auditor.events)
+	if strings.Contains(string(payload), raw) {
+		t.Fatalf("logout audit exposed token: %s", payload)
 	}
 }
 
@@ -113,5 +138,32 @@ func TestHandlerDoesNotLeakPrivateError(t *testing.T) {
 	handler.Login(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/auth/login", strings.NewReader(`{"account":"gim-user","password":"correct-password"}`)))
 	if strings.Contains(recorder.Body.String(), private) {
 		t.Fatalf("handler leaked private error: %s", recorder.Body.String())
+	}
+}
+
+func TestLoginAuditExcludesPasswordAndToken(t *testing.T) {
+	auditor := &captureAuditor{}
+	handler := NewHandler(fakeApplication{login: func(_ context.Context, input service.LoginInput) (service.LoginResult, error) {
+		if input.Account == "success-user" {
+			return service.LoginResult{Token: "do-not-log-jwt", User: service.PublicUser{UserID: 7, Role: 2, Status: 1}}, nil
+		}
+		return service.LoginResult{}, apperror.Business(service.CodeInvalidCredential, "账号或密码错误")
+	}}, auditor)
+	for _, body := range []string{
+		`{"account":"success-user","password":"do-not-log-password"}`,
+		`{"account":"failed-user","password":"do-not-log-password"}`,
+	} {
+		request := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/login", strings.NewReader(body))
+		request.Header.Set("token", "do-not-log-jwt")
+		handler.Login(httptest.NewRecorder(), request)
+	}
+	if len(auditor.events) != 2 || auditor.events[0].EventType != audit.EventAuthLoginSuccess || auditor.events[1].EventType != audit.EventAuthLoginFailed {
+		t.Fatalf("audit events = %#v", auditor.events)
+	}
+	payload, _ := json.Marshal(auditor.events)
+	for _, secret := range []string{"do-not-log-password", "do-not-log-jwt", "success-user", "failed-user"} {
+		if strings.Contains(string(payload), secret) {
+			t.Fatalf("audit leaked %q: %s", secret, payload)
+		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
 	stdhttp "net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/file/domain"
 	fileservice "github.com/kanhai447/GIM/server/internal/file/service"
 	"github.com/kanhai447/GIM/server/internal/platform/apperror"
+	"github.com/kanhai447/GIM/server/internal/platform/audit"
 	"github.com/kanhai447/GIM/server/internal/platform/httpresponse"
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/rest/pathvar"
@@ -25,14 +27,20 @@ const multipartOverhead int64 = 1 << 20
 type Handler struct {
 	files    *fileservice.Service
 	maxBytes int64
+	auditor  audit.Publisher
+	logger   *log.Logger
 }
 
-func NewHandler(files *fileservice.Service, maxBytes int64) *Handler {
-	return &Handler{files: files, maxBytes: maxBytes}
+func NewHandler(files *fileservice.Service, maxBytes int64, publishers ...audit.Publisher) *Handler {
+	var publisher audit.Publisher
+	if len(publishers) > 0 {
+		publisher = publishers[0]
+	}
+	return &Handler{files: files, maxBytes: maxBytes, auditor: publisher, logger: log.Default()}
 }
 
-func RegisterRoutes(server *rest.Server, files *fileservice.Service, maxBytes int64) {
-	handler := NewHandler(files, maxBytes)
+func RegisterRoutes(server *rest.Server, files *fileservice.Service, maxBytes int64, publishers ...audit.Publisher) {
+	handler := NewHandler(files, maxBytes, publishers...)
 	server.AddRoutes([]rest.Route{
 		{Method: stdhttp.MethodPost, Path: "/api/file/file", Handler: handler.UploadFile},
 		{Method: stdhttp.MethodPost, Path: "/api/file/image", Handler: handler.UploadImage},
@@ -86,6 +94,17 @@ func (handler *Handler) upload(writer stdhttp.ResponseWriter, request *stdhttp.R
 		if uploadErr != nil {
 			writeError(writer, uploadErr)
 			return
+		}
+		metadata, metadataErr := audit.Metadata(map[string]any{
+			"user_file_id": result.Metadata.UserFile.ID, "file_object_uid": result.Metadata.Object.UID,
+			"size_bytes": result.Metadata.Object.Size, "mime_type": result.Metadata.Object.MIMEType,
+			"object_created": result.ObjectCreated, "reference_created": result.ReferenceNew,
+		})
+		if metadataErr == nil {
+			event := audit.NewEvent(audit.EventFileUploaded, "file", "upload", audit.StatusSuccess)
+			event.UserID, event.ResourceType, event.ResourceID, event.Metadata = audit.Uint64(userID), "user_file", strconv.FormatUint(result.Metadata.UserFile.ID, 10), metadata
+			audit.EnrichHTTP(&event, request)
+			audit.EmitBestEffort(audit.HTTPContext(request), handler.auditor, event, handler.logger)
 		}
 		_ = httpresponse.Success(writer, uploadDTO(result.Metadata, result.ObjectCreated, result.ReferenceNew))
 		return
@@ -141,6 +160,13 @@ func (handler *Handler) Delete(writer stdhttp.ResponseWriter, request *stdhttp.R
 	if err := handler.files.Delete(request.Context(), userID, id); err != nil {
 		writeError(writer, err)
 		return
+	}
+	metadata, metadataErr := audit.Metadata(map[string]any{"user_file_id": id})
+	if metadataErr == nil {
+		event := audit.NewEvent(audit.EventFileDeleted, "file", "delete", audit.StatusSuccess)
+		event.UserID, event.ResourceType, event.ResourceID, event.Metadata = audit.Uint64(userID), "user_file", strconv.FormatUint(id, 10), metadata
+		audit.EnrichHTTP(&event, request)
+		audit.EmitBestEffort(audit.HTTPContext(request), handler.auditor, event, handler.logger)
 	}
 	_ = httpresponse.Success(writer, map[string]bool{"deleted": true})
 }

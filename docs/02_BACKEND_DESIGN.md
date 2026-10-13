@@ -176,6 +176,16 @@ MySQL
 
 Admin 日志详情必须安全渲染结构化 JSON，禁止将用户输入拼接 HTML 后 `v-html`。
 
+### Day 4 / Checkpoint 1 正式审计边界
+
+Auth、Chat、Group、File 只依赖 `audit.Publisher`，不直接依赖 Kafka API。每个服务进程复用一个 producer；业务提交后构造不可变 Event 值并非阻塞地写入容量有界的队列，单 worker 负责 JSON 编码、有限重试和 Kafka 写入。队列满或 Kafka 长时间不可用时只增加 drop 计数并写安全的普通服务告警，既不创建逐事件 goroutine，也不回滚业务结果。关闭时先停止接收、在 shutdown deadline 内排空，再关闭 Kafka writer。
+
+V1 使用单 topic `gim.audit.events`，partition key 优先为 user ID，其次 resource ID/event type。传输语义是业务边界 best-effort、Kafka/consumer at-least-once；不宣称 exactly-once，也没有 transactional outbox。Logs Consumer 只有在 MySQL Insert 成功（包括 event ID 已存在）后才提交 offset；DB、fetch 或 commit 暂时失败均有界退避重试。畸形 payload 只输出 partition/offset 并提交跳过，避免 poison message crash loop 或泄漏原始 payload。
+
+`audit_logs.event_id UNIQUE` 是重复投递的最终幂等屏障。Logs API 只读持久化后的安全结构化字段，并由目标服务再次验证可信 `User-ID` 和 `Role == 1`。Log Service 的内部错误只写普通服务日志，禁止再次发布 audit 形成递归。
+
+metadata 使用代码 allowlist，只接受明确的标量字段。聊天正文、文件内容/磁盘路径、password/hash、JWT/token、Authorization、Cookie、Secret、DSN 与完整 request/user/config 对象都不能进入 event。Gateway 覆盖外部 `X-Request-ID` 并向下游传播新 UUID；没有可信反向代理 IP 配置时保持 audit IP 为空，禁止信任客户端伪造转发头。
+
 ## C. 原会话聚合查询的结论修正
 
 实际私聊源码通过子查询拿最新 preview，不是简单 `MAX(msg_preview)`。GIM 改 session 表的理由应表述为：降低动态聚合复杂度、支持未读/已读、降低大消息表查询成本、统一删除/置顶状态，而不是声称原 SQL 一定取错 preview。

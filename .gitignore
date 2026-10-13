@@ -17,7 +17,7 @@ node_modules/
 dist/
 
 # Logs and temporary files.
-logs/
+/logs/
 *.log
 .tmp/
 tmp/
