@@ -4,16 +4,19 @@ import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { useFileStore } from '@/stores/file'
 import { useGroupStore } from '@/stores/group'
 
 const auth = useAuthStore()
 const chat = useChatStore()
+const file = useFileStore()
 const group = useGroupStore()
 const route = useRoute()
 const router = useRouter()
 
 async function logout(): Promise<void> {
   chat.stop()
+  file.stop()
   group.stop()
   try {
     await auth.logout()
@@ -37,7 +40,7 @@ async function logout(): Promise<void> {
         <el-menu-item index="/files">文件</el-menu-item>
         <el-menu-item index="/profile">个人资料</el-menu-item>
       </el-menu>
-      <p class="phase-note">Day 3 · Reliable Group Chat</p>
+      <p class="phase-note">Day 3 · Reliable IM & Files</p>
     </el-aside>
     <el-container>
       <el-header class="topbar">
