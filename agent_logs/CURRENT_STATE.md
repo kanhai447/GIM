@@ -1,14 +1,14 @@
 # GIM Current State
 
 - **Current Day:** DAY 3
-- **Current Phase:** GROUP FRONTEND INTEGRATION
-- **Current Checkpoint:** DAY 3 / CHECKPOINT 4 COMPLETED
-- **Last Completed Checkpoint:** Day 3 / Checkpoint 4 — Group Frontend Integration
-- **Working Tree:** CLEAN（本状态随 Checkpoint 4 实现/日志双提交并 push 后）
-- **Last Stable Business Baseline:** `0a17af6 feat(web): integrate reliable group chat`
-- **Last Push:** Checkpoint 4 implementation 已推送 `origin/main`；本 log/status commit 随后推送并复核 HEAD equality
+- **Current Phase:** FILE SERVICE BACKEND FOUNDATION
+- **Current Checkpoint:** DAY 3 / CHECKPOINT 5 COMPLETED
+- **Last Completed Checkpoint:** Day 3 / Checkpoint 5 — File Service Backend Foundation
+- **Working Tree:** CLEAN（本状态随 Checkpoint 5 实现/日志双提交并 push 后）
+- **Last Stable Business Baseline:** `5142da9 feat(file): add secure streaming file service`
+- **Last Push:** Checkpoint 5 implementation 已推送 `origin/main`；本 log/status commit 随后推送并复核 HEAD equality
 - **Next Authorized Work:** NONE
-- **Next Planned Work:** FILE SERVICE CHECKPOINT（需用户明确授权）
+- **Next Planned Work:** FILE FRONTEND INTEGRATION + DAY 3 FINAL ACCEPTANCE（需用户明确授权）
 - **Database Migration:** PASS — EMPTY → UP → DOWN → RE-UP on isolated local MySQL
 
 ## Completed
@@ -70,10 +70,13 @@
 - Group Client Reliability：stable clientMsgId、pending/sent/failed、ACK/message 双顺序合并、duplicate/lost ACK retry、30 秒上限退避与 auth/logout terminal lifecycle。
 - Group Web State：realtime preview/order/unread、focus-aware Mark Read、message-ID cursor history、reconnect reconciliation 与多设备 shared read。
 - Group Browser Acceptance：真实 Chrome A/B/C、mute/unmute、HTML literal、20+ history、Group restart/Chat unaffected、logout/revoked auth PASS；`GROUP CHAT V1 = FUNCTIONAL`。
+- File Backend Foundation：FileObject/UserFile/Physical Object 分层、MySQL Repository transaction、local Storage abstraction 与正式 File API runtime。
+- File Reliability/Security：bounded multipart、streaming SHA-256/MIME、content-addressed atomic publish、50 concurrent dedup、owner-only access 与 failure compensation。
+- File Gateway Acceptance：真实 etcd/Auth/Gateway/File/MySQL upload/list/download、missing/revoked token、spoofed identity PASS；`FILE BACKEND V1 = FUNCTIONAL`。
 
 ## In Progress
 
-- 无；Day 3 / Checkpoint 3 已完成并冻结，等待用户授权下一阶段。
+- 无；Day 3 / Checkpoint 5 已完成并冻结，等待用户授权下一阶段。
 
 ## Authorization
 
@@ -92,6 +95,9 @@ COMPLETED
 Day 3 / Checkpoint 4:
 COMPLETED
 
+Day 3 / Checkpoint 5:
+COMPLETED
+
 Private Chat V1:
 COMPLETED / REGRESSION PASS
 
@@ -100,7 +106,7 @@ NONE
 
 ## Not Started
 
-- File、Presence UI、Kafka/Logs 与完整 Admin 业务；均未获下一 Checkpoint 授权。
+- File Frontend、Chat/Group 文件消息、Admin File、S3/OSS、Presence UI、Kafka/Logs 与完整 Admin 业务；均未获下一 Checkpoint 授权。
 
 ## Test Status
 
@@ -127,6 +133,7 @@ NONE
 - Day 3 / Checkpoint 2：Group Hub/Client/pumps/heartbeat/multi-device/slow/shutdown/Origin/typed error PASS；真实 etcd Gateway/Auth/Group tunnel 与 Redis Presence negative PASS；正式 Group API lease/cleanup PASS；10 轮 stress PASS，Group WS 汇总 coverage 77.3%。Group API 与 Private Chat regression、真实依赖全量测试、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；Chat + Group compatible CI PENDING。
 - Day 3 / Checkpoint 3：真实 MySQL/Redis Group message integration 连续 3 轮 PASS；50 duplicate/50 distinct、transaction failure injection、partial/latest/stale read、session/history/deletion、actual two-instance/multi-device Group WS、Redis degraded、Presence negative 与 EXPLAIN PASS。全量真实依赖测试、Private Chat regression、vet/gofmt/diff/Secret Scan PASS；focused coverpkg 69.1%。Race 保持 NOT AVAILABLE；compatible CI PENDING。
 - Day 3 / Checkpoint 4：Web 12 files / 77 tests、type-check、production build PASS；真实 Chrome A/B/C pending/ACK/realtime/unread/read/refresh/mute/multi-device/cursor/reconnect/logout/revoked auth/HTML 安全 PASS。Group + Private Chat 真实 MySQL/Redis focused integration、后端全量、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；compatible CI PENDING。
+- Day 3 / Checkpoint 5：File unit + 真实 MySQL/filesystem + 真实 etcd/Auth/Gateway PASS；50 concurrent dedup、ownership、restart、missing physical、failure injection、EXPLAIN PASS；File coverpkg 62.2%。后端全量、Private Chat/Group focused 3 轮、Web 77 tests/type-check/build、vet/gofmt/diff/Secret Scan PASS。Race 保持 NOT AVAILABLE；compatible CI PENDING。
 
 ## Known Issues
 
@@ -136,8 +143,10 @@ NONE
 - Gateway 的 Upgrade 检测、query token 认证和真实 Chat WebSocket tunnel 已验证；Chat 内部 endpoint 信任 Gateway Header，正式部署不得直接暴露公网。
 - Presence key helper 已集中建立；未来若确需 connection/device tracking key，仍必须加入 `rediskeys`，不得硬编码。
 - V1 pending queue 仅保存在内存；刷新页面前尚未获得服务端 ACK 的消息不会跨刷新保留，已持久化消息由 history 恢复。
+- File V1 当前为单 File API 实例 + 本地 storage root；进程内 hash lock 不等同于多实例分布式锁。DB UNIQUE 保留最终竞争防线，多实例共享对象存储属于后续部署演进。
+- File V1 删除只移除 UserFile 并保留 FileObject/物理对象；延迟 orphan GC 尚未实现，以避免共享引用误删。
 
 ## Next Action
 
-- Group Domain/Membership、Group WebSocket、Group Message Reliability/Session/Unread/History 与 Group Frontend 已完成；Presence 仍为 Chat WS ONLY；`GROUP CHAT V1 = FUNCTIONAL`，`PRIVATE CHAT V1 = COMPLETED / REGRESSION PASS`。
-- Next Authorized Work：NONE。Next Planned 是 **File Service Checkpoint**；必须等待用户明确授权。本轮严格停止，不进入 File、Admin 或 Day 4。
+- Group Domain/Membership、Group WebSocket、Group Message Reliability/Session/Unread/History、Group Frontend 与 File Backend Foundation 已完成；Presence 仍为 Chat WS ONLY；`FILE BACKEND V1 = FUNCTIONAL`，`GROUP CHAT V1 = FUNCTIONAL`，`PRIVATE CHAT V1 = COMPLETED / REGRESSION PASS`。
+- Next Authorized Work：NONE。Next Planned 是 **File Frontend Integration + Day 3 Final Acceptance**；必须等待用户明确授权。本轮严格停止，不进入 Chat/Group 文件消息、Admin File、S3/OSS 或 Day 4。

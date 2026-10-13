@@ -7,6 +7,7 @@
 - Day 3 / Checkpoint 2：COMPLETED — Group WebSocket Foundation。
 - Day 3 / Checkpoint 3：COMPLETED — Group Message Reliability + Session/Unread/History。
 - Day 3 / Checkpoint 4：COMPLETED — Group Frontend Integration。
+- Day 3 / Checkpoint 5：COMPLETED — File Service Backend Foundation。
 
 ## Checkpoint 1 — Group Domain + Membership + API Foundation
 
@@ -28,6 +29,20 @@
 - `agent_logs/operations/day-3/002_checkpoint-2_group-ws-foundation.md`
 - `agent_logs/operations/day-3/003_checkpoint-3_group-message-session.md`
 - `agent_logs/operations/day-3/004_checkpoint-4_group-frontend.md`
+- `agent_logs/operations/day-3/005_checkpoint-5_file-backend-foundation.md`
+
+## Checkpoint 5 — File Service Backend Foundation
+
+- 时间：2026-10-13 13:13 +08:00。
+- 新增独立 File Domain/Repository/Service/Local Storage/HTTP/runtime，复用既有 005_file，无 migration 变化。
+- multipart 正文以双层 cap 流式写同盘 temp，同时 SHA-256 与 MIME sniff；最终按 hash 内容寻址并原子发布，production 无整文件 `io.ReadAll`。
+- MySQL Attach 事务、SHA UNIQUE、per-hash lock 和补偿完成；50 并发同内容收敛，跨用户/改名保持独立 UserFile。
+- owner-only list/detail/download/delete、安全 Content-Disposition、路径/CRLF/Unicode/size/MIME 防护、共享引用安全删除完成。
+- 真实 MySQL/filesystem 与真实 etcd/Auth/Gateway 测试 PASS；DB/temp/move/reference failure injection、restart/missing physical/EXPLAIN PASS。
+- `go test ./... -count=1`、Private Chat/Group focused 3 轮、vet/gofmt/diff/Secret Scan PASS；Web 77 tests/type-check/build PASS。
+- File coverpkg 62.2%；Race 保持 NOT AVAILABLE，compatible environment/CI PENDING。
+- Implementation commit/push：`5142da9 feat(file): add secure streaming file service`，SUCCESS。
+- `FILE BACKEND V1 = FUNCTIONAL`；未进入 File Frontend、Chat/Group 文件消息、Admin File、S3/OSS 或 Day 4。
 
 ## Checkpoint 4 — Group Frontend Integration
 
@@ -91,5 +106,5 @@
 
 ## 下一入口
 
-- File Service checkpoint（需用户另行授权）。
-- 严格不继续 File、Admin 或 Day 4。
+- File Frontend Integration + Day 3 Final Acceptance（需用户另行授权）。
+- 严格不继续 Chat/Group 文件消息、Admin File、S3/OSS 或 Day 4。

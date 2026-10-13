@@ -722,3 +722,27 @@
 - log/status commit：本记录所在提交，随后推送并复核 equality/clean。
 - `GROUP CHAT V1 = FUNCTIONAL`（text scope）；Private Chat regression PASS。
 - Next Authorized Work：NONE。Next Planned：File Service checkpoint；严格未进入 File、Admin 或 Day 4。
+
+## 2026-10-13 Day 3 / Checkpoint 5 — File Service Backend Foundation
+
+### Scope / Implementation
+
+- 自主实现 FileObject/UserFile Domain、MySQL Repository、Service、local Storage、HTTP transport 与 `cmd/file-api`；复用 005_file，无 migration。
+- multipart -> same-filesystem temp -> bounded streaming copy/SHA-256/MIME -> content-addressed atomic publish -> MySQL Attach transaction；同 hash keyed lock + DB UNIQUE 最终防线。
+- owner-only list/detail/download/delete；删除仅 UserFile，保留共享物理对象；安全 filename/MIME/Content-Disposition/no-path response。
+- 保留 `/api/file/file`、`/api/file/image`、`/api/file/:id-or-uuid`，新增 `/api/file/user-files`，未占用 Day 4 Admin `/api/file/files`。
+
+### Acceptance
+
+- 真实 MySQL/filesystem 50 concurrent dedup、跨用户/改名引用、ownership、restart、missing physical、empty/MIME/content integrity、EXPLAIN PASS。
+- temp write/final move/DB attach/shared reference failure injection 与 oversize/traversal/CRLF cleanup PASS。
+- 真实 etcd/Auth/Gateway/File：valid upload/list/download、missing/revoked token、spoofed User-ID PASS；临时 runtime/data 已清理。
+- 后端全量、Chat/Group focused 3 轮、vet/gofmt/diff/Secret Scan PASS；Web 77 tests/type-check/build PASS；File coverpkg 62.2%。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible CI PENDING。
+
+### Git / Freeze
+
+- implementation commit：`5142da94f5ee9fb5d776c3438e1a2995bc6a50bc feat(file): add secure streaming file service`，已 push `origin/main`。
+- log/status commit：本记录所在提交，随后 push 并复核 equality/clean。
+- `FILE BACKEND V1 = FUNCTIONAL`。
+- Next Authorized Work：NONE。Next Planned：File Frontend Integration + Day 3 Final Acceptance；严格未进入 Chat/Group 文件消息、Admin File、S3/OSS 或 Day 4。
