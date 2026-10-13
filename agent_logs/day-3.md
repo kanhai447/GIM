@@ -2,12 +2,13 @@
 
 ## 授权状态
 
-- Day 3：IN PROGRESS。
+- Day 3：COMPLETED。
 - Day 3 / Checkpoint 1：COMPLETED — Group Domain + Membership + API Foundation。
 - Day 3 / Checkpoint 2：COMPLETED — Group WebSocket Foundation。
 - Day 3 / Checkpoint 3：COMPLETED — Group Message Reliability + Session/Unread/History。
 - Day 3 / Checkpoint 4：COMPLETED — Group Frontend Integration。
 - Day 3 / Checkpoint 5：COMPLETED — File Service Backend Foundation。
+- Day 3 / Checkpoint 6：COMPLETED — File Frontend Integration + Day 3 Final Acceptance。
 
 ## Checkpoint 1 — Group Domain + Membership + API Foundation
 
@@ -30,6 +31,21 @@
 - `agent_logs/operations/day-3/003_checkpoint-3_group-message-session.md`
 - `agent_logs/operations/day-3/004_checkpoint-4_group-frontend.md`
 - `agent_logs/operations/day-3/005_checkpoint-5_file-backend-foundation.md`
+- `agent_logs/operations/day-3/006_checkpoint-6_file-frontend-day3-final.md`
+
+## Checkpoint 6 — File Frontend + Day 3 Final Acceptance
+
+- 时间：2026-10-13 13:52 +08:00。
+- 新增 typed File API/Store/models/formatters/components 与真实 Chrome smoke；上传、独立 progress task、50 MiB 预检、cursor list、refresh、authenticated Blob download/revoke、UserFile delete 与安全 error/auth/ownership UX 完成。
+- File UI 只展示公开 metadata，HTML-like filename 纯文本；无 preview、`v-html`、`innerHTML`、public window.open 或 storage path。
+- 真实 Chrome A/B：small/12 MiB upload-download hash、oversize preflight、refresh、20+ cursor、2503 owner boundary、shared dedup delete safety、malicious filename 和 confirmation全部 PASS。
+- Private Chat A/B 与 Group A/B/C 真实浏览器最终回归 PASS；Group 从 FUNCTIONAL 升级 COMPLETED。
+- etcd 五类 API 注册与 shutdown key cleanup、001–006 migration repeated up、Redis `gim:*` 清零、Gateway 五路、真实 MySQL/Redis/etcd integration全部 PASS。
+- Web 16 files / 90 tests、type-check/build PASS；后端全量、File/Chat/Group 3 轮、WS lifecycle 10 轮、vet/gofmt/diff/Secret Scan/reference audit PASS；lint NOT CONFIGURED。
+- implementation：`a9e1182 feat(web): integrate file management`；final log/status commit 随后推送并复核 equality/clean。
+- Race：NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT；compatible CI PENDING。
+- `PRIVATE CHAT V1 = COMPLETED`；`GROUP CHAT V1 = COMPLETED`；`FILE V1 = COMPLETED`；`DAY 3 = COMPLETED`。
+- `DAY 4 = NOT STARTED`；Next Authorized Work：NONE。
 
 ## Checkpoint 5 — File Service Backend Foundation
 
@@ -104,7 +120,8 @@
 - Log/status commit：本记录所在提交。
 - Push：implementation commit 已成功推送至 `origin/main`；log/status commit 随后推送并执行最终等值/clean 复核。
 
-## 下一入口
+## Day 3 最终冻结
 
-- File Frontend Integration + Day 3 Final Acceptance（需用户另行授权）。
-- 严格不继续 Chat/Group 文件消息、Admin File、S3/OSS 或 Day 4。
+- 六个 Checkpoint 全部完成，Day 3 总验收通过。
+- 下一计划为 Day 4 final engineering / deployment / Admin / logging / performance，但尚未授权。
+- 严格不继续 Chat/Group 文件消息、Admin File/Chat、Kafka、Docker Compose、S3/OSS 或 Day 4。

@@ -746,3 +746,27 @@
 - log/status commit：本记录所在提交，随后 push 并复核 equality/clean。
 - `FILE BACKEND V1 = FUNCTIONAL`。
 - Next Authorized Work：NONE。Next Planned：File Frontend Integration + Day 3 Final Acceptance；严格未进入 Chat/Group 文件消息、Admin File、S3/OSS 或 Day 4。
+
+## 2026-10-13 Day 3 / Checkpoint 6 — File Frontend + Day 3 Final Acceptance
+
+### Implementation
+
+- 自主实现 typed File API/Store/models/formatters、upload task panel、UserFile list 与 `/files` 页面；保持 `View/components -> Store -> API -> Gateway`。
+- 多文件独立 progress state、50 MiB preflight、20 条 `beforeId` cursor、ID reconciliation、refresh reload、authenticated Blob download/revoke、owner UserFile confirm delete完成。
+- 下载使用 `Content-Disposition: attachment` 成功边界，HTTP 200 business envelope 不会误保存；filename/MIME只作文本，无 content preview。
+
+### Integrated Acceptance
+
+- 真实 Chrome File A/B：12 MiB hash、oversize no-upload、ownership 2503、shared object safety、cursor 与 malicious filename PASS。
+- Private Chat A/B、Group A/B/C real browser regression PASS；Chat/Group restart/reconnect、unread/read/history/mute/logout/auth terminal均正常。
+- 真实 etcd 五服务注册/cleanup、001–006 repeated migration up、Redis key cleanup、Gateway five-route 与 MySQL/Redis/etcd integrations PASS。
+- Web 16 files / 90 tests、type-check/build PASS；Go full integration、focused 3-round、WS lifecycle 10-round、vet/gofmt/diff/Secret Scan/reference independence PASS。
+- fixture DB/Redis、浏览器、应用、etcd 与 runtime data全部清理。
+
+### Git / Freeze
+
+- Implementation：`a9e1182 feat(web): integrate file management`。
+- Final log/status：`docs(day3): finalize day3`，随后 push 并复核 `HEAD == origin/main` / clean。
+- Race 保持 NOT AVAILABLE；compatible CI PENDING。
+- `PRIVATE CHAT V1 = COMPLETED`；`GROUP CHAT V1 = COMPLETED`；`FILE V1 = COMPLETED`；`DAY 3 = COMPLETED`。
+- `DAY 4 = NOT STARTED`；Next Authorized Work：NONE。
