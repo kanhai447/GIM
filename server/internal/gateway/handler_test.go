@@ -79,6 +79,23 @@ func TestHandlerOverwritesForgedIdentityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerOverwritesForgedIdentityForFileUpload(t *testing.T) {
+	endpoint, _ := url.Parse("http://127.0.0.1:9007")
+	auth := &fakeAuthenticator{result: authclient.Result{UserID: 77, Role: 2, Authenticated: true}}
+	resolver := &fakeResolver{endpoints: []discovery.Endpoint{{URL: *endpoint}}}
+	forwarder := &fakeForwarder{}
+	handler := NewHandler(auth, resolver, forwarder, time.Second)
+	request := httptest.NewRequest(http.MethodPost, "/api/file/file", strings.NewReader("multipart-placeholder"))
+	request.Header.Set("token", "file-test-credential")
+	request.Header.Set("User-ID", "999")
+	request.Header.Set("Role", "1")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent || resolver.service != "file_api" || forwarder.headers.Get("User-ID") != "77" || forwarder.headers.Get("Role") != "2" {
+		t.Fatalf("status=%d service=%q headers=%#v", recorder.Code, resolver.service, forwarder.headers)
+	}
+}
+
 func TestHandlerPublicRequestRemovesForgedIdentity(t *testing.T) {
 	endpoint, _ := url.Parse("http://127.0.0.1:9002")
 	auth := &fakeAuthenticator{result: authclient.Result{Public: true}}

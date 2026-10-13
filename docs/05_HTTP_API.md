@@ -128,6 +128,21 @@ read cursor 只允许单调推进；目标消息必须属于该群。partial rea
 
 上传使用 multipart。后端必须限制最大大小并验证 MIME/扩展名策略；返回 URL 保持前端可直接用于消息。
 
+Day 3 / Checkpoint 5 的精确用户文件契约：
+
+- `POST /api/file/file`：multipart 字段 `file`，通用流式上传。
+- `POST /api/file/image`：multipart 字段 `image` 的兼容入口；与通用上传共用安全存储，不在本 Checkpoint 实现图片消息或前端。
+- `GET /api/file/user-files?beforeId=&limit=`：当前用户文件列表，默认 20、最大 100，使用 UserFile ID cursor。
+- `GET /api/file/user-files/:id`：当前用户文件安全元数据。
+- `DELETE /api/file/user-files/:id`：仅删除当前用户的 UserFile 引用；V1 保留 FileObject/物理对象供共享引用和后续 GC。
+- `GET /api/file/:id-or-uuid`：当前用户下载。数字为 UserFile ID；UUID 兼容 FileObject UID，但仍必须存在当前用户引用。响应使用 server-detected MIME、`Content-Length`、`Content-Disposition: attachment` 和 `X-Content-Type-Options: nosniff`，正文流式输出。
+
+上传响应只包含 `id/uid/fileName/size/mimeType/sha256/url/createdAt/objectCreated/referenceCreated/src` 等安全元数据；`src` 与 `url` 相同以兼容现有 Web 字段。绝不返回 storage root/path。原 `/api/file/files` 仍保留给 Day 4 Admin，不在本 Checkpoint 改成用户列表。
+
+`User-ID/Role` 只信任 Gateway/Auth 覆盖后的 Header；内部 File API 正式部署不得直连公网。文件名移除路径组件并拒绝控制字符、空名、无效 UTF-8 和超过 255 bytes 的值；MIME 以服务端首 512 bytes 嗅探结果为准，不信任客户端声明。默认最大上传为 50 MiB，同时存在 HTTP request cap 与流式 `max+1` cap。零字节文件允许，按空内容 SHA-256 去重并使用服务端嗅探类型。
+
+File 错误码：`2501` 参数/文件名/multipart 无效、`2502` 超过大小限制、`2503` 文件不存在或当前用户无权访问（不区分以防枚举）、`2504` 服务暂不可用。原始路径、SQL、磁盘或数据库错误不得进入响应。
+
 ## 7. 错误约定
 
 优先复用参考项目现有 code。新增错误至少区分：未认证/无权限、参数错误、好友关系不存在、群成员不存在/禁言、重复 clientMsgId（应返回原消息而非失败）、消息不存在/无权撤回、文件超限/类型不允许、系统错误。

@@ -117,17 +117,22 @@ V1 群规模按参考项目限制；同步 session 扇出成本记录为大群 V
 
 ```text
 select file -> multipart upload
- -> stream to temp + SHA-256
- -> size/MIME validate
+ -> HTTP total request cap
+ -> stream to same-filesystem temp + SHA-256 + first-512-byte MIME sniff
+ -> streaming size cap / filename validate
  -> find file_object
-    exists: remove temp
-    absent: atomic move + create file_object
- -> create user_file
+    exists + physical exists: remove temp
+    exists + physical missing: atomic repair from temp
+    absent: atomic move to content-addressed path
+ -> MySQL transaction resolve/create file_object + resolve/create user_file
+ -> failure compensation: remove partial temp; delete only a newly published unreferenced object
  -> return URL/file metadata
  -> send normal chat/group message referencing file URL
 ```
 
 上传与“发送文件消息”是两个步骤；上传成功不等于消息已发送。
+
+相同用户、相同内容、相同规范化文件名返回原 UserFile；相同内容但不同文件名或不同用户创建各自 UserFile，始终只有一个 FileObject/物理对象。下载/详情/删除均先按可信用户身份检查 UserFile ownership。删除只移除用户引用；共享对象不受影响，物理 GC 不在当前 Checkpoint。
 
 ## 8. 撤回
 

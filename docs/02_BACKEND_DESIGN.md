@@ -127,6 +127,16 @@ HTTP handler 传入的 ctx 应继续传到 RPC/DB；禁止业务路径无理由 
 - 创建群 -> group + creator member + 邀请成员；
 - 文件物理对象与 user_file 关系建立（结合文件落盘补偿）。
 
+### File Service Backend Foundation（Day 3 / Checkpoint 5）
+
+File 使用 `UserFile -> FileObject -> Local Storage Object` 三层模型。Domain 与 Repository 不依赖 multipart；HTTP 只负责读取可信 `User-ID`、建立有界 multipart reader 和输出安全 DTO，Service 负责流式 SHA-256/MIME、同 hash 串行化、物理提交、数据库事务和补偿。
+
+上传从 storage root 内的 `temp/` 写入，因此最终发布与 temp 位于同一文件系统；最终路径固定为 `objects/{sha[0:2]}/{sha[2:4]}/{sha256}`，不使用用户文件名。服务启动创建并验证 `temp/objects` 可写，同时清理上一进程遗留的 `upload-*.part`。当前 V1 部署边界是一个 File API 实例配一个本地 storage root；多实例共享对象存储/分布式 hash lock 属于后续部署演进。
+
+物理文件发布后，Repository 在一个 MySQL 事务内以 `file_objects.sha256 UNIQUE` 解析/创建 FileObject，再以 `(user_id,file_object_id,original_name) UNIQUE` 解析/创建 UserFile。DB 失败时只删除本请求刚发布且数据库中仍不存在对象的文件；已有共享对象永不因第二个用户引用失败而删除。进程崩溃可能留下按 hash 定址但尚无 DB 行的对象，后续相同内容上传会原位采用并补齐数据库关系，不形成随机不可寻址垃圾。
+
+V1 删除只删除当前用户的 UserFile；不立即删除 FileObject/物理文件，避免误删共享内容。孤儿统计与延迟 GC 留到后续管理能力。下载必须先按当前用户所有权解析 UserFile，再由内部 storage path 打开；API 不接受或返回真实路径。
+
 ## 9. 安全和配置
 
 - `CheckOrigin` 不得永久 `return true`；允许 origin 配置化。
