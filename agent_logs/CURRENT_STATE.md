@@ -4,9 +4,11 @@
 - **Current Phase:** Day 4 engineering
 - **Current Checkpoint:** Day 4 / Checkpoint 1 — Kafka Structured Logs + Audit Log Foundation COMPLETED
 - **Last Completed Checkpoint:** Kafka Audit Foundation + Structured Log Events + Log Consumer/Persistence/API
-- **Working Tree:** implementation commit complete；等待 log/status commit/push 后最终 clean 复核
+- **Working Tree:** CLEAN（implementation、operation log 与最终状态提交均 push 后复核）
 - **Starting Baseline:** `386856e554dc6194f7fddc1f013049e5cfd06c05`
 - **Implementation Commit:** `2ac7199ad6ee600460342c1c3cb801b893a2360e feat(logs): add kafka audit pipeline`
+- **Log/Status Commit:** `88afb79d27a3a1e20962c90f3ed1b41acc2db15b docs(day4): record kafka audit checkpoint`
+- **Last Push:** Day 4 / Checkpoint 1 commits 已推送 `origin/main`；最终提交后执行 `HEAD == origin/main` 与 clean 复核
 - **Next Authorized Work:** NONE（Checkpoint 1 完成后严格停止）
 - **Next Planned Work:** Admin Integration（需用户明确授权）
 - **Database Migration:** PASS — 001–007 EMPTY → UP → DOWN → RE-UP on isolated local MySQL

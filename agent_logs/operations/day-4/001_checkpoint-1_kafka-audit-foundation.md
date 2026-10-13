@@ -127,6 +127,7 @@ committed business operation
 ## Git / Freeze
 
 - Implementation commit：`2ac7199ad6ee600460342c1c3cb801b893a2360e feat(logs): add kafka audit pipeline`。
-- Log/status commit：`docs(day4): record kafka audit checkpoint`（本 operation/state 所在提交）。
-- Push 与最终 `HEAD == origin/main` / clean 在两个提交后复核。
+- Log/status commit：`88afb79d27a3a1e20962c90f3ed1b41acc2db15b docs(day4): record kafka audit checkpoint`。
+- 最终状态措辞校正随其后的 state-only commit 推送；该提交不修改实现或验收结论。
+- Push 后执行最终 `HEAD == origin/main` / clean 复核。
 - Next 条件：具备进入 **Admin Integration** 的后端 API/数据基础，但必须等待新授权；本轮严格停止于 Checkpoint 1。
