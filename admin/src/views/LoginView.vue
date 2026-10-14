@@ -3,8 +3,8 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 
-import { PublicApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { submitAdminLogin } from '@/views/loginFlow'
 
 const form = reactive({ account: '', password: '' })
 const submitting = ref(false)
@@ -13,26 +13,12 @@ const route = useRoute()
 const router = useRouter()
 
 async function submit(): Promise<void> {
-  if (form.account.trim().length < 3 || form.password.length < 8) {
-    Message.warning('请输入有效的账号和密码')
-    return
-  }
-  submitting.value = true
-  try {
-    await auth.login({ account: form.account.trim(), password: form.password })
-    if (!auth.isAdmin) {
-      Message.error('当前账号没有管理权限')
-      await router.replace({ name: 'forbidden' })
-      return
-    }
-    Message.success('登录成功')
-    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/admin') ? route.query.redirect : '/admin'
-    await router.replace(redirect)
-  } catch (error) {
-    Message.error(error instanceof PublicApiError ? error.message : '登录失败，请稍后重试')
-  } finally {
-    submitting.value = false
-  }
+  await submitAdminLogin(form, route.query.redirect, submitting, {
+    login: auth.login,
+    isAdmin: () => auth.isAdmin,
+    replace: (target) => router.replace(target),
+    notify: Message,
+  })
 }
 </script>
 

@@ -45,7 +45,7 @@ async function logout(): Promise<void> {
     </a-layout-sider>
     <a-layout>
       <a-layout-header class="admin-header">
-        <div><strong>{{ route.meta.title }}</strong><span>Day 1 · Foundation</span></div>
+        <div><strong>{{ route.meta.title }}</strong><span>Day 4 · Admin Integration</span></div>
         <div class="admin-user">
           <a-avatar :size="34" :image-url="auth.user?.avatar || undefined">{{ auth.user?.nickname.slice(0, 1) }}</a-avatar>
           <span>{{ auth.user?.nickname }}</span>
@@ -66,11 +66,11 @@ async function logout(): Promise<void> {
 .admin-menu { background: transparent; color: #d9e5f9; }
 .menu-mark { display: inline-grid; width: 28px; height: 22px; margin-right: 10px; place-items: center; border: 1px solid rgba(255,255,255,.18); border-radius: 6px; font-size: 9px; }
 .security-note { position: absolute; right: 24px; bottom: 24px; left: 24px; color: #7890b5; font-size: 11px; line-height: 1.7; }
-.admin-shell > .arco-layout { margin-left: 238px; }
+.admin-shell > .arco-layout { min-width: 0; margin-left: 238px; }
 .admin-header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid #e8ebef; background: white; }
 .admin-header > div:first-child { display: flex; flex-direction: column; gap: 4px; }
 .admin-header > div:first-child span { color: #86909c; font-size: 11px; }
 .admin-user { display: flex; align-items: center; gap: 10px; }
-.admin-content { min-height: calc(100vh - 72px); padding: 28px; background: #f3f5f8; }
+.admin-content { min-width: 0; min-height: calc(100vh - 72px); padding: 28px; background: #f3f5f8; }
 @media (max-width: 780px) { .admin-sider { width: 176px !important; } .admin-shell > .arco-layout { margin-left: 176px; } .admin-user > span { display: none; } }
 </style>
