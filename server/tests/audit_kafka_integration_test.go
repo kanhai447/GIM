@@ -213,7 +213,17 @@ func integrationBusinessEvents(t *testing.T, requestPrefix string) []audit.Event
 	}
 	file := audit.NewEvent(audit.EventFileUploaded, "file", "upload", audit.StatusSuccess)
 	file.UserID, file.ResourceType, file.ResourceID, file.RequestID, file.Metadata = audit.Uint64(7), "user_file", "91", requestPrefix+"-file", fileMetadata
-	return []audit.Event{login, group, file}
+	settings := audit.NewEvent(audit.EventAdminSettingsUpdated, "settings", "update", audit.StatusSuccess)
+	settings.UserID, settings.Role, settings.ResourceType, settings.ResourceID, settings.RequestID = audit.Uint64(1), audit.Int32(1), "settings", "public", requestPrefix+"-settings"
+	userMetadata, err := audit.Metadata(map[string]any{"target_user_id": uint64(7)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := audit.NewEvent(audit.EventAdminUserDisabled, "user", "disable", audit.StatusSuccess)
+	disabled.UserID, disabled.Role, disabled.ResourceType, disabled.ResourceID, disabled.RequestID, disabled.Metadata = audit.Uint64(1), audit.Int32(1), "user", "7", requestPrefix+"-user-disabled", userMetadata
+	enabled := audit.NewEvent(audit.EventAdminUserEnabled, "user", "enable", audit.StatusSuccess)
+	enabled.UserID, enabled.Role, enabled.ResourceType, enabled.ResourceID, enabled.RequestID, enabled.Metadata = audit.Uint64(1), audit.Int32(1), "user", "7", requestPrefix+"-user-enabled", userMetadata
+	return []audit.Event{login, group, file, settings, disabled, enabled}
 }
 
 func waitForAuditRows(t *testing.T, repository *logsmysql.Repository, requestID string, count int) domain.Page {

@@ -9,6 +9,9 @@ import (
 	"syscall"
 
 	files "github.com/kanhai447/GIM/server/internal/file"
+	fileadmin "github.com/kanhai447/GIM/server/internal/file/admin"
+	fileadminmysql "github.com/kanhai447/GIM/server/internal/file/admin/mysql"
+	fileadminhttp "github.com/kanhai447/GIM/server/internal/file/admin/transport/http"
 	fileconfig "github.com/kanhai447/GIM/server/internal/file/config"
 	filehttp "github.com/kanhai447/GIM/server/internal/file/transport/http"
 	platformmysql "github.com/kanhai447/GIM/server/internal/platform/database/mysql"
@@ -87,6 +90,7 @@ func run(args []string) error {
 		return err
 	}
 	filehttp.RegisterRoutes(server, module.Service, fileConfig.MaxUploadBytes, auditProducer)
+	fileadminhttp.RegisterRoutes(server, fileadmin.New(fileadminmysql.New(mysqlClient.DB())), module.Service, auditProducer)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
 	if err != nil {
 		return err

@@ -24,7 +24,7 @@ import (
 	"github.com/kanhai447/GIM/server/migrations"
 )
 
-const migrationCount = 7
+const migrationCount = 8
 
 var migrationDatabasePattern = regexp.MustCompile(`^gim_migration_test_[0-9]+_[0-9]+$`)
 
@@ -186,12 +186,14 @@ func assertSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	assertColumn(t, ctx, db, "users", "status", columnExpectation{dataType: "tinyint", columnType: "tinyint unsigned", nullable: false, defaultValue: "1"})
 	assertColumn(t, ctx, db, "chat_messages", "client_msg_id", columnExpectation{dataType: "varchar", columnType: "varchar(64)", nullable: false, length: 64})
 	assertColumn(t, ctx, db, "chat_messages", "msg", columnExpectation{dataType: "json", columnType: "json", nullable: false})
+	assertColumn(t, ctx, db, "chat_messages", "admin_deleted_at", columnExpectation{dataType: "datetime", columnType: "datetime(3)", nullable: true})
 	assertColumn(t, ctx, db, "chat_messages", "conversation_low_id", columnExpectation{dataType: "bigint", columnType: "bigint unsigned", nullable: true, extra: "STORED GENERATED"})
 	assertColumn(t, ctx, db, "chat_sessions", "unread_count", columnExpectation{dataType: "int", columnType: "int unsigned", nullable: false, defaultValue: "0"})
 	assertColumn(t, ctx, db, "chat_sessions", "is_top", columnExpectation{dataType: "tinyint", columnType: "tinyint(1)", nullable: false, defaultValue: "0"})
 	assertColumn(t, ctx, db, "chat_sessions", "hidden_at", columnExpectation{dataType: "datetime", columnType: "datetime(3)", nullable: true})
 	assertColumn(t, ctx, db, "group_messages", "client_msg_id", columnExpectation{dataType: "varchar", columnType: "varchar(64)", nullable: false, length: 64})
 	assertColumn(t, ctx, db, "group_messages", "msg", columnExpectation{dataType: "json", columnType: "json", nullable: false})
+	assertColumn(t, ctx, db, "group_messages", "admin_deleted_at", columnExpectation{dataType: "datetime", columnType: "datetime(3)", nullable: true})
 	assertColumn(t, ctx, db, "group_sessions", "unread_count", columnExpectation{dataType: "int", columnType: "int unsigned", nullable: false, defaultValue: "0"})
 	assertColumn(t, ctx, db, "file_objects", "sha256", columnExpectation{dataType: "char", columnType: "char(64)", nullable: false, length: 64})
 	assertColumn(t, ctx, db, "settings", "setting_value", columnExpectation{dataType: "json", columnType: "json", nullable: false})

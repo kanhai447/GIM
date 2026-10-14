@@ -18,6 +18,7 @@ func (repository *Repository) ListHistory(
 	}
 	query := repository.db.WithContext(ctx).Model(&record{}).
 		Where("conversation_low_id = ? AND conversation_high_id = ?", lowID, highID).
+		Where("admin_deleted_at IS NULL").
 		Where("NOT EXISTS (SELECT 1 FROM chat_message_deletions AS deletions WHERE deletions.user_id = ? AND deletions.message_id = chat_messages.id)", userID)
 	if beforeMessageID != 0 {
 		query = query.Where("id < ?", beforeMessageID)

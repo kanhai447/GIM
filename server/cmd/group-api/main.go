@@ -10,7 +10,11 @@ import (
 	"syscall"
 
 	userv1 "github.com/kanhai447/GIM/server/api/user/v1"
+	"github.com/kanhai447/GIM/server/internal/chat/presence"
 	"github.com/kanhai447/GIM/server/internal/group"
+	groupadmin "github.com/kanhai447/GIM/server/internal/group/admin"
+	groupadminmysql "github.com/kanhai447/GIM/server/internal/group/admin/mysql"
+	groupadminhttp "github.com/kanhai447/GIM/server/internal/group/admin/transport/http"
 	groupconfig "github.com/kanhai447/GIM/server/internal/group/config"
 	"github.com/kanhai447/GIM/server/internal/group/delivery"
 	groupmessage "github.com/kanhai447/GIM/server/internal/group/message"
@@ -143,6 +147,7 @@ func run(args []string) error {
 		return err
 	}
 	grouphttp.RegisterRoutes(server, groupModule.Service, auditProducer)
+	groupadminhttp.RegisterRoutes(server, groupadmin.New(groupadminmysql.New(mysqlClient.DB()), presence.NewRedisStore(redisClient.Raw())), auditProducer)
 	groupmessagehttp.RegisterRoutes(server, messageService)
 	groupws.RegisterRoute(server, groupWebSocketConfig.Path, webSocketModule.Handler)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)

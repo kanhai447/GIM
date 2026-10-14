@@ -12,7 +12,7 @@ func TestEmbeddedMigrationsAreOrderedAndPaired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load() error = %v", err)
 	}
-	wantNames := []string{"identity", "friend", "chat", "group", "file", "settings", "audit_logs"}
+	wantNames := []string{"identity", "friend", "chat", "group", "file", "settings", "audit_logs", "admin_management"}
 	if len(migrations) != len(wantNames) {
 		t.Fatalf("migration count = %d", len(migrations))
 	}

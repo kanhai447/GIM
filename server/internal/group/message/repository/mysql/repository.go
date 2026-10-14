@@ -128,7 +128,7 @@ func (repository *Repository) GetBySenderAndClientMsgID(ctx context.Context, sen
 }
 func (repository *Repository) GetByID(ctx context.Context, id uint64) (message.Message, error) {
 	var row record
-	err := repository.db.WithContext(ctx).Where("id = ?", id).Take(&row).Error
+	err := repository.db.WithContext(ctx).Where("id = ? AND admin_deleted_at IS NULL", id).Take(&row).Error
 	return result(row, err)
 }
 func result(row record, err error) (message.Message, error) {

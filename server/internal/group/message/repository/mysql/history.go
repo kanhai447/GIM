@@ -7,7 +7,7 @@ import (
 )
 
 func (repository *Repository) ListHistory(ctx context.Context, userID, groupID, before uint64, limit int) ([]message.Message, error) {
-	query := repository.db.WithContext(ctx).Model(&record{}).Where("group_id = ?", groupID).Where("NOT EXISTS (SELECT 1 FROM group_message_deletions AS deletions WHERE deletions.user_id = ? AND deletions.message_id = group_messages.id)", userID)
+	query := repository.db.WithContext(ctx).Model(&record{}).Where("group_id = ? AND admin_deleted_at IS NULL", groupID).Where("NOT EXISTS (SELECT 1 FROM group_message_deletions AS deletions WHERE deletions.user_id = ? AND deletions.message_id = group_messages.id)", userID)
 	if before != 0 {
 		query = query.Where("id < ?", before)
 	}

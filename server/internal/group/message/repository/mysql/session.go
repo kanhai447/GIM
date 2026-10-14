@@ -47,7 +47,7 @@ func (repository *Repository) ListSessions(ctx context.Context, userID uint64, l
 		return nil, 0, fmt.Errorf("count group sessions: %w", err)
 	}
 	var rows []sessionListRecord
-	err := db.Table("group_sessions AS sessions").Select(`sessions.id,sessions.user_id,sessions.group_id,sessions.last_message_id,sessions.last_message_at,sessions.last_read_message_id,sessions.unread_count,sessions.is_top,sessions.hidden_at,groups.name AS group_name,groups.avatar AS group_avatar,messages.send_user_id AS message_sender_id,messages.group_member_id AS message_member_id,messages.client_msg_id AS message_client_id,messages.msg_type AS message_type,messages.msg_preview AS message_preview,messages.msg AS message_payload,messages.created_at AS message_created_at,messages.updated_at AS message_updated_at`).Joins("JOIN group_members AS membership ON membership.group_id = sessions.group_id AND membership.user_id = sessions.user_id").Joins("JOIN `groups` ON groups.id = sessions.group_id AND groups.status = 1").Joins("JOIN group_messages AS messages ON messages.id = sessions.last_message_id").Where("sessions.user_id = ? AND sessions.hidden_at IS NULL", userID).Order("sessions.is_top DESC,sessions.last_message_at DESC,sessions.id DESC").Limit(limit).Scan(&rows).Error
+	err := db.Table("group_sessions AS sessions").Select(`sessions.id,sessions.user_id,sessions.group_id,sessions.last_message_id,sessions.last_message_at,sessions.last_read_message_id,sessions.unread_count,sessions.is_top,sessions.hidden_at,groups.name AS group_name,groups.avatar AS group_avatar,messages.send_user_id AS message_sender_id,messages.group_member_id AS message_member_id,messages.client_msg_id AS message_client_id,messages.msg_type AS message_type,messages.msg_preview AS message_preview,messages.msg AS message_payload,messages.created_at AS message_created_at,messages.updated_at AS message_updated_at`).Joins("JOIN group_members AS membership ON membership.group_id = sessions.group_id AND membership.user_id = sessions.user_id").Joins("JOIN `groups` ON groups.id = sessions.group_id AND groups.status = 1").Joins("JOIN group_messages AS messages ON messages.id = sessions.last_message_id AND messages.admin_deleted_at IS NULL").Where("sessions.user_id = ? AND sessions.hidden_at IS NULL", userID).Order("sessions.is_top DESC,sessions.last_message_at DESC,sessions.id DESC").Limit(limit).Scan(&rows).Error
 	if err != nil {
 		return nil, 0, fmt.Errorf("list group sessions: %w", err)
 	}
@@ -87,7 +87,7 @@ func (repository *Repository) MarkRead(ctx context.Context, userID, groupID, rea
 			effective = *session.LastReadMessageID
 		}
 		var unread int64
-		if err := tx.Table("group_messages AS messages").Where("messages.group_id = ? AND messages.send_user_id <> ? AND messages.id > ?", groupID, userID, effective).Where("NOT EXISTS (SELECT 1 FROM group_message_deletions AS deletions WHERE deletions.user_id = ? AND deletions.message_id = messages.id)", userID).Count(&unread).Error; err != nil {
+		if err := tx.Table("group_messages AS messages").Where("messages.group_id = ? AND messages.send_user_id <> ? AND messages.id > ? AND messages.admin_deleted_at IS NULL", groupID, userID, effective).Where("NOT EXISTS (SELECT 1 FROM group_message_deletions AS deletions WHERE deletions.user_id = ? AND deletions.message_id = messages.id)", userID).Count(&unread).Error; err != nil {
 			return fmt.Errorf("count unread group messages: %w", err)
 		}
 		if err := tx.Model(&session).Updates(map[string]any{"last_read_message_id": effective, "unread_count": unread}).Error; err != nil {

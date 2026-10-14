@@ -16,18 +16,26 @@ import (
 const SchemaVersion = 1
 
 const (
-	EventUserRegistered       = "user.registered"
-	EventAuthLoginSuccess     = "auth.login.success"
-	EventAuthLoginFailed      = "auth.login.failed"
-	EventAuthLogout           = "auth.logout"
-	EventChatMessageAccepted  = "chat.message.accepted"
-	EventGroupCreated         = "group.created"
-	EventGroupMemberJoined    = "group.member.joined"
-	EventGroupMemberKicked    = "group.member.kicked"
-	EventGroupDissolved       = "group.dissolved"
-	EventGroupMessageAccepted = "group.message.accepted"
-	EventFileUploaded         = "file.uploaded"
-	EventFileDeleted          = "user_file.deleted"
+	EventUserRegistered               = "user.registered"
+	EventAuthLoginSuccess             = "auth.login.success"
+	EventAuthLoginFailed              = "auth.login.failed"
+	EventAuthLogout                   = "auth.logout"
+	EventChatMessageAccepted          = "chat.message.accepted"
+	EventGroupCreated                 = "group.created"
+	EventGroupMemberJoined            = "group.member.joined"
+	EventGroupMemberKicked            = "group.member.kicked"
+	EventGroupDissolved               = "group.dissolved"
+	EventGroupMessageAccepted         = "group.message.accepted"
+	EventFileUploaded                 = "file.uploaded"
+	EventFileDeleted                  = "user_file.deleted"
+	EventAdminUserRestrictionsUpdated = "admin.user.restrictions.updated"
+	EventAdminUserDisabled            = "admin.user.disabled"
+	EventAdminUserEnabled             = "admin.user.enabled"
+	EventAdminChatMessageDeleted      = "admin.chat.message.deleted"
+	EventAdminGroupDissolved          = "admin.group.dissolved"
+	EventAdminGroupMessageDeleted     = "admin.group.message.deleted"
+	EventAdminFileDeleted             = "admin.file.deleted"
+	EventAdminSettingsUpdated         = "admin.settings.updated"
 )
 
 const (
@@ -42,6 +50,8 @@ var knownEventTypes = map[string]struct{}{
 	EventUserRegistered: {}, EventAuthLoginSuccess: {}, EventAuthLoginFailed: {}, EventAuthLogout: {},
 	EventChatMessageAccepted: {}, EventGroupCreated: {}, EventGroupMemberJoined: {}, EventGroupMemberKicked: {},
 	EventGroupDissolved: {}, EventGroupMessageAccepted: {}, EventFileUploaded: {}, EventFileDeleted: {},
+	EventAdminUserRestrictionsUpdated: {}, EventAdminUserDisabled: {}, EventAdminUserEnabled: {}, EventAdminChatMessageDeleted: {},
+	EventAdminGroupDissolved: {}, EventAdminGroupMessageDeleted: {}, EventAdminFileDeleted: {}, EventAdminSettingsUpdated: {},
 }
 
 // Event is the only payload written to the GIM audit topic.

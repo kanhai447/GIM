@@ -14,6 +14,9 @@ import (
 	chatconfig "github.com/kanhai447/GIM/server/internal/chat/config"
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
 	"github.com/kanhai447/GIM/server/internal/chat/message"
+	chatadmin "github.com/kanhai447/GIM/server/internal/chat/message/admin"
+	chatadminmysql "github.com/kanhai447/GIM/server/internal/chat/message/admin/mysql"
+	chatadminhttp "github.com/kanhai447/GIM/server/internal/chat/message/admin/transport/http"
 	chatmysql "github.com/kanhai447/GIM/server/internal/chat/message/repository/mysql"
 	chathttp "github.com/kanhai447/GIM/server/internal/chat/message/transport/http"
 	"github.com/kanhai447/GIM/server/internal/chat/presence"
@@ -150,6 +153,7 @@ func run(args []string) error {
 	}
 	chat.RegisterRoute(server, chatModule.Config.Path, chatModule.Handler)
 	chathttp.RegisterRoutes(server, messageService)
+	chatadminhttp.RegisterRoutes(server, chatadmin.New(chatadminmysql.New(mysqlClient.DB())), auditProducer)
 
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)
 	if err != nil {

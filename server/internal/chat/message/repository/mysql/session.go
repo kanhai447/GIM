@@ -96,7 +96,7 @@ func (repository *Repository) ListSessions(ctx context.Context, userID uint64, l
 			messages.msg_preview AS message_preview, messages.msg AS message_payload,
 			messages.created_at AS message_created_at, messages.updated_at AS message_updated_at`).
 		Joins("JOIN users ON users.id = sessions.peer_user_id").
-		Joins("JOIN chat_messages AS messages ON messages.id = sessions.last_message_id").
+		Joins("JOIN chat_messages AS messages ON messages.id = sessions.last_message_id AND messages.admin_deleted_at IS NULL").
 		Where("sessions.user_id = ? AND sessions.hidden_at IS NULL", userID).
 		Order("sessions.is_top DESC, sessions.last_message_at DESC, sessions.id DESC").
 		Limit(limit).Scan(&rows).Error
@@ -143,6 +143,7 @@ func (repository *Repository) MarkRead(ctx context.Context, userID, peerID, read
 		var unread int64
 		if err := transaction.Table("chat_messages AS messages").
 			Where("messages.send_user_id = ? AND messages.rev_user_id = ? AND messages.id > ?", peerID, userID, effectiveReadID).
+			Where("messages.admin_deleted_at IS NULL").
 			Where("NOT EXISTS (SELECT 1 FROM chat_message_deletions AS deletions WHERE deletions.user_id = ? AND deletions.message_id = messages.id)", userID).
 			Count(&unread).Error; err != nil {
 			return fmt.Errorf("count unread chat messages: %w", err)
