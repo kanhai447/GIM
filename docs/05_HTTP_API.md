@@ -162,27 +162,34 @@ Agent 不得为了“更 RESTful”随意改已有路径和字段。需要改时
 所有以下接口都必须经过 Gateway/Auth，并由目标服务 AdminMiddleware 校验角色 1。
 
 ### User Admin
-- `GET /api/user/users`
-- `POST /api/user/curtail`
-- `DELETE /api/user/users`
+- `GET /api/user/users?beforeId=&limit=&search=&status=`：默认 50、最大 100；返回安全用户资料、在线状态、消息/群统计和限制策略，不返回 `pwd_hash/open_id`。
+- `POST /api/user/curtail`：更新显式 allowlist 的四项用户限制。
+- `DELETE /api/user/users?userId=`：V1 为保留历史关系和审计，将目标账号状态改为禁用；当前管理员不能禁用自己。
+- `PUT /api/user/users?userId=`：将目标账号恢复为启用。禁用/启用响应都返回 User Domain 的正式 `status`（`1=启用、2=禁用`），供 Admin UI 同步当前行。
+
+### Admin Overview
+- `GET /api/settings/admin/overview`：由现有 Settings/Admin aggregation runtime 返回只读真实聚合计数；仅管理员可访问，不提供部署 Secret，不调用 `/api/data/*` Mock。
 
 ### Chat Admin
-- `GET /api/chat/admin/history`
+- `GET /api/chat/admin/history?beforeId=&limit=&userId=&sendUserId=&revUserId=`
 - `GET /api/chat/admin/session`（参考后端存在，Admin 当前页面主要使用 history）
-- `DELETE /api/chat/admin/history`
+- `DELETE /api/chat/admin/history?messageId=`：写 `admin_deleted_at` tombstone，并事务修复相关 session；不释放 clientMsgId 幂等键。
 
 ### Group Admin
-- `GET /api/group/groups`
-- `DELETE /api/group/groups`
-- `GET /api/group/messages/:id`
-- `DELETE /api/group/messages`
+- `GET /api/group/groups?beforeId=&limit=&search=&status=`：返回群主、成员/在线成员/消息统计。
+- `DELETE /api/group/groups?groupId=`：管理员解散群，保留历史消息并隐藏 session。
+- `GET /api/group/messages/:id?beforeId=&limit=`
+- `DELETE /api/group/messages?messageId=`：写 tombstone，并事务修复相关 group session。
 
 ### File Admin
-- `GET /api/file/files`
-- `DELETE /api/file/files`
+- `GET /api/file/files?beforeId=&limit=&userId=&search=`：返回 UserFile/FileObject 安全元数据，不返回 storage path。
+- `GET /api/file/files/:id`：管理员鉴权下载；使用服务端 MIME、attachment、nosniff 与 sandbox CSP。
+- `DELETE /api/file/files?id=`：只删除 UserFile 引用；共享 FileObject/物理对象保留给后续 GC。
 
 ### Settings Admin
-- `PUT /api/settings/admin/info`
+- `GET /api/settings/info`：公开读取 `site.name/version/notice/registrationEnabled` 与 `openLogin.enabled`。
+- `GET /api/settings/open_login`：公开读取开放登录入口开关。
+- `PUT /api/settings/admin/info`：只更新上述 allowlist 业务设置。Kafka/MySQL/Redis/JWT/OAuth Secret 等部署配置永不进入 Settings DB/API。
 
 ### Logs Admin
 - `GET /api/logs/logs?beforeId=&limit=&from=&to=&service=&eventType=&userId=&status=&requestId=`：默认 50、最大 100，按 `occurredAt DESC,id DESC` 返回 `{list,nextBeforeId,hasMore}`。时间使用 RFC3339；`beforeId` 指向上一页最后一条持久化记录。

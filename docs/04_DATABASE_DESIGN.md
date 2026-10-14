@@ -121,7 +121,7 @@
 
 ### 7.1 迁移版本与运行策略
 
-迁移版本严格连续：`001_identity`、`002_friend`、`003_chat`、`004_group`、`005_file`、`006_settings`、`007_audit_logs`。`schema_migrations` 记录版本、名称、应用时间和 `dirty` 状态。
+迁移版本严格连续：`001_identity`、`002_friend`、`003_chat`、`004_group`、`005_file`、`006_settings`、`007_audit_logs`、`008_admin_management`。`schema_migrations` 记录版本、名称、应用时间和 `dirty` 状态。
 
 MySQL DDL 会隐式提交，无法承诺跨多个 DDL 的事务原子性。Runner 在执行前先写 dirty 状态，成功后清除；失败时后续 UP 会 fail-fast。操作员应检查失败点和备份，再运行已审阅的对应 DOWN，修复原因后重试，禁止直接删除版本记录。部署顺序为备份与兼容性确认、UP、status/健康检查；生产回滚必须先恢复兼容应用并确认可验证备份。
 
@@ -182,3 +182,9 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 `audit_logs` 保存 Log Service 已验证的结构化安全事件：`event_id/schema_version/event_type/service/action/user_id/role/resource_type/resource_id/request_id/trace_id/status/error_code/ip/method/path/occurred_at/metadata/created_at`。`event_id CHAR(36) UNIQUE` 是 Kafka 重投和 consumer restart 的幂等保障；metadata 为 MySQL JSON，写入前仍须通过应用 allowlist，数据库 JSON 类型本身不是脱敏边界。
 
 列表按 `(occurred_at DESC, id DESC)` 做稳定 cursor 分页。实际过滤对应的必要索引是 time、`user_id + time`、`event_type + time`、`service + time` 和 `request_id + time`；不为任意 metadata 字段建索引。007 迁移的 UP/DOWN/RE-UP 与这些查询的 EXPLAIN 都属于验收项。
+
+### 7.10 Admin Message Removal
+
+008 为 `chat_messages` 和 `group_messages` 增加可空 `admin_deleted_at DATETIME(3)`。管理员删除消息使用 tombstone，不物理删除消息行，因此 `(sender, client_msg_id)` 幂等事实和审计可追溯性不会被破坏。用户 history/session/read 查询过滤 tombstone；若删除的是 session 最后一条消息，目标服务在同一事务将 session 指针回退到该用户仍可见的上一条消息，并重算 unread；没有可见消息时隐藏该 session。
+
+008 不为 tombstone 单独增加索引：Admin/用户消息查询仍由既有 conversation/group cursor 主索引先缩小范围，布尔空值过滤不是独立入口。该取舍须通过真实 MySQL 回归验证。

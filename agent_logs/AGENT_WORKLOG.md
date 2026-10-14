@@ -802,3 +802,30 @@
 - Implementation commit：`2ac7199ad6ee600460342c1c3cb801b893a2360e feat(logs): add kafka audit pipeline`。
 - Log/status commit：本记录所在提交，随后 push 并最终复核 equality/clean。
 - Next Planned：Admin Integration，需新授权；本轮严格未开始 Admin frontend、Compose、performance、CI 或后续 Checkpoint。
+
+## 2026-10-14 Day 4 / Checkpoint 2 — Admin Final Integration
+
+### Implementation
+
+- 完成 User / Chat / Group / File / Settings / Logs 的 admin-only API、真实 Dashboard overview、Admin Vue 页面、typed API、路由与安全文本渲染。
+- Gateway 覆盖客户端 identity headers，目标服务使用可信 `User-ID` 与正式 `Role == 1`；forged numeric/string role、normal user、expired/revoked token 均拒绝。
+- Users 使用正式 `1=Active`、`2=Disabled`，Disable/Enable 由后端响应/重载真实状态驱动；补对称 audit events。
+- 修复 Arco Login controls 注册与 Edge 100% zoom Users 主 flex/table containment，不重写现有视觉架构。
+
+### Acceptance
+
+- `Real Browser E2E: MANUAL USER-EXECUTED — PASS`；Computer Use blocked by browser URL verification safety layer, not bypassed。
+- Admin 11 files / 25 tests、type-check、build PASS；Web 16 files / 90 tests、type-check、build PASS。
+- clean environment Go full suite、vet、gofmt、diff、Chat/Group/File focused regressions PASS。
+- Migration 008 EMPTY/UP/DOWN/RE-UP、Admin EXPLAIN 与 repository/API privacy PASS。
+- fresh Kafka `business event -> consumer -> MySQL -> Logs query` 连续 3 轮 PASS；幂等、restart、unavailable bounded behavior PASS。
+- repository safety、Secret Scan、XSS/privacy 与 reference independence PASS。
+- `Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT`；`Race Verification Pending`。
+
+### Git / Freeze
+
+- `e18e562 feat(admin): add management services and audit integration`。
+- `08a4f2e feat(admin): integrate management console and fixes`。
+- docs/status：本记录所在提交，随后 push 并复核 equality/clean。
+- `ADMIN V1 = FUNCTIONAL`；`Day 4 / Checkpoint 2 = COMPLETED`；Next Authorized Work：NONE。
+- Next Planned：Docker Compose Full Stack Deployment；严格未进入下一 Checkpoint。

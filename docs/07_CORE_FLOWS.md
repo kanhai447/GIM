@@ -154,3 +154,18 @@ business transaction commit
 登录失败属于少量高价值失败事件，只保存 `failure_category`，不会保存账号是否存在的可枚举差异、输入账号或密码。注册事件由 Auth/User 注册边界唯一拥有，User 服务不重复发送同义事件。Chat/Group message event 只在消息事务成功且 `createdNew=true` 后发送，metadata 只有消息/发送方/接收方或群/类型/大小等标识，不含 content；重复 clientMsgId 不产生第二条审计事件。File 上传/删除只在 DB/物理流程成功后发送，不含文件正文、原始磁盘路径。
 
 Kafka 故障是 observability degradation，不改变 HTTP 成功、消息 ACK、realtime delivery 或文件事务。消费者停机期间事件由 Kafka 保留；使用同 consumer group 恢复后继续持久化。Business DB 与 audit Kafka 不原子，V1 没有 outbox，长时间 broker 故障或有界队列溢出可能造成 audit loss，这是已知限制。
+
+## 10. Admin 管理流程
+
+```text
+Admin Browser -> Gateway -> Auth authentication
+ -> Gateway 覆盖 User-ID/Role
+ -> target service 再验证 role=1 + valid user ID
+ -> bounded cursor/filter query or transactional management action
+ -> success response
+ -> best-effort structured admin audit event
+```
+
+普通用户 token 和缺失可信身份的 `Role: 1` 均由目标服务拒绝。用户禁用保留历史关系，启用/禁用均使用 User Domain 的正式状态值并返回实际更新状态；Chat/Group 消息删除写 tombstone，并在同一事务修复 session last-message/unread；文件删除只移除 UserFile 引用；群解散保留历史消息。Admin Logs 详情只把已持久化 schema/allowlist metadata 渲染为普通文本 JSON，不使用 HTML 注入。
+
+Admin Dashboard 只读聚合复用 Settings/Admin runtime，通过标量计数查询返回用户、消息、群、文件与审计事件数量；该接口同样经过 Gateway/Auth 和目标服务 Admin 身份校验，不引入 Mock `/api/data/*` 或新的微服务。
