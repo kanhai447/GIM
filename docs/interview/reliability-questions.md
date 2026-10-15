@@ -12,6 +12,14 @@ ACK 表示服务端已经成功接受并持久化消息。它不表示接收端�
 
 可以。进程可能在 commit 后、ACK/广播前终止，或者接收方不在线。数据库 history、session 和 unread 仍是事实来源；重试不会重复写入。要缩小跨系统窗口，可引入 transactional outbox，但 V1 没有宣称 realtime exactly-once。
 
+## What if Redis Pub/Sub loses a delivery?
+
+Pub/Sub 只承担实时通知。消息在发布前已经写入 MySQL，并且 session/unread 已提交；接收方重连后通过 session 和 cursor history 恢复。V1 接受实时通知可丢，不把 Redis 包装成可靠队列。
+
+## Why not claim exactly-once?
+
+网络会让“对方是否收到响应”不可判定，commit 与实时推送也跨系统。项目提供的是 at-least-once retry + server-side idempotency，得到“数据库只保留一个逻辑消息”；receiver receipt 和跨系统 exactly-once 需要额外协议与成本。
+
 ## Why one writePump per WebSocket?
 
 Gorilla WebSocket 不允许多个并发 writer 安全写同一连接。让所有业务把 frame 送入有界 queue，由 `writePump` 串行写，可以避免竞态、交错 frame 和 goroutine 阻塞扩散。Hub 也不直接写 socket。
@@ -36,6 +44,18 @@ send queue 有固定容量。消费者持续跟不上时，系统选择关闭并
 - 100 connections / 50 msg/s：1000/1000 ACK，ACK p95 13.47 ms。
 - 5 分钟 Private 1500/1500、Group 600/600 ACK/rows，交付计数全部匹配。
 - File 1 MiB c10 为 60.75 MiB/s，10 MiB c5 为 211.75 MiB/s。
+
+## Where was the load test run, and why not in the cloud?
+
+基线运行在 Windows 宿主 + Docker Desktop Linux containers，目标是给同一仓库提供可重复的本地工程回归，不是 production capacity certification。云上容量规划需要固定机型、网络、HA 拓扑、监控和多轮统计，属于后续部署演进。
+
+## Is 200 WebSocket connections the capacity limit?
+
+不是。它只是当前 harness 和本机环境的 maximum tested load。没有继续升压到饱和点，因此不能推断容量上限。
+
+## Why is Login throughput lower than Profile?
+
+Login 需要 bcrypt 密码验证，属于有意的 CPU 密集安全操作；Profile 主要是已认证后的索引读取。当前实测 Login c25 约 99.98 req/s、p95 254.92 ms，Profile c10 约 2772.67 req/s、p95 4.86 ms。
 
 ## Why is audit best-effort?
 

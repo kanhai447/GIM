@@ -8,6 +8,41 @@ GIM 是我围绕即时通信可靠性重新实现的 Go 微服务项目。它包
 
 项目通过 Compose 全栈、001–008 空库迁移、Web/Admin 单测与构建、真实 Gateway 冒烟、5 分钟 soak 和 Linux race。最大已测是 200 个私聊 WS 连接；这是已测基线，不是容量上限。
 
+## 技术栈
+
+Go、go-zero、GORM、MySQL、Redis、etcd、gRPC、Gorilla WebSocket、JWT、Kafka；Vue 3、TypeScript、Pinia、Vue Router、Axios、Element Plus/Arco/ECharts；Docker Compose 与 GitHub Actions workflow。
+
+## 为什么做这个项目
+
+目标不是复刻聊天 UI，而是用一个业务可理解的场景展示后端面试常问的并发安全、事务边界、幂等、缓存/消息中间件取舍、文件一致性、安全和可验证部署。
+
+## 服务架构
+
+Web/Admin 只进入 Gateway；Gateway 调 Auth 后注入可信身份，再路由 User/Chat/Group/File/Settings/Logs。User/Group 提供内部 RPC，etcd 管理发现，MySQL 是持久化事实源，Redis 负责撤销/Presence/实时跨实例投递，Kafka 只承担审计。
+
+## 核心难点与我做了什么
+
+- 为 Chat/Group 分别实现 Hub/Client 单写并发模型、心跳、断线清理和多设备投递。
+- 设计事务后 ACK、`clientMsgId` 幂等、session/unread/read cursor 和历史恢复。
+- 完成流式文件、内容寻址去重、原子发布、数据库补偿和 ownership。
+- 完成有界 Kafka audit、Admin 二次鉴权、Compose、migration、负载、race 与安全复核。
+
+## 可靠性与并发
+
+MySQL 消息和 session 是事实源；Redis Pub/Sub 只优化实时性，丢失时用 history/session 恢复。每条 socket 只有一个 `writePump`，Hub event loop 管理连接 map，有界队列保护内存。真实 soak 找到并最小修复 MySQL 1213 deadlock。
+
+## 性能
+
+本地 Windows + Docker Desktop Linux 环境最大已测 200 个认证 Private WS；100 连接、50 msg/s 下 ACK p95 13.47 ms。5 分钟修复后 soak 无错误。数字是可重复 baseline，不是生产容量认证。
+
+## 安全
+
+Gateway 清洗伪造身份头，Auth 是身份权威，Admin 目标服务二次鉴权；密码 bcrypt、JWT/env 不入库；文件限长/探测 MIME/限制路径；审计和前端渲染排除敏感内容与 HTML 注入。
+
+## 部署
+
+单一 Compose 启动 MySQL、Redis、etcd、Kafka、migration、RPC/API、Gateway、Web/Admin；内部 API 不映射宿主机。当前是 single-host development deployment，不是 HA。
+
 ## What I would demo
 
 1. 从 Compose 状态开始，展示内部服务不暴露宿主端口。

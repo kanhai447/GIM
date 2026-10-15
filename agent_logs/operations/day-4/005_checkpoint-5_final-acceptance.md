@@ -82,6 +82,7 @@
 - README 已包含 Features、Architecture、Tech Stack、Reliability、Security、Performance、Quick Start、Testing、Repository Structure、Known Limitations、Roadmap 与 Reference/Independence。
 - 架构文档覆盖 Auth/Gateway、双 WS、ACK/幂等/session/unread、Presence、File、Audit 和关键 trade-off。
 - 面试包包含 60 秒介绍、demo 路径、架构/可靠性/性能问答、简历 bullets、禁止夸大项和真实缺口。
+- 最终对照原始清单补齐 File Range、HTTP/Group 性能摘要、clone Quick Start、分层 Roadmap，以及 Redis Pub/Sub/Kafka realtime/MySQL 事实源/性能环境等面试问答。
 - 检查范围内相对 Markdown 链接均可解析；README/docs 无过期的 race-pending 标记。
 
 ## Compose shutdown

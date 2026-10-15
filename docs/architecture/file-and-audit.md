@@ -11,7 +11,7 @@ File API 使用 `MaxBytesReader` 限制 multipart 总体积，随后以流式方
 5. 事务内 upsert `file_objects` 并创建当前用户的 `user_files` 引用。
 6. 数据库失败时执行补偿；并发相同内容依赖 SHA-256 唯一键收敛。
 
-下载和删除以 `user_files` ownership 为边界。响应只返回逻辑 ID、UID、hash、MIME 和公开下载 URL，不返回物理 storage path。路径在 Local Storage 层清理并限制在根目录内。
+下载和删除以 `user_files` ownership 为边界。下载由 `http.ServeContent` 提供标准 Range/conditional response，并强制 attachment、server-detected MIME 与 `nosniff`。响应只返回逻辑 ID、UID、hash、MIME 和公开下载 URL，不返回物理 storage path。路径在 Local Storage 层清理并限制在根目录内。
 
 删除的是用户引用，不同步删除内容对象。最后一个引用消失后物理对象可安全复用，但 V1 没有孤儿 GC；浏览器下载也会将响应物化成 Blob。
 

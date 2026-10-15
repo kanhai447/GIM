@@ -9,7 +9,7 @@ GIM 是一个面向后端工程能力展示的即时通信系统。项目以 Go 
 - 注册、登录、注销、JWT 鉴权、用户资料与用户配置。
 - 私聊文本消息：独立 Chat WebSocket、持久化 ACK、`clientMsgId` 幂等、历史、会话、未读/已读、置顶、隐藏、撤回和在线 Presence。
 - 群聊文本消息：群/成员/申请/权限、独立 Group WebSocket、持久化 ACK、幂等、历史、会话、未读/已读、置顶、隐藏、撤回和禁言。
-- 文件：流式上传、50 MiB 限制、SHA-256 内容寻址去重、分页列表、鉴权下载和所有权删除。
+- 文件：流式上传、50 MiB 限制、SHA-256 内容寻址去重、分页列表、鉴权 Range 下载和所有权删除。
 - Admin：真实 Users / Chats / Groups / Files / Settings / Logs 管理接口与独立 Vue 应用；没有虚构 Mock 数据服务。
 - Audit：业务服务生成请求隔离的结构化安全事件，经有界 Kafka producer 和 Logs consumer 幂等落库，供 Admin 查询。
 - 工程化：001–008 SQL migration、服务发现、健康检查、Compose 全栈、负载工具、5 分钟稳定性基线、Linux race 验证和 CI workflow。
@@ -77,6 +77,8 @@ V1 保留 `Gateway -> Auth Service -> Business Service` 鉴权链。Gateway 删�
 
 - 最大已测：200 个并发 Private WebSocket 连接。
 - 100 连接、50 msg/s、20 秒：1000/1000 ACK，2600/2600 delivery，ACK p95 13.47 ms。
+- HTTP 基线：Login c25 为 99.98 req/s、p95 254.92 ms；Profile c10 为 2772.67 req/s、p95 4.86 ms；Session c10 为 688.84 req/s、p95 49.02 ms。
+- Group 5 members × 2 devices：300/300 ACK、3000/3000 delivery。
 - 修复后 5 分钟 soak：Private 1500/1500 ACK/rows、2100/2100 delivery；Group 600/600 ACK/rows、6000/6000 delivery；无错误、重连或 drop。
 - 1 MiB 文件、并发 10：60.75 MiB/s；10 MiB 文件、并发 5：211.75 MiB/s。
 - Linux Docker full/focused/real-dependency race：PASS。Windows native 因 32-bit MinGW 不兼容而不可用。
@@ -88,6 +90,8 @@ V1 保留 `Gateway -> Auth Service -> Business Service` 鉴权链。Gateway 删�
 前置条件：Docker Desktop/Engine、Docker Compose v2，建议至少 8 GiB 可用内存。
 
 ```powershell
+git clone https://github.com/kanhai447/GIM.git
+Set-Location GIM
 Copy-Item .env.compose.example .env.compose.local
 # 编辑 .env.compose.local，替换全部 CHANGE_ME
 docker compose up -d --build
@@ -157,7 +161,13 @@ reference/    Local read-only references; ignored and never part of GIM builds
 
 ## Roadmap
 
-V1.1 候选方向包括好友管理闭环、富消息与 File 消息引用、pending 持久化、delivery/read receipt、文件孤儿 GC、transactional outbox/DLQ、Admin chunk 拆分，以及多节点路由与生产安全基线。它们均不属于当前 V1 完成声明。
+### V1.1 candidates
+
+好友管理闭环、富消息与 File 消息引用、pending 持久化、delivery/read receipt、文件孤儿 GC、transactional outbox/DLQ 和 Admin chunk 拆分。
+
+### Deployment evolution
+
+多节点路由、HA、内部 TLS、Secret Manager、Kubernetes 和云环境容量验证。以上均不属于当前 V1 完成声明，也不承诺具体日期。
 
 ## Reference and Independence
 
