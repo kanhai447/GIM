@@ -8,7 +8,7 @@
 - **Starting Baseline:** `f86b552c5e1ca15a0dd51c6d5e647b25cb6d5e98`
 - **Implementation Commit:** `69955ce test(perf): add reproducible stability and race verification`
 - **Log/Status Commit:** 本记录所在提交
-- **Last Push:** 待最终 push 后复核
+- **Last Push:** Checkpoint 4 implementation/report 已 push；本记录提交后再次复核
 - **Next Authorized Work:** NONE
 - **Next Planned Work:** Day 4 Final Acceptance + Documentation / Interview Package（需用户明确授权）
 
@@ -48,7 +48,7 @@
 - Maximum tested：200 concurrent Private WS connections；不是最大容量声明。
 - Windows native race：NOT AVAILABLE（32-bit MinGW 不支持 windows/amd64 race）。
 - Linux Docker focused/full unit/real-dependency integration race：PASS，无 race warning。
-- GitHub Actions workflow 已添加；远端结果只按 push 后实际状态记录。
+- GitHub Actions workflow 已添加并 push；宿主无 `gh` 且当前网络工具无法读取仓库 Actions/API，`CI remote result: NOT OBSERVED`；local equivalent PASS。
 
 ## Known Limitations
 
@@ -57,7 +57,7 @@
 - V1 audit 为 best-effort，无 transactional outbox、disk spool、DLQ 或 exactly-once 声明；长 outage 会有可观测 drop。
 - Private Chat Compose smoke 在正式注册用户后使用对称数据库 friend fixture；当前 V1 尚无 friend-management HTTP 流程。
 - 服务 restart 存在 DB 已提交但 ACK/live delivery 未完成窗口；history/session/unread 保留，V1 无 receiver delivery ACK。
-- Admin Vite build 保留既有非阻塞 chunk-size warning；CI 真实远端结果待 push 后观察。
+- Admin Vite build 保留既有非阻塞 chunk-size warning；CI 真实远端结果未能从当前工具观察。
 
 ## Next Action
 

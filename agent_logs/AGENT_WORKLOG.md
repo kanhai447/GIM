@@ -859,7 +859,7 @@
 - 新增参数化 Go load harness、资源快照、loopback-only opt-in metrics/pprof、Docker race runner 与 GitHub Actions backend/frontend/race workflow。
 - 真实 Gateway 路径完成 HTTP、200 Private WS、Private 50 msg/s、Group 3/5/10 members + 2-device、File 1/10 MiB + dedup、Kafka degraded、5-minute soak 与 controlled restart。
 - soak 将 Private 2204 定位为 MySQL 1213；只对该错误做最多 3 次 transaction 重建重试。修复后同参 600/600 rows/ACK、840/840 delivery，0 final error。
-- Linux Docker focused/full unit/real-dependency integration race PASS；Backend、Web、Admin 全量回归及 Secret Scan PASS。
+- Linux Docker focused/full unit/real-dependency integration race PASS；Backend、Web、Admin 全量回归及 Secret Scan PASS。GitHub Actions 已 push，remote result NOT OBSERVED，local equivalent PASS。
 
 ### Results / Freeze
 

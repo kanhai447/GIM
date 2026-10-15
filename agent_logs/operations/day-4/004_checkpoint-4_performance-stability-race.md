@@ -117,7 +117,7 @@ Gateway 路径，全部 correctness pass、0 failure/timeout/drop、幂等 ACK/m
   - real integration：停止应用层容器并等待 etcd 15s lease 清理，仅保留 MySQL/Redis/etcd/Kafka；容器 `/tmp` 动态生成 root 测试配置后 `go test -race ./tests -count=1`，PASS（24.628s），随后全栈恢复 16/16 healthy。
 - race 脚本第一次发现 Debian login shell PATH 丢失，改为绝对 `/usr/local/go/bin/go`。
 - 第一次 real integration race 发现 Kafka 测试复用生产 topic + 新 group + FirstOffset，约 9000 条历史 backlog 导致 10s 超时，并非 race。测试改为每次唯一临时 topic 且 cleanup 删除，复跑 PASS；保留 consumer 首次消费、重启续读和 event-id 幂等语义。
-- CI：新增 GitHub Actions backend test/vet/gofmt、web/admin install/type-check/test/build、full + focused Linux race；remote run 待 push 后观察。
+- CI：新增 GitHub Actions backend test/vet/gofmt、web/admin install/type-check/test/build、full + focused Linux race；已 push。宿主无 `gh` 且当前网络工具无法读取该仓库 Actions/API，故 `CI remote result = NOT OBSERVED`；local equivalent 全部 PASS，不猜测远端结论。
 
 ## Correctness
 
@@ -154,5 +154,5 @@ Gateway 路径，全部 correctness pass、0 failure/timeout/drop、幂等 ACK/m
 ## Git
 
 - implementation/perf/CI commit：`69955ce3e7caa032db60aa85bf88588e50e703f9 test(perf): add reproducible stability and race verification`。
-- docs/status commit：本记录所在提交。
-- push：文档提交后执行并复核 `HEAD == origin/main` / clean。
+- docs/status：`3af6640 docs(day4): record performance and race verification` + 本次最终 push 状态记录提交。
+- push：已推送 `origin/main`；最终状态提交后再次复核 `HEAD == origin/main` / clean。

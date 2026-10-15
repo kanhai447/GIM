@@ -89,7 +89,7 @@ Private soak 的通用 2204 通过只记录安全类别的诊断稳定定位为 
 - Linux Docker focused high-risk race：PASS，覆盖 Chat、Group、File、Audit、Kafka producer/consumer、Logs、load harness。
 - Linux Docker full unit race：`go test -race ./... -count=1` PASS，无 race warning。
 - Linux Docker real-dependency integration race：应用层容器停止、保留 MySQL/Redis/etcd/Kafka，隔离临时配置执行 `go test -race ./tests -count=1`，PASS（24.628s）；全栈随后恢复。
-- GitHub Actions workflow 已新增 backend test/vet/gofmt、Web/Admin type-check/test/build、full + focused Linux race。远端结果只能在 push 后按实际观察，不在本文预先声明 PASS。CI 未运行真实外部依赖 integration race，本地 Docker 已覆盖该范围。
+- GitHub Actions workflow 已新增 backend test/vet/gofmt、Web/Admin type-check/test/build、full + focused Linux race。提交已 push，但宿主未安装 `gh`，当前网络工具也无法读取该仓库 Actions/API，因此 `CI remote result = NOT OBSERVED`；只声明 local equivalent PASS。CI 未运行真实外部依赖 integration race，本地 Docker 已覆盖该范围。
 
 ## Regression, cleanup, and limits
 
