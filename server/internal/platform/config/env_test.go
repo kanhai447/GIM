@@ -80,6 +80,15 @@ func TestRequiredRejectsPlaceholder(t *testing.T) {
 	}
 }
 
+func TestLoadEnvironment(t *testing.T) {
+	t.Setenv("GIM_TEST_ENV_VALUE", "compose-runtime-value")
+	values := LoadEnvironment()
+	value, err := values.Required("GIM_TEST_ENV_VALUE")
+	if err != nil || value != "compose-runtime-value" {
+		t.Fatalf("Required() = %q, %v", value, err)
+	}
+}
+
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), ".env.test")

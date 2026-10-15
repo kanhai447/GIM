@@ -16,6 +16,24 @@ type Values struct {
 	values map[string]string
 }
 
+// LoadEnvironment reads valid GIM-style keys from the process environment.
+// Values are never included in returned errors or diagnostic output.
+func LoadEnvironment() Values {
+	parsed := make(map[string]string)
+	for _, entry := range os.Environ() {
+		separator := strings.IndexByte(entry, '=')
+		if separator < 1 {
+			continue
+		}
+		key := entry[:separator]
+		if !validKey(key) {
+			continue
+		}
+		parsed[key] = entry[separator+1:]
+	}
+	return Values{values: parsed}
+}
+
 // LoadFile parses a dotenv-style file. Blank lines and full-line comments are
 // ignored. Duplicate and malformed keys are rejected without including their
 // values in returned errors.

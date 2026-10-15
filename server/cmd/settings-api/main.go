@@ -62,7 +62,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-settings-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-settings-api")
 	if err != nil {
 		return err
 	}
@@ -84,6 +84,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	settingshttp.RegisterRoutes(server, module.Service, auditProducer)
 	overviewhttp.RegisterRoutes(server, overview.New(overviewmysql.New(mysqlClient.DB())))
 	registry, err := discovery.NewRegistry(etcdClient.Raw(), registrationConfig.LeaseTTL)

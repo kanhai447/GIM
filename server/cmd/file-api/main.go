@@ -69,7 +69,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-file-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-file-api")
 	if err != nil {
 		return err
 	}
@@ -89,6 +89,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	filehttp.RegisterRoutes(server, module.Service, fileConfig.MaxUploadBytes, auditProducer)
 	fileadminhttp.RegisterRoutes(server, fileadmin.New(fileadminmysql.New(mysqlClient.DB())), module.Service, auditProducer)
 	etcdClient, err := platformetcd.Open(startupContext, etcdConfig)

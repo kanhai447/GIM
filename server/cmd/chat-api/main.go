@@ -72,7 +72,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-chat-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-chat-api")
 	if err != nil {
 		return err
 	}
@@ -151,6 +151,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	chat.RegisterRoute(server, chatModule.Config.Path, chatModule.Handler)
 	chathttp.RegisterRoutes(server, messageService)
 	chatadminhttp.RegisterRoutes(server, chatadmin.New(chatadminmysql.New(mysqlClient.DB())), auditProducer)

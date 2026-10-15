@@ -5,6 +5,7 @@ reference/
 .env
 .env.*
 !.env.example
+!.env.compose.example
 
 # Private keys and certificates.
 *.key

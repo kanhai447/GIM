@@ -52,7 +52,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	address, err := serviceruntime.RPCAddress(values, "GROUP")
+	address, err := serviceruntime.RPCListenAddress(values, "GROUP")
 	if err != nil {
 		return err
 	}

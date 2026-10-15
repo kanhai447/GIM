@@ -89,7 +89,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-group-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-group-api")
 	if err != nil {
 		return err
 	}
@@ -146,6 +146,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	grouphttp.RegisterRoutes(server, groupModule.Service, auditProducer)
 	groupadminhttp.RegisterRoutes(server, groupadmin.New(groupadminmysql.New(mysqlClient.DB()), presence.NewRedisStore(redisClient.Raw())), auditProducer)
 	groupmessagehttp.RegisterRoutes(server, messageService)

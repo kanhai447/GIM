@@ -1,0 +1,359 @@
+name: gim
+
+x-gim-app: &gim-app
+  image: gim-server:compose
+  env_file:
+    - .env.compose.local
+  networks:
+    - gim
+  init: true
+  restart: unless-stopped
+
+x-api-healthcheck: &api-healthcheck
+  interval: 5s
+  timeout: 3s
+  retries: 20
+  start_period: 5s
+
+services:
+  mysql:
+    image: mysql:8.4
+    env_file:
+      - .env.compose.local
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      - "127.0.0.1:13306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - gim
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    env_file:
+      - .env.compose.local
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    ports:
+      - "127.0.0.1:16379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gim
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  etcd:
+    image: registry.k8s.io/etcd:3.5.17-0
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd
+      - --data-dir=/var/lib/etcd
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd=http://etcd:2380
+      - --initial-cluster-state=new
+    ports:
+      - "127.0.0.1:12379:2379"
+    volumes:
+      - etcd_data:/var/lib/etcd
+    networks:
+      - gim
+    healthcheck:
+      test: ["CMD-SHELL", "ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:2379 endpoint health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.2.2
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://:29093,INTERNAL://:29092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "127.0.0.1:19092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - gim
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:29092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  migration:
+    <<: *gim-app
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+      args:
+        GOPROXY: ${GIM_DOCKER_GOPROXY:-https://proxy.golang.org,direct}
+    command: ["/app/gim-migrate", "-command", "up"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+
+  admin-bootstrap:
+    <<: *gim-app
+    profiles: ["tools"]
+    command: ["/app/gim-admin-bootstrap"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    restart: "no"
+
+  storage-init:
+    image: alpine:3.22
+    command: ["sh", "-c", "mkdir -p /var/lib/gim/files/temp /var/lib/gim/files/objects && chown -R 65532:65532 /var/lib/gim/files"]
+    volumes:
+      - file_storage:/var/lib/gim/files
+    networks:
+      - gim
+    restart: "no"
+
+  user-rpc:
+    <<: *gim-app
+    command: ["/app/gim-user-rpc"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9091"]
+      <<: *api-healthcheck
+
+  group-rpc:
+    <<: *gim-app
+    command: ["/app/gim-group-rpc"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      user-rpc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9094"]
+      <<: *api-healthcheck
+
+  user-api:
+    <<: *gim-app
+    command: ["/app/gim-user-api"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8082/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  auth-api:
+    <<: *gim-app
+    command: ["/app/gim-auth-api"]
+    depends_on:
+      user-rpc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  chat-api:
+    <<: *gim-app
+    command: ["/app/gim-chat-api"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      user-rpc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8083/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  group-api:
+    <<: *gim-app
+    command: ["/app/gim-group-api"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      user-rpc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8084/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  file-api:
+    <<: *gim-app
+    command: ["/app/gim-file-api"]
+    volumes:
+      - file_storage:/var/lib/gim/files
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8085/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  settings-api:
+    <<: *gim-app
+    command: ["/app/gim-settings-api"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  logs-api:
+    <<: *gim-app
+    command: ["/app/gim-logs-api"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8087/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  gateway:
+    <<: *gim-app
+    command: ["/app/gim-gateway"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      auth-api:
+        condition: service_healthy
+      user-api:
+        condition: service_healthy
+      chat-api:
+        condition: service_healthy
+      group-api:
+        condition: service_healthy
+      file-api:
+        condition: service_healthy
+      settings-api:
+        condition: service_healthy
+      logs-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz >/dev/null"]
+      <<: *api-healthcheck
+
+  web:
+    image: gim-web:compose
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        APP_DIR: web
+        VITE_API_BASE_URL: /
+        NPM_CONFIG_REGISTRY: ${GIM_DOCKER_NPM_REGISTRY:-https://registry.npmjs.org}
+    ports:
+      - "127.0.0.1:5173:8080"
+    networks:
+      - gim
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/ >/dev/null"]
+      <<: *api-healthcheck
+    restart: unless-stopped
+
+  admin:
+    image: gim-admin:compose
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        APP_DIR: admin
+        VITE_API_BASE_URL: /
+        NPM_CONFIG_REGISTRY: ${GIM_DOCKER_NPM_REGISTRY:-https://registry.npmjs.org}
+    ports:
+      - "127.0.0.1:4174:8080"
+    networks:
+      - gim
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/ >/dev/null"]
+      <<: *api-healthcheck
+    restart: unless-stopped
+
+networks:
+  gim:
+    name: gim
+
+volumes:
+  mysql_data:
+  redis_data:
+  etcd_data:
+  kafka_data:
+  file_storage:

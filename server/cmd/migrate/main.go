@@ -29,12 +29,15 @@ func run() error {
 	if *envFile == "" {
 		*envFile = os.Getenv("GIM_ENV_FILE")
 	}
+	var values config.Values
+	var err error
 	if *envFile == "" {
-		return errors.New("migration environment file is required")
-	}
-	values, err := config.LoadFile(*envFile)
-	if err != nil {
-		return err
+		values = config.LoadEnvironment()
+	} else {
+		values, err = config.LoadFile(*envFile)
+		if err != nil {
+			return err
+		}
 	}
 	cfg, err := mysqlclient.FromValues(values)
 	if err != nil {

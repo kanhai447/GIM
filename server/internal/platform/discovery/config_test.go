@@ -11,7 +11,7 @@ import (
 
 func TestRegistrationFromValues(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env.test")
-	content := "INTERNAL_API_HOST=127.0.0.1\nAUTH_API_PORT=8081\nAUTH_API_INSTANCE_ID=auth-one\nETCD_SERVICE_TTL=20s\n"
+	content := "INTERNAL_API_HOST=127.0.0.1\nAUTH_API_HOST=auth-api\nAUTH_API_PORT=8081\nAUTH_API_INSTANCE_ID=auth-one\nETCD_SERVICE_TTL=20s\n"
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -23,7 +23,7 @@ func TestRegistrationFromValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegistrationFromValues() error = %v", err)
 	}
-	if cfg.Endpoint.String() != "http://127.0.0.1:8081" || cfg.InstanceID != "auth-one" || cfg.LeaseTTL != 20*time.Second {
+	if cfg.Endpoint.String() != "http://auth-api:8081" || cfg.InstanceID != "auth-one" || cfg.LeaseTTL != 20*time.Second {
 		t.Fatalf("RegistrationFromValues() = %#v", cfg)
 	}
 }

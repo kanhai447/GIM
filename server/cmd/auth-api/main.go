@@ -65,7 +65,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-auth-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-auth-api")
 	if err != nil {
 		return err
 	}
@@ -103,6 +103,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	authhttp.RegisterRoutes(server, authModule.Service, auditProducer)
 
 	registry, err := discovery.NewRegistry(etcdClient.Raw(), registrationConfig.LeaseTTL)

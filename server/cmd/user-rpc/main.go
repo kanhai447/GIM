@@ -40,7 +40,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	address, err := serviceruntime.RPCAddress(values, "USER")
+	address, err := serviceruntime.RPCListenAddress(values, "USER")
 	if err != nil {
 		return err
 	}

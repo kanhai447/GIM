@@ -25,7 +25,7 @@ func RegistrationFromValues(values platformconfig.Values, prefix, service string
 	if !validConfigPrefix(prefix) || !validName(service) {
 		return RegistrationConfig{}, ErrInvalidService
 	}
-	host, err := values.Required("INTERNAL_API_HOST")
+	host, err := registrationHost(values, prefix)
 	if err != nil {
 		return RegistrationConfig{}, err
 	}
@@ -49,6 +49,13 @@ func RegistrationFromValues(values platformconfig.Values, prefix, service string
 	}
 	endpoint := url.URL{Scheme: "http", Host: net.JoinHostPort(host, strconv.Itoa(port))}
 	return RegistrationConfig{Service: service, InstanceID: instanceID, Endpoint: endpoint, LeaseTTL: ttl}, nil
+}
+
+func registrationHost(values platformconfig.Values, prefix string) (string, error) {
+	if value, ok := values.Lookup(prefix + "_API_HOST"); ok && strings.TrimSpace(value) != "" && value != "CHANGE_ME" {
+		return strings.TrimSpace(value), nil
+	}
+	return values.Required("INTERNAL_API_HOST")
 }
 
 func validConfigPrefix(prefix string) bool {

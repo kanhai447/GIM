@@ -15,6 +15,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/gateway"
 	"github.com/kanhai447/GIM/server/internal/platform/config"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
+	serviceruntime "github.com/kanhai447/GIM/server/internal/platform/process"
 )
 
 func main() {
@@ -25,15 +26,7 @@ func main() {
 }
 
 func run() error {
-	envFile := flag.String("env", "", "path to the ignored GIM environment file")
-	flag.Parse()
-	if *envFile == "" {
-		*envFile = os.Getenv("GIM_ENV_FILE")
-	}
-	if *envFile == "" {
-		return errors.New("gateway environment file is required")
-	}
-	values, err := config.LoadFile(*envFile)
+	values, err := loadValues()
 	if err != nil {
 		return err
 	}
@@ -53,9 +46,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", serviceruntime.HealthzHandler())
+	mux.Handle("/", module.Handler)
 	server := &http.Server{
 		Addr:              module.Config.ListenAddress,
-		Handler:           module.Handler,
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
@@ -80,4 +76,16 @@ func run() error {
 		}
 		return nil
 	}
+}
+
+func loadValues() (config.Values, error) {
+	envFile := flag.String("env", "", "path to the ignored GIM environment file")
+	flag.Parse()
+	if *envFile == "" {
+		*envFile = os.Getenv("GIM_ENV_FILE")
+	}
+	if *envFile == "" {
+		return config.LoadEnvironment(), nil
+	}
+	return config.LoadFile(*envFile)
 }

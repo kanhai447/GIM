@@ -69,7 +69,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-user-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-user-api")
 	if err != nil {
 		return err
 	}
@@ -100,6 +100,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	userhttp.RegisterRoutes(server, users.Service)
 	useradminhttp.RegisterRoutes(server, adminUsers, auditProducer)
 

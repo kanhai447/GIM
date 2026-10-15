@@ -53,7 +53,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	restConfig, err := serviceruntime.RESTConfig(registrationConfig, "gim-logs-api")
+	restConfig, err := serviceruntime.RESTConfig(values, registrationConfig, "gim-logs-api")
 	if err != nil {
 		return err
 	}
@@ -84,6 +84,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	serviceruntime.RegisterHealthz(server)
 	logshttp.RegisterRoutes(server, logService)
 
 	registry, err := discovery.NewRegistry(etcdClient.Raw(), registrationConfig.LeaseTTL)
