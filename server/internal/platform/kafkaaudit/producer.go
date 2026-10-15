@@ -102,6 +102,23 @@ func (producer *Producer) Publish(ctx context.Context, event audit.Event) error 
 
 func (producer *Producer) Dropped() uint64 { return producer.dropped.Load() }
 
+type Stats struct {
+	Enabled       bool   `json:"enabled"`
+	QueueDepth    int    `json:"queueDepth"`
+	QueueCapacity int    `json:"queueCapacity"`
+	Dropped       uint64 `json:"dropped"`
+}
+
+func (producer *Producer) Stats() Stats {
+	if producer == nil {
+		return Stats{}
+	}
+	return Stats{
+		Enabled: producer.config.Enabled, QueueDepth: len(producer.queue),
+		QueueCapacity: cap(producer.queue), Dropped: producer.dropped.Load(),
+	}
+}
+
 func (producer *Producer) run() {
 	defer close(producer.done)
 	for {

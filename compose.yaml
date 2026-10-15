@@ -202,6 +202,8 @@ services:
   chat-api:
     <<: *gim-app
     command: ["/app/gim-chat-api"]
+    environment:
+      GIM_DEBUG_ADDR: "127.0.0.1:6060"
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -220,6 +222,8 @@ services:
   group-api:
     <<: *gim-app
     command: ["/app/gim-group-api"]
+    environment:
+      GIM_DEBUG_ADDR: "127.0.0.1:6060"
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -238,6 +242,8 @@ services:
   file-api:
     <<: *gim-app
     command: ["/app/gim-file-api"]
+    environment:
+      GIM_DEBUG_ADDR: "127.0.0.1:6060"
     volumes:
       - file_storage:/var/lib/gim/files
     depends_on:
@@ -270,6 +276,8 @@ services:
   logs-api:
     <<: *gim-app
     command: ["/app/gim-logs-api"]
+    environment:
+      GIM_DEBUG_ADDR: "127.0.0.1:6060"
     depends_on:
       migration:
         condition: service_completed_successfully

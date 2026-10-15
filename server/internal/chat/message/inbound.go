@@ -4,14 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/kanhai447/GIM/server/internal/chat"
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
 	"github.com/kanhai447/GIM/server/internal/chat/protocol"
 	"github.com/kanhai447/GIM/server/internal/platform/audit"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Sender interface {
@@ -59,6 +63,7 @@ func (inbound *Inbound) Handle(ctx context.Context, identity chat.ClientIdentity
 	})
 	if err != nil {
 		code, message := safeError(err)
+		inbound.logger.Printf("chat message rejected sender_id=%d receiver_id=%d code=%d cause=%s", identity.UserID, data.ReceiverID, code, classifyCause(err))
 		inbound.sendError(ctx, identity, envelope.RequestID, envelope.ClientMsgID, code, message)
 		return nil
 	}
@@ -103,6 +108,27 @@ func (inbound *Inbound) Handle(ctx context.Context, identity chat.ClientIdentity
 		}
 	}
 	return ackErr
+}
+
+func classifyCause(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "deadline_exceeded"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "canceled"
+	}
+	var mysqlError *mysqldriver.MySQLError
+	if errors.As(err, &mysqlError) {
+		return fmt.Sprintf("mysql_%d", mysqlError.Number)
+	}
+	if code := status.Code(err); code != codes.Unknown {
+		return "grpc_" + code.String()
+	}
+	root := err
+	for errors.Unwrap(root) != nil {
+		root = errors.Unwrap(root)
+	}
+	return fmt.Sprintf("%T", root)
 }
 
 func (inbound *Inbound) HandleMalformed(ctx context.Context, identity chat.ClientIdentity) error {

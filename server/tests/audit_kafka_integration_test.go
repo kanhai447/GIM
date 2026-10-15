@@ -39,12 +39,13 @@ func TestKafkaAuditProduceConsumePersistQueryRestartAndIdempotency(t *testing.T)
 	if err != nil || !kafkaConfig.Enabled {
 		t.Fatalf("Kafka configuration: enabled=%t err=%v", kafkaConfig.Enabled, err)
 	}
-	kafkaConfig.Topic = kafkaaudit.DefaultTopic
+	kafkaConfig.Topic = "gim.audit.events.integration." + strings.ReplaceAll(uuid.NewString(), "-", "")
 	kafkaConfig.ConsumerGroup = "gim-logs-integration-" + uuid.NewString()
 	kafkaConfig.PublishTimeout = 2 * time.Second
 	kafkaConfig.RetryBackoff = 25 * time.Millisecond
 	kafkaConfig.MaxAttempts = 3
 	ensureAuditTopic(t, kafkaConfig)
+	t.Cleanup(func() { deleteAuditTopic(t, kafkaConfig) })
 
 	mysqlConfig, err := platformmysql.FromValues(values)
 	if err != nil {
@@ -263,5 +264,29 @@ func ensureAuditTopic(t *testing.T, config kafkaaudit.Config) {
 	err = controllerConnection.CreateTopics(kafka.TopicConfig{Topic: config.Topic, NumPartitions: 3, ReplicationFactor: 1})
 	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
 		t.Fatalf("create audit topic: %v", err)
+	}
+}
+
+func deleteAuditTopic(t *testing.T, config kafkaaudit.Config) {
+	t.Helper()
+	connection, err := kafka.Dial("tcp", config.Brokers[0])
+	if err != nil {
+		t.Errorf("connect Kafka broker for topic cleanup: %v", err)
+		return
+	}
+	defer connection.Close()
+	controller, err := connection.Controller()
+	if err != nil {
+		t.Errorf("resolve Kafka controller for topic cleanup: %v", err)
+		return
+	}
+	controllerConnection, err := kafka.Dial("tcp", fmt.Sprintf("%s:%d", controller.Host, controller.Port))
+	if err != nil {
+		t.Errorf("connect Kafka controller for topic cleanup: %v", err)
+		return
+	}
+	defer controllerConnection.Close()
+	if err := controllerConnection.DeleteTopics(config.Topic); err != nil {
+		t.Errorf("delete integration audit topic: %v", err)
 	}
 }

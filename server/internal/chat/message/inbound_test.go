@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/kanhai447/GIM/server/internal/chat"
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
 	"github.com/kanhai447/GIM/server/internal/chat/protocol"
@@ -116,4 +117,13 @@ func decodeCapturedEnvelope(t *testing.T, payload []byte) protocol.Envelope {
 		t.Fatal(err)
 	}
 	return envelope
+}
+
+func TestClassifyCauseDoesNotExposeErrorDetails(t *testing.T) {
+	if got := classifyCause(context.DeadlineExceeded); got != "deadline_exceeded" {
+		t.Fatalf("deadline classification = %q", got)
+	}
+	if got := classifyCause(&mysqldriver.MySQLError{Number: 1213, Message: "sensitive SQL detail"}); got != "mysql_1213" {
+		t.Fatalf("mysql classification = %q", got)
+	}
 }

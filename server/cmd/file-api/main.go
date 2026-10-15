@@ -15,6 +15,7 @@ import (
 	fileconfig "github.com/kanhai447/GIM/server/internal/file/config"
 	filehttp "github.com/kanhai447/GIM/server/internal/file/transport/http"
 	platformmysql "github.com/kanhai447/GIM/server/internal/platform/database/mysql"
+	"github.com/kanhai447/GIM/server/internal/platform/debugserver"
 	"github.com/kanhai447/GIM/server/internal/platform/discovery"
 	platformetcd "github.com/kanhai447/GIM/server/internal/platform/etcd"
 	"github.com/kanhai447/GIM/server/internal/platform/kafkaaudit"
@@ -102,6 +103,18 @@ func run(args []string) error {
 		return err
 	}
 	lifecycleContext, lifecycleCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	debug, err := debugserver.Start(lifecycleContext, os.Getenv("GIM_DEBUG_ADDR"), func() map[string]any {
+		return map[string]any{"database": mysqlClient.Stats(), "audit": auditProducer.Stats()}
+	})
+	if err != nil {
+		lifecycleCancel()
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
+		defer cancel()
+		_ = debug.Close(ctx)
+	}()
 	registration, err := registry.Register(lifecycleContext, registrationConfig.Service, registrationConfig.InstanceID, registrationConfig.Endpoint)
 	if err != nil {
 		lifecycleCancel()

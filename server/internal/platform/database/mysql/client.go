@@ -144,6 +144,13 @@ func configurePool(db *sql.DB, cfg Config) {
 
 func (c *Client) DB() *gorm.DB { return c.db }
 
+func (c *Client) Stats() sql.DBStats {
+	if c == nil || c.sqlDB == nil {
+		return sql.DBStats{}
+	}
+	return c.sqlDB.Stats()
+}
+
 func (c *Client) Health(ctx context.Context) error {
 	if c == nil || c.sqlDB == nil {
 		return &operationError{"health check", errors.New("client is not initialized")}

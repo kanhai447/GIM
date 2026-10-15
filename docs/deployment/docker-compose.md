@@ -56,6 +56,13 @@ docker compose ps
 docker compose logs -f <service>
 ```
 
+For local performance verification, Chat, Group, File, and Logs expose an
+opt-in debug listener only on `127.0.0.1:6060` inside their own containers.
+It is not published to the host and is not routed by Gateway. The tracked
+Compose configuration enables it so `scripts/perf-snapshot.ps1` can record
+runtime goroutines, heap, DB pool, and audit producer queue/drop counters.
+Outside Compose, an empty `GIM_DEBUG_ADDR` keeps the listener disabled.
+
 长期运行容器配置 `unless-stopped`；migration、storage-init 与手动 bootstrap 不自动重启。应用日志写 stdout/stderr，Kafka audit 数据单独进入 `audit_logs`。
 
 ## Stop and persistence

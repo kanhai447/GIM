@@ -46,6 +46,29 @@ func (repository *Repository) Create(ctx context.Context, value message.Message)
 }
 
 func (repository *Repository) PersistWithSessions(ctx context.Context, value message.Message) (message.PersistResult, error) {
+	const maxDeadlockAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxDeadlockAttempts; attempt++ {
+		result, err := repository.persistWithSessionsOnce(ctx, value)
+		if err == nil || !isDeadlock(err) {
+			return result, err
+		}
+		lastErr = err
+		if attempt == maxDeadlockAttempts {
+			break
+		}
+		timer := time.NewTimer(time.Duration(attempt) * 10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return message.PersistResult{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return message.PersistResult{}, fmt.Errorf("persist chat message after deadlock retries: %w", lastErr)
+}
+
+func (repository *Repository) persistWithSessionsOnce(ctx context.Context, value message.Message) (message.PersistResult, error) {
 	row, err := encodeRecord(value)
 	if err != nil {
 		return message.PersistResult{}, err
@@ -141,4 +164,9 @@ func encodeRecord(value message.Message) (record, error) {
 func isDuplicate(err error) bool {
 	var mysqlError *mysqldriver.MySQLError
 	return errors.As(err, &mysqlError) && mysqlError.Number == 1062
+}
+
+func isDeadlock(err error) bool {
+	var mysqlError *mysqldriver.MySQLError
+	return errors.As(err, &mysqlError) && mysqlError.Number == 1213
 }
