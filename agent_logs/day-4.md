@@ -108,7 +108,7 @@
 ### Acceptance
 
 - HTTP login/profile/session、200 Private WS、100 connections 50 msg/s、3/5/10-member Group、2-device fanout、1/10 MiB File 与 concurrent dedup：correctness + latency/throughput baseline PASS。
-- Kafka normal/degraded、5-minute Chat/Group soak、Chat/Group controlled restart 与资源观测 PASS；高压 restart 的 persisted-before-ACK/live-delivery gap 如实列为 V1 限制。
+- Kafka normal/degraded、修复后完整 5-minute Chat/Group soak、Chat/Group controlled restart 与资源观测 PASS；最终 soak 为 Private 1500/1500 ACK/rows、2100/2100 delivery，Group 600/600 ACK/rows、6000/6000 delivery，均无错误、重连或 drop；高压 restart 的 persisted-before-ACK/live-delivery gap 如实列为 V1 限制。
 - Linux Docker focused/full unit/real-dependency integration race 均 PASS，无 race warning；Windows native race 仍因 32-bit MinGW 不可用，但项目 Race Verification 已在兼容 Linux 环境解除 PENDING。GitHub Actions 已 push，remote result 因当前无可用 Actions/API 访问而 NOT OBSERVED，local equivalent PASS。
 - Backend full tests/vet/gofmt、Web 16/90 + type-check/build、Admin 11/25 + type-check/build、Secret Scan/repository safety/diff PASS。
 - perf users/groups/messages/file references 及两个已确认孤立物理对象已清理；16 个长期 Compose 服务最终保持 healthy，无 OOM/restart。
@@ -116,7 +116,7 @@
 ### Baseline / Limits
 
 - Maximum tested：200 concurrent Private WS；100 connections、50 msg/s 时 1000/1000 ACK，ACK p95=13.47ms。该数字不是最大容量声明。
-- 修复后 Private 同参 2 分钟 600/600 rows/ACK、840/840 delivery；5-minute soak 未发现 goroutine/memory/connection runaway。
+- 修复后最终完整 5 分钟 Private 1500/1500 rows/ACK、2100/2100 delivery，Group 600/600 rows/ACK、6000/6000 delivery；未发现 goroutine/memory/connection runaway。
 - V1 audit 是 bounded best-effort；服务进程终止存在 DB commit 与 ACK/live publish 间窗口；无 outbox、receiver delivery ACK 或 exactly-once。
 
 ### Git / Freeze

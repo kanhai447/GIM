@@ -71,7 +71,9 @@ Authenticated Gateway WS connection 阶梯为 25 / 50 / 100 / 200，全部连接
 
 ## Soak and restart
 
-5 分钟并行 soak：Private 50 connections / 5 msg/s，Group 10 members / 2 msg/s。Group 600/600 ACK、6000/6000 delivery；修复后 Private 同参 2 分钟 600/600 ACK/rows、840/840 delivery。Chat goroutine 起点/中点均 143，Group 均 59；内存约 19–20 MiB，随 GC 波动，无单调增长、OOM、容器重启、DB pool wait 或 Kafka lag。
+修复前 5 分钟并行 soak（Private 50 connections / 5 msg/s，Group 10 members / 2 msg/s）发现并定位了 Private MySQL 1213 deadlock；2 分钟同参修复验证先达到 600/600 ACK/rows。随后又完成一轮修复后的完整 5 分钟并行 soak：Private 1500/1500 ACK/rows、2100/2100 delivery，ACK p50/p95/p99=14.929/48.574/95.200 ms；Group 600/600 ACK/rows、6000/6000 delivery，ACK p50/p95/p99=13.026/40.439/94.958 ms。两者均 0 failure/timeout/protocol/business error、0 final-unacked retry、0 reconnect/drop，幂等与 unread 正确。
+
+第一轮资源观测中 Chat goroutine 起点/中点均 143、Group 均 59，内存约 19–20 MiB，随 GC 波动。最终完整复验连接关闭后 Chat/Group goroutine 为 40/39、heap alloc 4.42/7.29 MiB，DB pool `WaitCount=0`，Redis blocked=0，Kafka queue/lag=0；16 个长期容器均 healthy，RestartCount=0、OOMKilled=false。
 
 轻量 restart（10 connections、2 msg/s、45 秒）分别重启 Chat/Group：两者均 10/10 sockets 自动重连；原 `clientMsgId` 重试后 Chat 90/90 rows/ACK、90/90 delivery，Group 90/90 rows/ACK、900/900 delivery，无 duplicate storm。恢复消息端到端 p99 约 35.5s/29.5s。
 
@@ -97,6 +99,6 @@ Private soak 的通用 2204 通过只记录安全类别的诊断稳定定位为 
 - Web：type-check、16 files / 90 tests、build PASS。
 - Admin：type-check、11 files / 25 tests、build PASS；仅保留既有 chunk-size warning。
 - Repository safety 与 Secret Scan PASS。
-- Cleanup：`perf-user-*`、`perf-group-*`、private/group perf messages、sessions/unread/file references 与两个已核实无引用的物理对象已清理；数据库核验相关计数为 0。共享 audit topic 的历史事件按既有 retention 保留，不做危险的 topic truncate/Redis flush。
+- Cleanup：`perf-user-*`、`perf-group-*`、private/group perf messages、sessions/unread/file references 与两个已核实无引用的物理对象已清理；最终补强复验及三次准备失败留下的 `perf-user-final-*` 也按精确前缀清理，数据库核验 remaining=0。共享 audit topic 的历史事件按既有 retention 保留，不做危险的 topic truncate/Redis flush。
 
-可信结论：在上述本机 Compose 环境，已验证 200 条并发 Private WS 连接；100 connections、50 msg/s 下 1000/1000 持久化 ACK，ACK p95 13.47 ms；5 分钟轻量 Chat/Group soak 未观察到连接、goroutine、DB pool 或内存 runaway。以上均为 `maximum tested`，不是最大容量声明。
+可信结论：在上述本机 Compose 环境，已验证 200 条并发 Private WS 连接；100 connections、50 msg/s 下 1000/1000 持久化 ACK，ACK p95 13.47 ms；修复后的完整 5 分钟 Chat/Group soak 2100/2100 与 6000/6000 delivery，未观察到连接、goroutine、DB pool 或内存 runaway。以上均为 `maximum tested`，不是最大容量声明。

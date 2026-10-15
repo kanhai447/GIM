@@ -85,6 +85,8 @@ Gateway 路径，全部 correctness pass、0 failure/timeout/drop、幂等 ACK/m
 - Group：600/600 ACK，600 rows，6000/6000 fanout，12 次 duplicate retry 一致，p50/p95/p99=11.65/23.17/309.64 ms，0 error/drop/reconnect。
 - Private（修复前）：1500 sends，1495 rows/ACK，2093/2093 accepted-message fanout，14 次 `2204`，最终同 clientMsgId retry 使 9 次恢复、5 条仍未接受；无重复行、unread 正确。该结果触发下述 deadlock 诊断与必要修复。
 - 修复后同参 2 分钟：600/600 ACK/rows，840/840 fanout，12 次 duplicate retry 一致，p50/p95/p99=10.59/25.82/233.66 ms，0 error、0 final retry、0 drop/reconnect，correctness pass。
+- 最终 post-fix 完整 5 分钟并行复验：Private 1500/1500 ACK/rows、2100/2100 delivery，p50/p95/p99=14.929/48.574/95.200 ms；Group 600/600 ACK/rows、6000/6000 delivery，p50/p95/p99=13.026/40.439/94.958 ms。两者均 0 failure/timeout/protocol/business error、0 final-unacked retry、0 reconnect/drop，duplicate ACK/message ID 与 unread 正确。
+- 最终关闭连接后的 Chat/Group goroutine=40/39，heap alloc=4.42/7.29 MiB；DB WaitCount=0、Redis blocked=0、Kafka queue/lag=0；16 个长期容器 healthy，RestartCount=0、OOMKilled=false。
 
 ## Restart stability
 
@@ -125,7 +127,7 @@ Gateway 路径，全部 correctness pass、0 failure/timeout/drop、幂等 ACK/m
 - Private 20/50 msg/s、Group 3/5/10 members 和 2-device、File 1/10 MiB 与 concurrent dedup、Kafka normal/degraded 均完成持久化一致性验证；修复后 soak 600/600 rows/ACK、840/840 delivery。
 - 重启验收档 Chat 90/90 rows/ACK/delivery、Group 90/90 rows/ACK 且 900/900 delivery，无 duplicate storm；高压探索档的已提交/未 ACK 窗口保留为限制，不伪装为通过。
 - Backend full test/vet/gofmt、Web 16 files / 90 tests/type-check/build、Admin 11 files / 25 tests/type-check/build、Compose config、repository safety 与 `git diff --check` 均 PASS。
-- 测试数据清理后核验：`perf-user-*`、`pc-*`、`gc-*` 与本轮两个无引用 FileObject 均为 0；对应两个物理对象已按精确 hash path 删除。16 个长期 Compose 服务保持 running/healthy，migration/storage-init 为既有 exited 0。
+- 测试数据清理后核验：`perf-user-*`、`pc-*`、`gc-*` 与本轮两个无引用 FileObject 均为 0；对应两个物理对象已按精确 hash path 删除。最终 5 分钟复验和三次 prepare 失败留下的 `perf-user-final-*` 也按精确前缀清理，remaining=0。16 个长期 Compose 服务保持 running/healthy，migration/storage-init 为既有 exited 0。
 
 ## Security
 
@@ -154,5 +156,5 @@ Gateway 路径，全部 correctness pass、0 failure/timeout/drop、幂等 ACK/m
 ## Git
 
 - implementation/perf/CI commit：`69955ce3e7caa032db60aa85bf88588e50e703f9 test(perf): add reproducible stability and race verification`。
-- docs/status：`3af6640 docs(day4): record performance and race verification` + 本次最终 push 状态记录提交。
+- docs/status：`3af6640 docs(day4): record performance and race verification`、`0b82095 docs(day4): finalize checkpoint 4 status` + 本次 post-fix 5-minute soak 补强记录提交。
 - push：已推送 `origin/main`；最终状态提交后再次复核 `HEAD == origin/main` / clean。
