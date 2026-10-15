@@ -96,3 +96,32 @@
 - docs/status commit：本记录所在提交，随后 push 并复核 `HEAD == origin/main` / clean。
 - `DOCKER COMPOSE = FUNCTIONAL`；Next Authorized Work：NONE。
 - Next Planned：Performance / Stability / CI Race；严格未进入下一 Checkpoint。
+
+## 2026-10-15 Checkpoint 4 — Performance / Stability / Race Verification
+
+### Scope
+
+- 新增单一可复现 Go load harness，覆盖 Gateway HTTP、Private/Group authenticated WS、File streaming/dedup、fixture correctness 与 prefix cleanup。
+- 新增 loopback-only opt-in runtime metrics/pprof、资源快照脚本、Linux Docker full/focused/integration race runner 与 GitHub Actions backend/frontend/race workflow。
+- 基于 soak 证据只修复 Private Chat MySQL 1213 deadlock：最多 3 次重建 transaction，10/20ms context-aware backoff；未移除事务、ACK、unread、鉴权或 audit。
+
+### Acceptance
+
+- HTTP login/profile/session、200 Private WS、100 connections 50 msg/s、3/5/10-member Group、2-device fanout、1/10 MiB File 与 concurrent dedup：correctness + latency/throughput baseline PASS。
+- Kafka normal/degraded、5-minute Chat/Group soak、Chat/Group controlled restart 与资源观测 PASS；高压 restart 的 persisted-before-ACK/live-delivery gap 如实列为 V1 限制。
+- Linux Docker focused/full unit/real-dependency integration race 均 PASS，无 race warning；Windows native race 仍因 32-bit MinGW 不可用，但项目 Race Verification 已在兼容 Linux 环境解除 PENDING。
+- Backend full tests/vet/gofmt、Web 16/90 + type-check/build、Admin 11/25 + type-check/build、Secret Scan/repository safety/diff PASS。
+- perf users/groups/messages/file references 及两个已确认孤立物理对象已清理；16 个长期 Compose 服务最终保持 healthy，无 OOM/restart。
+
+### Baseline / Limits
+
+- Maximum tested：200 concurrent Private WS；100 connections、50 msg/s 时 1000/1000 ACK，ACK p95=13.47ms。该数字不是最大容量声明。
+- 修复后 Private 同参 2 分钟 600/600 rows/ACK、840/840 delivery；5-minute soak 未发现 goroutine/memory/connection runaway。
+- V1 audit 是 bounded best-effort；服务进程终止存在 DB commit 与 ACK/live publish 间窗口；无 outbox、receiver delivery ACK 或 exactly-once。
+
+### Git / Freeze
+
+- implementation/perf/CI：`69955ce test(perf): add reproducible stability and race verification`。
+- docs/status：本记录所在提交，随后 push 并复核 equality/clean。
+- `Performance Baseline = COMPLETED`；`Stability = PASS`；`Race = PASS in compatible Linux environment`。
+- Next Authorized Work：NONE。Next Planned：Day 4 Final Acceptance + Documentation / Interview Package；严格停止。

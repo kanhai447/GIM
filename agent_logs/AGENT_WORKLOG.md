@@ -851,3 +851,21 @@
 - implementation commit：`36e694e chore(deploy): add full stack docker compose`。
 - docs/status commit：本记录所在提交，随后 push 并复核 equality/clean。
 - `DOCKER COMPOSE = FUNCTIONAL`；Next Authorized Work：NONE；Next Planned：Performance / Stability / CI Race。
+
+## 2026-10-15 Day 4 / Checkpoint 4 — Performance / Stability / Race Verification
+
+### Implementation / Verification
+
+- 新增参数化 Go load harness、资源快照、loopback-only opt-in metrics/pprof、Docker race runner 与 GitHub Actions backend/frontend/race workflow。
+- 真实 Gateway 路径完成 HTTP、200 Private WS、Private 50 msg/s、Group 3/5/10 members + 2-device、File 1/10 MiB + dedup、Kafka degraded、5-minute soak 与 controlled restart。
+- soak 将 Private 2204 定位为 MySQL 1213；只对该错误做最多 3 次 transaction 重建重试。修复后同参 600/600 rows/ACK、840/840 delivery，0 final error。
+- Linux Docker focused/full unit/real-dependency integration race PASS；Backend、Web、Admin 全量回归及 Secret Scan PASS。
+
+### Results / Freeze
+
+- `Maximum tested: 200 concurrent Private WS connections; not claimed maximum capacity.`
+- 100 connections / 50 msg/s：1000/1000 ACK，ACK p95=13.47ms；5-minute soak 无明显 goroutine/memory/connection leak。
+- 测试数据和两个精确无引用文件对象已清理；Compose 16 个长期服务 healthy，无 OOM/restart。
+- implementation/perf/CI：`69955ce test(perf): add reproducible stability and race verification`；docs/status：本记录所在提交。
+- `Performance Baseline = COMPLETED`；`Stability = PASS`；`Race Verification = PASS in compatible Linux environment`。
+- Next Authorized Work：NONE。Next Planned：Day 4 Final Acceptance + Documentation / Interview Package；Checkpoint 4 后严格停止。
