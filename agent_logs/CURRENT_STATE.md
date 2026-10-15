@@ -1,66 +1,79 @@
 # GIM Current State
 
-- **Current Day:** Day 4
-- **Current Phase:** Day 4 engineering
-- **Current Checkpoint:** Day 4 / Checkpoint 4 — COMPLETED
-- **Last Completed Checkpoint:** Performance / Stability / Race Verification
-- **Working Tree:** CLEAN（最终提交 push 后复核）
-- **Starting Baseline:** `f86b552c5e1ca15a0dd51c6d5e647b25cb6d5e98`
-- **Implementation Commit:** `69955ce test(perf): add reproducible stability and race verification`
-- **Log/Status Commit:** 本记录所在提交
-- **Last Push:** Checkpoint 4 implementation/report 已 push；本记录提交后再次复核
+- **PROJECT:** GIM
+- **V1 STATUS:** COMPLETED
+- **Current Day:** Day 4 — COMPLETED
+- **Current Checkpoint:** Day 4 / Checkpoint 5 — COMPLETED
+- **Last Completed Work:** Final Acceptance / Documentation / Interview Package
+- **Branch:** `main`
+- **Final Baseline Before Checkpoint 5:** `1cf870b18b5833fdb02e108e36dbf4b108b62822`
+- **Final Commit:** 本状态记录所在提交
+- **Working Tree:** 最终提交 push 后复核 clean
 - **Next Authorized Work:** NONE
-- **Next Planned Work:** Day 4 Final Acceptance + Documentation / Interview Package（需用户明确授权）
+- **Next Planned Work:** NONE — V1 frozen
 
-## Completed
+## Day status
 
-- Day 4 / Checkpoint 1 — Kafka Audit Foundation：COMPLETED。
-- Day 4 / Checkpoint 2 — Admin Final Integration：COMPLETED。
-- Day 4 / Checkpoint 3 — Docker Compose Full Stack Deployment：COMPLETED。
-- Day 4 / Checkpoint 4 — Performance / Stability / Race Verification：COMPLETED。
-- Performance Baseline：COMPLETED。
+- Day 1 — Identity / Auth / Gateway / User / migration / frontend foundations：COMPLETED。
+- Day 2 — Private Chat WS / Presence / ACK / idempotency / session / unread / frontend：COMPLETED。
+- Day 3 — Group Chat / File backend+frontend / integration acceptance：COMPLETED。
+- Day 4 — Kafka Audit / Admin / Docker Compose / Performance / Stability / Race / Final Acceptance：COMPLETED。
+
+## Component status
+
+- Auth / User / Gateway：FUNCTIONAL / regression PASS。
+- Private Chat V1：COMPLETED / regression and focused smoke PASS。
+- Group Chat V1：COMPLETED / regression and focused smoke PASS。
+- File V1：COMPLETED / regression and focused smoke PASS。
+- Settings：FUNCTIONAL / regression PASS。
+- Kafka Audit / Logs：FUNCTIONAL / regression and Admin Logs smoke PASS。
+- User Web：FUNCTIONAL / 16 files / 90 tests / type-check / build PASS。
+- Admin Web：FUNCTIONAL / 11 files / 25 tests / type-check / build PASS。
+- Docker Compose：FUNCTIONAL；最终验收后已 `down`，named volumes preserved。
+
+## Final acceptance
+
+- Backend：`go test ./... -count=1` PASS；`go vet ./...` PASS；repository gofmt PASS；`git diff --check` PASS。
+- Empty DB migration：001–008 UP / repeated UP / DOWN ALL / dirty protection / RE-UP PASS；主库 `schema_migrations` 8 applied / 0 dirty。
+- Compose focused smoke：Login、Private Chat、Group Chat、File、Admin Logs PASS。
+- Repository safety / Secret Scan / XSS / auth header / Admin second authorization / WS pre-upgrade auth / File path-MIME-size-ownership/privacy：PASS。
+- Test data：perf/final-admin/固定 CP4+CP6 E2E users、groups、messages、File references 已清理；普通开发数据未触碰。
+- Workspace：可重建 `.tmp`、helper、Web/Admin dist 已清理；tracked temp/coverage/log/binary/IDE artifact 为 0。
+- Documentation：README、architecture、reliability、deployment、performance、interview package 和 operation log 已冻结。
+
+## Performance / stability / race
+
+- Maximum tested：200 concurrent Private WS connections；不是容量上限声明。
+- 100 connections / 50 msg/s：1000/1000 ACK、2600/2600 delivery、ACK p95 13.47 ms。
+- Final 5-minute soak：Private 1500/1500 rows/ACK、2100/2100 delivery；Group 600/600 rows/ACK、6000/6000 delivery；0 failure/reconnect/drop。
 - Stability：PASS。
-- Race Verification：PASS in compatible Linux environment。
-- Docker Compose：FUNCTIONAL。
-- Admin V1：FUNCTIONAL / regression PASS。
-- Private Chat V1：COMPLETED / regression PASS。
-- Group Chat V1：COMPLETED / regression PASS。
-- File V1：COMPLETED / regression PASS。
-- Kafka Audit：FUNCTIONAL / regression PASS。
+- Windows Native Race：NOT AVAILABLE（32-bit MinGW 不兼容）。
+- Linux Docker Race：full / focused / real-dependency integration PASS。
+- Project Race Verification：PASS in compatible Linux environment。
+- GitHub Actions remote result：NOT OBSERVED；local equivalent PASS，不阻塞 Final Acceptance。
 
-## Compose Acceptance
+## V1 limitations
 
-- MySQL、Redis、etcd、Kafka KRaft、migration、User/Group RPC、七个 API/Consumer、Gateway、Web 与 Admin 通过单一 Compose 栈启动。
-- Clean start、persistent restart、Chat/Group/File/Logs restart、MySQL recovery、etcd lease replacement/cleanup 与 File volume persistence：PASS。
-- API/Auth、Private Chat、Group Chat、File、Admin 与 Kafka -> Logs real smoke：PASS。
-- 最终 long-running services 全部 healthy；migration/storage-init exited 0；服务保留运行。
+- Chat/Group 仅支持文本；File 未接入消息协议。
+- 无 receiver delivery receipt/read receipt；pending 不跨浏览器刷新。
+- 用户端好友管理 HTTP/UI 闭环未完成，Private smoke 使用可清理的对称好友 fixture。
+- File 物理孤儿对象延迟 GC；浏览器下载物化 Blob。
+- Audit 是 bounded best-effort，无 transactional outbox、DLQ、disk spool 或 exactly-once。
+- 高压 restart 存在 DB commit 与 ACK/live publish 窗口；幂等重试和历史可恢复。
+- single-host/single-node；无 HA、Kubernetes、内部 TLS 或 production Secret Manager。
+- Admin chunk warning；remote CI NOT OBSERVED。
 
-## Test Status
+## Final runtime state
 
-- Backend：`go test ./... -count=1` PASS；`go vet ./...` PASS；repository-wide gofmt PASS；`git diff --check` PASS。
-- Web：type-check PASS；16 files / 90 tests PASS；production build PASS。
-- Admin：type-check PASS；11 files / 25 tests PASS；production build PASS。
-- Compose config、完整 build、核心镜像 no-cache build、repository safety、Secret Scan、image inspection、reference independence：PASS。
+- Compose 停止前 16 个常驻服务全部 healthy。
+- 已执行 `docker compose down`，没有使用 `-v`。
+- `gim_mysql_data`、`gim_redis_data`、`gim_etcd_data`、`gim_kafka_data`、`gim_file_storage` 均保留。
 
-## Performance / Stability / Race
+## Freeze
 
-- 真实 Gateway HTTP、Private WS、Group fanout、File streaming/dedup、Kafka degraded、5-minute soak 与 controlled restart 基线：PASS。
-- Maximum tested：200 concurrent Private WS connections；不是最大容量声明。
-- Windows native race：NOT AVAILABLE（32-bit MinGW 不支持 windows/amd64 race）。
-- Linux Docker focused/full unit/real-dependency integration race：PASS，无 race warning。
-- GitHub Actions workflow 已添加并 push；宿主无 `gh` 且当前网络工具无法读取仓库 Actions/API，`CI remote result: NOT OBSERVED`；local equivalent PASS。
-
-## Known Limitations
-
-- Compose 面向 development/single-host；基础设施均为单节点，无 HA/Kubernetes/内部 TLS/production secret manager。
-- 未设置 CPU/memory hard limit 或强制 read-only rootfs。
-- V1 audit 为 best-effort，无 transactional outbox、disk spool、DLQ 或 exactly-once 声明；长 outage 会有可观测 drop。
-- Private Chat Compose smoke 在正式注册用户后使用对称数据库 friend fixture；当前 V1 尚无 friend-management HTTP 流程。
-- 服务 restart 存在 DB 已提交但 ACK/live delivery 未完成窗口；history/session/unread 保留，V1 无 receiver delivery ACK。
-- Admin Vite build 保留既有非阻塞 chunk-size warning；CI 真实远端结果未能从当前工具观察。
-
-## Next Action
-
-- Day 4 / Checkpoint 4 完成后 STOP。
-- Next Authorized Work：NONE。
-- Next Planned：Day 4 Final Acceptance + Documentation / Interview Package；必须等待用户新授权。
+- `DAY 1 = COMPLETED`。
+- `DAY 2 = COMPLETED`。
+- `DAY 3 = COMPLETED`。
+- `DAY 4 = COMPLETED`。
+- `GIM V1 = COMPLETED`。
+- Next Authorized Work：NONE。除非用户开启新版本/新范围，否则 STOP。

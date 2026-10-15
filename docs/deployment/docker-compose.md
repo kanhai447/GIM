@@ -56,12 +56,11 @@ docker compose ps
 docker compose logs -f <service>
 ```
 
-For local performance verification, Chat, Group, File, and Logs expose an
-opt-in debug listener only on `127.0.0.1:6060` inside their own containers.
-It is not published to the host and is not routed by Gateway. The tracked
-Compose configuration enables it so `scripts/perf-snapshot.ps1` can record
-runtime goroutines, heap, DB pool, and audit producer queue/drop counters.
-Outside Compose, an empty `GIM_DEBUG_ADDR` keeps the listener disabled.
+本地性能验证时，Chat、Group、File 和 Logs 可在各自容器内启用仅监听
+`127.0.0.1:6060` 的 debug listener。它不发布到宿主机，也不经过 Gateway。
+当前 Compose 配置启用该监听，供 `scripts/perf-snapshot.ps1` 采集 goroutine、
+heap、数据库连接池和 audit producer queue/drop 计数；Compose 外将
+`GIM_DEBUG_ADDR` 留空即可禁用。
 
 长期运行容器配置 `unless-stopped`；migration、storage-init 与手动 bootstrap 不自动重启。应用日志写 stdout/stderr，Kafka audit 数据单独进入 `audit_logs`。
 
@@ -97,5 +96,9 @@ Go 使用多阶段静态构建，runtime 不含 Go toolchain；Web/Admin 使用 
 - 内部服务间无 TLS，也未接入 production secret manager。
 - 当前未设置 Compose CPU/memory hard limit，避免把开发机限制过死。
 - audit 是 best-effort，无 transactional outbox；Kafka 故障期间允许丢失 audit，新事件在恢复后继续。
-- 没有 Kubernetes、生产云部署或负载测试。
-- `Race Verification Pending`；Compose 不替代兼容 64-bit CGO 环境中的 race 验证。
+- 已完成单机负载与 5 分钟稳定性基线，但未进行多机、云环境或容量上限测试；最大已测值不是容量声明。
+- Windows native race 因当前 32-bit MinGW 不兼容而不可用；Linux Docker full/focused/real-dependency race 均 PASS，项目 Race Verification 已在兼容 Linux 环境完成。
+- Chat/Group 当前仅支持文本消息；无 receiver delivery/read receipt，File 尚未接入消息协议。
+- 浏览器下载会物化 Blob；删除最后一个文件引用后，物理孤儿对象等待后续 GC。
+- 高压重启存在 DB commit 与 ACK/live publish 之间的窗口；幂等重试与历史可恢复，但不承诺实时 exactly-once。
+- GitHub Actions workflow 已配置，最终本地等价检查 PASS；远端执行结果在收口环境中为 NOT OBSERVED。

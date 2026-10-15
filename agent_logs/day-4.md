@@ -125,3 +125,32 @@
 - docs/status：本记录所在提交，随后 push 并复核 equality/clean。
 - `Performance Baseline = COMPLETED`；`Stability = PASS`；`Race = PASS in compatible Linux environment`。
 - Next Authorized Work：NONE。Next Planned：Day 4 Final Acceptance + Documentation / Interview Package；严格停止。
+
+## 2026-10-15 Checkpoint 5 — Final Acceptance / Documentation / Interview Package
+
+### Scope
+
+- 不新增业务能力；对 Backend、Web、Admin、Compose smoke、001–008 migration、安全边界、测试数据和仓库卫生执行最终复核。
+- 重构根 README；新增 architecture/reliability/file-audit/decisions 与 interview package；修正 deployment 中过期的 load/race 描述。
+- 清理明确 E2E/perf 临时数据和可重建工作区产物，最后以 `docker compose down` 保留 volumes 收口。
+
+### Acceptance
+
+- Backend `go test ./... -count=1`、`go vet ./...`、gofmt、diff：PASS。
+- Web type-check、16 files / 90 tests、build：PASS；Admin type-check、11 files / 25 tests、build：PASS（仅已知 chunk warning）。
+- Compose focused smoke：Login、Private、Group、File、Admin Logs 全部 PASS；临时用户、群、消息、File 引用和 Admin 已清理。
+- 隔离空库 migration 001–008 UP/repeated UP/DOWN/dirty protection/RE-UP、schema/constraints/EXPLAIN/User-Auth regression：PASS；主库 8 applied / 0 dirty。
+- Secret Scan、repository safety、identity header、Admin second authorization、WS pre-upgrade auth、File path/MIME/size/ownership/privacy、unsafe HTML：PASS。
+- 10 个明确历史 E2E 账号与 2 个测试群及关联数据已事务清理；普通开发数据未触碰。
+- 文档相对链接、最终状态措辞、FIM independence：PASS。
+
+### Shutdown / Freeze
+
+- 停止前 16 个长期服务全部 healthy。
+- 执行 `docker compose down`（未加 `-v`）；五个 GIM named volumes 已确认保留。
+- Windows Native Race：NOT AVAILABLE（32-bit MinGW）；Linux Docker Race：PASS；Project Race Verification：PASS in compatible Linux environment。
+- GitHub Actions remote：NOT OBSERVED；local equivalent PASS，不阻塞最终验收。
+- `Day 4 / Checkpoint 5 = COMPLETED`。
+- `DAY 4 = COMPLETED`。
+- `GIM V1 = COMPLETED`。
+- Next Authorized Work：NONE；V1 冻结后 STOP。

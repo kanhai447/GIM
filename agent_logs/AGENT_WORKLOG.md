@@ -869,3 +869,13 @@
 - implementation/perf/CI：`69955ce test(perf): add reproducible stability and race verification`；docs/status：本记录所在提交。
 - `Performance Baseline = COMPLETED`；`Stability = PASS`；`Race Verification = PASS in compatible Linux environment`。
 - Next Authorized Work：NONE。Next Planned：Day 4 Final Acceptance + Documentation / Interview Package；Checkpoint 4 后严格停止。
+
+## 2026-10-15 Day 4 / Checkpoint 5 — Final Acceptance
+
+- 完成 Backend full test/vet/gofmt/diff、Web 16/90、Admin 11/25、Compose Login/Private/Group/File/Admin Logs、隔离 001–008 migration 和最终安全复核。
+- Private focused smoke 12/12 ACK、12/12 delivery；Group 12/12 ACK、36/36 delivery；File stream/hash/download/delete 与 Admin Logs 均 PASS。
+- 清理本轮 perf/admin 数据、10 个历史固定前缀 E2E 账号、2 个测试群及关联数据；主库 migration 8 applied / 0 dirty。
+- 重写 README；新增 architecture 与 interview 文档；移除 deployment 中过期 race/load 说明；全部完成边界与限制如实记录。
+- 删除可重建 tmp/helper/dist；保留可能属于真实开发数据的 ignored local data。Compose 在 16 服务 healthy 后 `down`，五个 named volumes 保留。
+- Windows native race NOT AVAILABLE；Linux Docker race PASS；项目 race 验证在兼容 Linux 环境 PASS；remote CI NOT OBSERVED、local equivalent PASS。
+- `DAY 4 = COMPLETED`；`GIM V1 = COMPLETED`；最终提交、push 和 equality/clean 复核后停止。
