@@ -115,3 +115,5 @@ Gateway 通过 etcd 前缀 `/gim/services/{service}/{instance}` 查找 API 服�
 原 docker-compose 只部署用户端 `fim_web`，没有部署 `fim_admin`。GIM 应补充 Admin 的构建/启动说明；正式环境只公开 Gateway 和前端入口，API/RPC 服务不直接暴露公网，避免绕过 Gateway 伪造 `Role` Header。
 
 Gateway 在调用 Auth 前必须删除外部请求中的 `User-ID`、`Role`、`ValidPath`；公开请求保持无身份 Header，受保护请求只注入 Auth 返回的可信身份。内部 API 对这些 Header 的信任以网络隔离和仅公开 Gateway 为前提。
+
+Day 4 的 `compose.yaml` 提供单机开发拓扑：Web/Admin 使用 production build + 非特权 Nginx，同源 `/api`（包括 WebSocket Upgrade）代理到 Gateway；Gateway 继续从 etcd 发现七个 API，RPC 使用 Docker DNS 配置的内部端点。只有 Gateway、两个前端与 loopback 调试端口发布到宿主机，业务 API/RPC 保持 Docker network 内部可见。具体启动、Secret、bootstrap 与清理流程见 `docs/deployment/docker-compose.md`。

@@ -16,3 +16,7 @@
 10. `START_AGENT.md` 用于第一次和 Agent 对话
 
 推荐新项目目录：`server/ + web/ + admin/`；三个 FIM 源码放在本地 `reference/` 作为只读参考。
+
+## Docker Compose quick start
+
+全栈单机开发部署见 [docs/deployment/docker-compose.md](docs/deployment/docker-compose.md)。准备被 Git 忽略的 `.env.compose.local` 后运行 `docker compose up -d --build`。

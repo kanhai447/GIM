@@ -65,3 +65,34 @@
 - Log/status：本记录所在提交，随后 push 并复核 `HEAD == origin/main` / clean。
 - `ADMIN V1 = FUNCTIONAL`；`Day 4 / Checkpoint 2 = COMPLETED`。
 - Next Authorized Work：NONE。Next Planned：Docker Compose Full Stack Deployment；未进入下一 Checkpoint。
+
+## 2026-10-15 Checkpoint 3 — Docker Compose Full Stack Deployment
+
+### Scope
+
+- 新增单一 `compose.yaml`，运行 MySQL、Redis、etcd、Kafka KRaft、migration、User/Group RPC、Auth/User/Chat/Group/File/Settings/Logs API、Gateway、Web 与 Admin。
+- Go 共享多阶段镜像；Web/Admin production build 由非特权 Nginx 提供，并通过同源 `/api` 代理 Gateway/WS。
+- 新增容器环境适配、minimal health/readiness、File named volume、一次性正式 Admin bootstrap 与部署文档；没有新增业务能力或改变 Chat/Group/File 协议。
+
+### Acceptance
+
+- clean `down -v -> up`、persistent `down -> up`、migration 001–008 idempotency、File restart/down persistence、Chat/Group/File/Logs restart、etcd lease replacement/cleanup、MySQL recovery：PASS。
+- Compose API/Auth、Private Chat、Group Chat、File、Admin focused real-browser/API smoke：PASS。
+- Kafka 正常链路 `business event -> consumer -> MySQL -> Admin Logs API` PASS；Kafka 停止时核心业务继续成功，恢复后新 audit 继续消费。
+- 最终 long-running containers 全部 healthy；migration/storage-init exited 0；Gateway/Web/Admin HTTP 200。
+- backend full test/vet/gofmt、Web 16/90、Admin 11/25、两端 production build、Compose config/build、核心 no-cache build、Secret Scan/reference independence：PASS。
+- `Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT`；`Race Verification Pending`。
+
+### Architecture / Limitations
+
+- 单 bridge network；MySQL/Redis/etcd/Kafka/File 使用 named volumes；内部依赖走 Docker DNS，业务 API 路由继续使用 etcd discovery。
+- `.env.compose.local` ignored/runtime-only；模板只含 placeholder；Admin bootstrap 不自动运行或重置密码。
+- development/single-host only；基础设施单节点，无 HA、内部 TLS、production secret manager、resource hard limits 或 Kubernetes。
+- audit 仍为 best-effort；Private Chat smoke 因当前无 friend-management HTTP 流程使用最小对称数据库 fixture。
+
+### Git / Freeze
+
+- implementation commit：`36e694e chore(deploy): add full stack docker compose`。
+- docs/status commit：本记录所在提交，随后 push 并复核 `HEAD == origin/main` / clean。
+- `DOCKER COMPOSE = FUNCTIONAL`；Next Authorized Work：NONE。
+- Next Planned：Performance / Stability / CI Race；严格未进入下一 Checkpoint。

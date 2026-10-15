@@ -829,3 +829,25 @@
 - docs/status：本记录所在提交，随后 push 并复核 equality/clean。
 - `ADMIN V1 = FUNCTIONAL`；`Day 4 / Checkpoint 2 = COMPLETED`；Next Authorized Work：NONE。
 - Next Planned：Docker Compose Full Stack Deployment；严格未进入下一 Checkpoint。
+
+## 2026-10-15 Day 4 / Checkpoint 3 — Docker Compose Full Stack Deployment
+
+### Implementation
+
+- 建立单一全栈 Compose、共享 Go multi-stage image、Web/Admin production Nginx image、同源 Gateway/WS reverse proxy、named volumes、readiness/startup order 与 non-root runtime。
+- 配置 loader 支持容器 runtime env/bind/advertise addresses；业务服务仍由 etcd discovery，未硬编码业务 service URL。
+- migration 独立一次性运行；Admin bootstrap 为显式 opt-in 工具，密码只从运行时 env 接收且不自动重置。
+
+### Acceptance
+
+- clean/persistent start、001–008 migration、File persistence、Chat/Group/File/Logs restart、etcd lease、MySQL recovery 与 graceful Logs stop：PASS。
+- formal Auth API、Private/Group real browser WS、File browser、Admin browser、Kafka audit end-to-end：PASS；Kafka down 时核心业务仍成功，恢复后新事件继续消费。
+- Compose config/full build/core no-cache build、backend full tests/vet/gofmt、Web 16/90 + build、Admin 11/25 + build、Secret Scan/reference independence：PASS。
+- 最终所有 long-running services healthy；migration/storage-init exited 0；Compose 环境保留运行。
+- `Race: NOT AVAILABLE IN CURRENT LOCAL ENVIRONMENT`；`Race Verification Pending`。
+
+### Git / Freeze
+
+- implementation commit：`36e694e chore(deploy): add full stack docker compose`。
+- docs/status commit：本记录所在提交，随后 push 并复核 equality/clean。
+- `DOCKER COMPOSE = FUNCTIONAL`；Next Authorized Work：NONE；Next Planned：Performance / Stability / CI Race。

@@ -67,4 +67,6 @@ Kafka 部署配置使用 `KAFKA_BROKERS`、`KAFKA_AUDIT_TOPIC`（默认 `gim.aud
 
 ## 4. Docker Compose
 
-V1 至少一键启动 MySQL、Redis、etcd。Kafka/ZooKeeper 不应成为 `docker compose up` 的必选依赖。
+Day 4 完整 V1 的主 `compose.yaml` 一键启动 MySQL、Redis、单节点 etcd 与 Kafka 4.2.2 KRaft，以及全部应用 runtime；不引入 ZooKeeper。应用通过 Docker DNS service name 访问基础设施，API 仍经 etcd 注册/发现，不能把容器内部依赖配置为 `localhost`。
+
+Compose 运行时直接读取环境变量；`.env.compose.example` 只包含 placeholder，实际 `.env.compose.local` 必须被 Git 忽略。`INTERNAL_BIND_HOST` 用于监听所有容器接口，`*_API_HOST`/`*_RPC_HOST` 用于可达的 Docker DNS endpoint，避免把 bind address 当成 advertised address。完整操作说明见 `docs/deployment/docker-compose.md`。
