@@ -5,11 +5,13 @@ import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/file'
+import { useFriendStore } from '@/stores/friend'
 import { useGroupStore } from '@/stores/group'
 
 const auth = useAuthStore()
 const chat = useChatStore()
 const file = useFileStore()
+const friend = useFriendStore()
 const group = useGroupStore()
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +19,7 @@ const router = useRouter()
 async function logout(): Promise<void> {
   chat.stop()
   file.stop()
+  friend.stop()
   group.stop()
   try {
     await auth.logout()
@@ -35,12 +38,13 @@ async function logout(): Promise<void> {
       <router-link to="/" class="brand">GIM<span>Messaging</span></router-link>
       <el-menu :default-active="route.path.startsWith('/chat') ? '/chat' : route.path" router class="nav-menu">
         <el-menu-item index="/">概览</el-menu-item>
+        <el-menu-item index="/contacts">通讯录</el-menu-item>
         <el-menu-item index="/chat">私聊</el-menu-item>
         <el-menu-item index="/group">群聊</el-menu-item>
         <el-menu-item index="/files">文件</el-menu-item>
         <el-menu-item index="/profile">个人资料</el-menu-item>
       </el-menu>
-      <p class="phase-note">Day 3 · Reliable IM & Files</p>
+      <p class="phase-note">GIM V1 · IM · Files · Friends</p>
     </el-aside>
     <el-container>
       <el-header class="topbar">
