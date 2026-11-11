@@ -1,79 +1,56 @@
 # GIM Current State
 
 - **PROJECT:** GIM
-- **V1 STATUS:** COMPLETED
-- **Current Day:** Day 4 — COMPLETED
-- **Current Checkpoint:** Day 4 / Checkpoint 5 — COMPLETED
-- **Last Completed Work:** Final Acceptance / Documentation / Interview Package
+- **V1 STATUS:** COMPLETED（范围已收敛，见 `AGENTS.md` §5.1）
+- **Current Round:** 2026-11-11 范围收敛（C1/C2 + 好友闭环 + 文档口径 + 删除 group-rpc）— COMPLETED
 - **Branch:** `main`
-- **Final Baseline Before Checkpoint 5:** `1cf870b18b5833fdb02e108e36dbf4b108b62822`
-- **Final Commit:** 本状态记录所在最终文档补充提交
-- **Working Tree:** 最终提交 push 后复核 clean
-- **Next Authorized Work:** NONE
-- **Next Planned Work:** NONE — V1 frozen
+- **Working Tree:** 本轮日志提交后复核 clean
+- **Next Authorized Work:** NONE — 等待用户确认下一阶段
 
-## Day status
+## 本轮变更
 
-- Day 1 — Identity / Auth / Gateway / User / migration / frontend foundations：COMPLETED。
-- Day 2 — Private Chat WS / Presence / ACK / idempotency / session / unread / frontend：COMPLETED。
-- Day 3 — Group Chat / File backend+frontend / integration acceptance：COMPLETED。
-- Day 4 — Kafka Audit / Admin / Docker Compose / Performance / Stability / Race / Final Acceptance：COMPLETED。
+- **并发修复**：Admin 私聊删除的 `repairSession` 不再吞掉非 `RecordNotFound` 错误（C1）；admin delete 与发消息统一按 user_id 升序加锁，并对 MySQL 1213 做最多 3 次、10/20 ms、context-aware 的事务重建重试（C2）。
+- **好友闭环**：新增 `/api/user/search`、`/api/user/friends`（GET/POST/PUT/DELETE）、`/api/user/valid`、`/api/user/valid_status`、`/api/user/friend_info`；事务内行锁 + pending 唯一键保证并发同意只成功一次；好友列表读取 Redis Presence 并在故障时降级离线。用户端新增 `/contacts` 页面、API、Pinia store 与组件测试。
+- **文档口径**：`AGENTS.md` §5.1、README、`server/`/`web/`/`admin/` README、docs 05/06/07/10、面试材料统一为“V1 已实现 / V2 未实现”。
+- **拓扑收敛**：删除无调用方的 `cmd/group-rpc`、`internal/group/transport/grpc`、`api/group/v1`，同步 Compose（18 services）、Dockerfile、环境模板和拓扑文档；当前只有 User RPC。
 
-## Component status
+## 组件状态
 
-- Auth / User / Gateway：FUNCTIONAL / regression PASS。
-- Private Chat V1：COMPLETED / regression and focused smoke PASS。
-- Group Chat V1：COMPLETED / regression and focused smoke PASS。
-- File V1：COMPLETED / regression and focused smoke PASS。
-- Settings：FUNCTIONAL / regression PASS。
-- Kafka Audit / Logs：FUNCTIONAL / regression and Admin Logs smoke PASS。
-- User Web：FUNCTIONAL / 16 files / 90 tests / type-check / build PASS。
-- Admin Web：FUNCTIONAL / 11 files / 25 tests / type-check / build PASS。
-- Docker Compose：FUNCTIONAL；最终验收后已 `down`，named volumes preserved。
+- Auth / User / Gateway：FUNCTIONAL；`go test ./...` 覆盖。
+- 好友闭环：FUNCTIONAL（单测 + 前端测试）；真实 MySQL 集成用例已写但本轮未执行。
+- Private / Group Chat：文本消息、ACK、幂等、session/unread 状态未改动；本轮只改 admin 删除路径与锁顺序。
+- File / Settings / Logs：未改动。
+- User Web：19 files / 103 tests、type-check、build PASS。
+- Admin Web：11 files / 25 tests、type-check PASS；本轮未改动。
+- Compose：`docker compose config --quiet` PASS；daemon 未运行，未做 build/up。
 
-## Final acceptance
+## 验证矩阵（本轮真实执行）
 
-- Backend：`go test ./... -count=1` PASS；`go vet ./...` PASS；repository gofmt PASS；`git diff --check` PASS。
-- Empty DB migration：001–008 UP / repeated UP / DOWN ALL / dirty protection / RE-UP PASS；主库 `schema_migrations` 8 applied / 0 dirty。
-- Compose focused smoke：Login、Private Chat、Group Chat、File、Admin Logs PASS。
-- Repository safety / Secret Scan / XSS / auth header / Admin second authorization / WS pre-upgrade auth / File path-MIME-size-ownership/privacy：PASS。
-- Test data：perf/final-admin/固定 CP4+CP6 E2E users、groups、messages、File references 已清理；普通开发数据未触碰。
-- Workspace：可重建 `.tmp`、helper、Web/Admin dist 已清理；tracked temp/coverage/log/binary/IDE artifact 为 0。
-- Documentation：README、architecture、reliability、deployment、performance、interview package 和 operation log 已冻结。
+| 项目 | 结果 |
+|---|---|
+| `go build ./...` / `go vet ./...` / `gofmt -l .` | PASS / PASS / 无输出 |
+| `go test ./... -count=1` | PASS（69 个包 ok） |
+| C1 回归测试（修复前失败、修复后通过） | PASS |
+| C2 锁顺序/重试/退避单测 | PASS |
+| 好友 service / HTTP 单测 | PASS |
+| Web type-check / vitest / build | PASS / 19 files 103 tests / PASS |
+| Admin type-check / vitest | PASS / 11 files 25 tests |
+| `docker compose config --quiet` | PASS（18 services） |
+| `scripts/check-repository-safety.ps1` | PASS |
 
-## Performance / stability / race
+## 本轮未执行
 
-- Maximum tested：200 concurrent Private WS connections；不是容量上限声明。
-- 100 connections / 50 msg/s：1000/1000 ACK、2600/2600 delivery、ACK p95 13.47 ms。
-- Final 5-minute soak：Private 1500/1500 rows/ACK、2100/2100 delivery；Group 600/600 rows/ACK、6000/6000 delivery；0 failure/reconnect/drop。
-- Stability：PASS。
-- Windows Native Race：NOT AVAILABLE（32-bit MinGW 不兼容）。
-- Linux Docker Race：full / focused / real-dependency integration PASS。
-- Project Race Verification：PASS in compatible Linux environment。
-- GitHub Actions remote result：NOT OBSERVED；local equivalent PASS，不阻塞 Final Acceptance。
+- 20 个真实依赖集成测试（需要 `GIM_ENV_FILE` + MySQL/Redis/etcd/Kafka；Docker 未运行）。
+- 好友并发同意的真实 MySQL 运行（代码与断言已写）。
+- `go test -race`：Windows native 因 32-bit MinGW 不可用，Linux Docker 不可用。
+- Compose build/up、migration UP/DOWN、浏览器 E2E、性能基线复跑。
 
-## V1 limitations
+## V2 / 剩余限制
 
-- Chat/Group 仅支持文本；File 未接入消息协议。
-- 无 receiver delivery receipt/read receipt；pending 不跨浏览器刷新。
-- 用户端好友管理 HTTP/UI 闭环未完成，Private smoke 使用可清理的对称好友 fixture。
-- File 物理孤儿对象延迟 GC；浏览器下载物化 Blob。
-- Audit 是 bounded best-effort，无 transactional outbox、DLQ、disk spool 或 exactly-once。
-- 高压 restart 存在 DB commit 与 ACK/live publish 窗口；幂等重试和历史可恢复。
-- single-host/single-node；无 HA、Kubernetes、内部 TLS 或 production Secret Manager。
-- Admin chunk warning；remote CI NOT OBSERVED。
-
-## Final runtime state
-
-- Compose 停止前 16 个常驻服务全部 healthy。
-- 已执行 `docker compose down`，没有使用 `-v`。
-- `gim_mysql_data`、`gim_redis_data`、`gim_etcd_data`、`gim_kafka_data`、`gim_file_storage` 均保留。
+- 富消息（图片/视频/文件/语音/回复/引用/撤回/@/图文）、好友上线提醒、`user_confs` 读写、`DELETE /api/chat/chat`、`POST /api/user/valid`、`open_login`、delivery/read receipt、WS Ticket、多实例路由、文件 GC、审计 outbox/DLQ。
+- `.env.example` 仍保留未被读取的 `AUTH/CHAT/FILE/SETTINGS_RPC_PORT` 占位键（本轮只授权删除 `GROUP_RPC_*`）。
 
 ## Freeze
 
-- `DAY 1 = COMPLETED`。
-- `DAY 2 = COMPLETED`。
-- `DAY 3 = COMPLETED`。
-- `DAY 4 = COMPLETED`。
-- `GIM V1 = COMPLETED`。
-- Next Authorized Work：NONE。除非用户开启新版本/新范围，否则 STOP。
+- 本轮四个任务均已完成：C1/C2、好友闭环、文档收缩、删除 group-rpc。
+- 未打新 tag；未执行 `--force` push。
