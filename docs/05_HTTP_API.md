@@ -34,7 +34,7 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 
 - `GET /api/user/user_info`：当前登录用户的最小公开资料。
 - `GET /api/user/search?keyword=&limit=`：按账号/昵称模糊或精确数字 ID 搜索启用用户；`keyword` 必填（兼容旧参数 `search`），`limit` 默认 20、最大 50；排除调用者自己，返回 `isFriend`。
-- `POST /api/user/friends` `{friendID,message?}`：发送好友申请；`message` 最多 64 字符。已是好友返回 `1114`，同对用户已有 pending 申请（含反向）返回 `1116`，不能添加自己返回 `1113`。
+- `POST /api/user/friends` `{friendID,message?}`：发送好友申请；`message` 最多 64 字符。已是好友返回 `1114`，同对用户已有 pending 申请（含反向）返回 `1116`，不能添加自己返回 `1113`。**被拒绝（status=2）后允许再次申请**：rejected 历史记录保留，新的申请生成独立 pending 行；同一对用户同一时间只允许一条 pending。
 - `GET /api/user/valid?status=&limit=`：当前用户收到的申请列表，默认 `status=0`（pending），`status=all` 返回全部状态；`limit` 默认 20、最大 50；按申请 ID 倒序。
 - `PUT /api/user/valid_status` `{validID,status}`：`status` 仅允许 `1=accepted`、`2=rejected`。服务端在事务内锁定申请行，校验接收者、pending 状态，同意时写双向好友关系并更新状态；并发处理同一申请只有一个成功，另一个返回 `1118`。
 - `GET /api/user/friends?limit=`：当前用户好友列表，`limit` 默认/最大 50，按好友关系 ID 倒序，返回 `remark` 与 `isOnline`。

@@ -142,6 +142,44 @@ func TestFriendLifecycleMySQLAndConcurrency(t *testing.T) {
 	if _, err := service.Respond(ctx, 4, rejected.ID, friend.StatusAccepted); friendErrorCode(t, err) != friend.CodeRequestHandled {
 		t.Fatalf("respond to handled request code = %d", friendErrorCode(t, err))
 	}
+	if status := friendVerifyStatus(t, ctx, rawDB, rejected.ID); status != friend.StatusRejected {
+		t.Fatalf("rejected request status = %d, want %d", status, friend.StatusRejected)
+	}
+
+	// A rejection keeps its history but must not block a new application: the
+	// pending-pair unique key only covers status=0 rows (the generated pending
+	// columns are NULL once the request is processed).
+	reapplied, err := service.SendRequest(ctx, 3, 4, "second try")
+	if err != nil {
+		t.Fatalf("re-apply after rejection: %v", err)
+	}
+	if reapplied.ID == rejected.ID || reapplied.Status != friend.StatusPending {
+		t.Fatalf("re-applied request = %#v, want a new pending id", reapplied)
+	}
+	if status := friendVerifyStatus(t, ctx, rawDB, rejected.ID); status != friend.StatusRejected {
+		t.Fatalf("rejected history status changed to %d", status)
+	}
+	if _, err := service.SendRequest(ctx, 3, 4, ""); friendErrorCode(t, err) != friend.CodeDuplicateRequest {
+		t.Fatalf("duplicate pending after re-apply code = %d, want %d", friendErrorCode(t, err), friend.CodeDuplicateRequest)
+	}
+	if _, err := service.Respond(ctx, 4, reapplied.ID, friend.StatusAccepted); err != nil {
+		t.Fatalf("accept re-applied request: %v", err)
+	}
+	if rows := friendRowCount(t, ctx, rawDB, 3, 4); rows != 2 {
+		t.Fatalf("friendship rows after re-apply accept = %d, want 2", rows)
+	}
+	if _, err := service.SendRequest(ctx, 3, 4, ""); friendErrorCode(t, err) != friend.CodeAlreadyFriend {
+		t.Fatalf("apply after becoming friends code = %d, want %d", friendErrorCode(t, err), friend.CodeAlreadyFriend)
+	}
+}
+
+func friendVerifyStatus(t *testing.T, ctx context.Context, db *sql.DB, requestID uint64) int {
+	t.Helper()
+	var status int
+	if err := db.QueryRowContext(ctx, `SELECT status FROM friend_verifies WHERE id = ?`, requestID).Scan(&status); err != nil {
+		t.Fatalf("read friend verification status %d: %v", requestID, err)
+	}
+	return status
 }
 
 func friendErrorCode(t *testing.T, err error) uint32 {

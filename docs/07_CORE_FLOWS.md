@@ -125,6 +125,10 @@ Approve -> PUT /api/user/valid_status {status=1}
   -> commit
   -> 前端移除该申请并刷新好友列表
 Reject -> 同一加锁与校验路径，只把 status 置 2，不写 friends
+Re-apply after rejection -> 允许
+  -> rejected 历史行保留；该行 pending_* 生成列已是 NULL，不占用 pending 唯一键
+  -> 新 INSERT 生成新的 pending 行（status=0），再次申请成功
+  -> 若已有新的 pending，则仍返回 1116；若已互为好友，返回 1114
 ```
 
 并发两个管理员点击“同意”时，第二个请求阻塞在行锁上，提交后看到 `status=1` 并返回 `1118`，好友关系只会写入一次。`GET /api/user/friends` 从 Redis Presence 读取 `isOnline`；Presence 仍只由 Chat WS 写入，好友流程不改在线状态。
