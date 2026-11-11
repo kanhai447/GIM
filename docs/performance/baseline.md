@@ -96,7 +96,7 @@ Private soak 的通用 2204 通过只记录安全类别的诊断稳定定位为 
 ## Regression, cleanup, and limits
 
 - Backend：full tests、vet、repository gofmt、diff check PASS。
-- Web：type-check、16 files / 90 tests、build PASS。
+- Web：type-check、16 files / 90 tests、build PASS（2026-10-15 时点；好友迭代后为 19 files / 103 tests）。
 - Admin：type-check、11 files / 25 tests、build PASS；仅保留既有 chunk-size warning。
 - Repository safety 与 Secret Scan PASS。
 - Cleanup：`perf-user-*`、`perf-group-*`、private/group perf messages、sessions/unread/file references 与两个已核实无引用的物理对象已清理；最终补强复验及三次准备失败留下的 `perf-user-final-*` 也按精确前缀清理，数据库核验 remaining=0。共享 audit topic 的历史事件按既有 retention 保留，不做危险的 topic truncate/Redis flush。

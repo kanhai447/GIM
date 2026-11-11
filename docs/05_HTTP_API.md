@@ -22,7 +22,7 @@ Gateway 不解析 JWT，也不维护第二套公开路径。每个合法 API 请
 - `POST /api/auth/register` `{account,nickname,pwd,rePwd}` -> 公开用户资料；不得返回密码哈希
 - `POST /api/auth/authentication` 内部/网关认证，兼容原 Header `Token`/`ValidPath`，返回 `{userID,role,authenticated,public}`
 - `POST /api/auth/logout`，从 `token` Header 读取 JWT，并返回 `{loggedOut:true}`
-- `POST /api/auth/open_login` 可保留但非 V1 验收重点
+- `POST /api/auth/open_login`：**V2 / 未实现**。Auth 只注册 login/register/authentication/logout；公开 allowlist 保留该路径是为了未来兼容，当前调用会得到“不支持的服务/路由不存在”类响应。
 
 JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和过期时间分别从 `JWT_SECRET`、`JWT_EXPIRE_SECONDS` 读取；错误响应不得暴露验签细节。
 
@@ -62,7 +62,7 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 - `GET /api/chat/history?peerUserID=&beforeMessageID=&limit=`（兼容 `friendId`）
 - `GET /api/chat/session?limit=`
 - `POST /api/chat/user_top` `{peerUserID,isTop}`（`friendId` 可作为 peer 字段兼容）
-- `DELETE /api/chat/chat`
+- `DELETE /api/chat/chat`：**V2 / 未实现**。隐藏会话的 Repository 方法已存在（`chat_sessions.hidden_at`），但未注册 HTTP 路由，Web 也未调用；V1 仅通过新消息恢复可见性。
 
 `GET /api/chat/history` 首次不传 `beforeMessageID`，后续使用上一页返回的 `nextBeforeMessageID`；核心查询为 `id < cursor`，默认 20、最大 100。响应消息按 oldest -> newest 返回，并带 `hasMore/nextBeforeMessageID`。只查询当前可信 `User-ID` 与 peer 的双向消息，cursor 必须属于该会话；`chat_message_deletions` 只过滤当前用户自己的记录。
 
@@ -131,7 +131,7 @@ read cursor 只允许单调推进；目标消息必须属于该群。partial rea
 
 - `POST /api/file/image`
 - `POST /api/file/file`
-- `GET /api/file/:id-or-uuid`
+- `GET /api/file/:id`（数字为 UserFile ID；同时接受 FileObject UUID，但仍必须存在当前用户引用）
 
 上传使用 multipart。后端必须限制最大大小并验证 MIME/扩展名策略；返回 URL 保持前端可直接用于消息。
 
@@ -142,7 +142,7 @@ Day 3 / Checkpoint 5 的精确用户文件契约：
 - `GET /api/file/user-files?beforeId=&limit=`：当前用户文件列表，默认 20、最大 100，使用 UserFile ID cursor。
 - `GET /api/file/user-files/:id`：当前用户文件安全元数据。
 - `DELETE /api/file/user-files/:id`：仅删除当前用户的 UserFile 引用；V1 保留 FileObject/物理对象供共享引用和后续 GC。
-- `GET /api/file/:id-or-uuid`：当前用户下载。数字为 UserFile ID；UUID 兼容 FileObject UID，但仍必须存在当前用户引用。响应使用 server-detected MIME、`Content-Length`、`Content-Disposition: attachment` 和 `X-Content-Type-Options: nosniff`，正文流式输出。
+- `GET /api/file/:id`：当前用户下载。数字为 UserFile ID；UUID 兼容 FileObject UID，但仍必须存在当前用户引用。响应使用 server-detected MIME、`Content-Length`、`Content-Disposition: attachment` 和 `X-Content-Type-Options: nosniff`，正文流式输出。
 
 上传响应只包含 `id/uid/fileName/size/mimeType/sha256/url/createdAt/objectCreated/referenceCreated/src` 等安全元数据；`src` 与 `url` 相同以兼容现有 Web 字段。绝不返回 storage root/path。原 `/api/file/files` 仍保留给 Day 4 Admin，不在本 Checkpoint 改成用户列表。
 
@@ -179,7 +179,7 @@ Agent 不得为了“更 RESTful”随意改已有路径和字段。需要改时
 
 ### Chat Admin
 - `GET /api/chat/admin/history?beforeId=&limit=&userId=&sendUserId=&revUserId=`
-- `GET /api/chat/admin/session`（参考后端存在，Admin 当前页面主要使用 history）
+- `GET /api/chat/admin/session`：**V2 / 未实现**。参考后端存在该路由，GIM Admin 只使用 history 列表。
 - `DELETE /api/chat/admin/history?messageId=`：写 `admin_deleted_at` tombstone，并事务修复相关 session；不释放 clientMsgId 幂等键。
 
 ### Group Admin

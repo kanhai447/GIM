@@ -161,11 +161,13 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 
 ## 5. 消息类型
 
-沿用参考 `ctype.MsgType`：文本、图片、视频文件、普通文件、语音文件、撤回、回复、引用、@、图文。VoiceCall/VideoCall V1 不验收，可保留类型但不能成为核心依赖。
+沿用参考 `ctype.MsgType` 的类型编号：文本、图片、视频文件、普通文件、语音文件、撤回、回复、引用、@、图文。
+
+**V1 只实现文本 `type=1`**：服务端 `validate` 拒绝其他类型（错误 `2201`/`2403`），前端只提供文本输入。图片、视频、普通文件、语音、撤回、回复/引用、@、图文和 VoiceCall/VideoCall 均为 **V2**，不得在 README 或面试材料中描述为已实现。
 
 ## 6. 撤回
 
-V1 可沿用“撤回是一条特殊消息”的参考模型，`withdrawMsg.msgID` 指向原消息。服务端验证操作者、时间策略（若配置）后落库撤回事件并推送。历史 DTO 不应泄露不应展示的原内容。
+**V2 / 未实现**。参考实现把撤回建模为一条特殊消息（`withdrawMsg.msgID` 指向原消息）；GIM V1 没有撤回消息类型、没有撤回路由/事件，`chat_message_deletions` 只表达“仅自己隐藏历史”，与撤回是不同语义。
 
 ## 7. Ping/Pong
 

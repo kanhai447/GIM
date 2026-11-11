@@ -13,7 +13,8 @@
 
 ## Full-stack / delivery
 
-- 交付 Vue 3 用户端与独立 Admin，使用 TypeScript、Pinia、Router、Axios、Element Plus/Arco/ECharts；最终 Web 16 files / 90 tests、Admin 11 files / 25 tests、类型检查和生产构建通过。
+- 交付 Vue 3 用户端与独立 Admin，使用 TypeScript、Pinia、Router、Axios、Element Plus/Arco/ECharts；好友迭代后 Web 19 files / 103 tests、Admin 11 files / 25 tests、类型检查和生产构建通过（V1 收口时为 16/90）。
+- 实现好友闭环：搜索、申请、事务内并发安全同意、好友列表 Presence、方向性备注与删除，配套 Go 单元测试和 Vue 页面/组件测试。
 - 搭建 MySQL/Redis/etcd/Kafka KRaft/12 个应用进程/Web/Admin 的单一 Compose 栈，包含 001–008 migration、健康依赖、非特权镜像、named volumes、恢复与持久性验证。
 - 建立负载工具、资源快照、Linux Docker race runner 和 GitHub Actions workflow；记录 200 个 Private WS 最大已测值与 100 连接 50 msg/s 下 13.47 ms ACK p95，明确不将其描述为容量上限。
 

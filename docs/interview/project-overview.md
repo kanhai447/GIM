@@ -59,14 +59,15 @@ Gateway 清洗伪造身份头，Auth 是身份权威，Admin 目标服务二次�
 - WebSocket 使用单写模型、有界队列、心跳和幂等清理，而不是并发 goroutine 直接写连接。
 - session 表不是为了修复虚构的 `MAX(msg_preview)` bug，而是为未读、已读、置顶、隐藏和稳定查询复杂度建立可扩展模型。
 - 真实 soak 找到 MySQL 1213，并只对安全事务边界做有限、可取消的重建重试。
+- 好友闭环用“申请行锁 + 双向关系写入 + pending 唯一键”保证并发同意只成功一次、反向重复申请被拒绝；Presence 只读，Redis 故障降级为离线。
 - 文件不用 `io.ReadAll`；审计不使用共享可变事件对象，也不记录敏感内容。
 - Admin API 同时依赖 Gateway 权威身份和目标服务角色检查，前端路由不作为安全边界。
 
 ## Honest gaps
 
-- Chat/Group 当前仅支持文本，File 尚未进入消息协议。
-- 没有 receiver delivery/read receipt，pending 不跨浏览器刷新。
-- 用户端好友管理闭环尚未完成。
+- Chat/Group 当前仅支持文本，File 尚未进入消息协议；富消息为 V2。
+- 没有 receiver delivery/read receipt，pending 不跨浏览器刷新；好友 `isOnline` 只在页面加载时读取，没有实时上线提醒。
+- 好友申请列表只提供接收方向；`POST /api/user/valid`、`DELETE /api/chat/chat`、`user_confs` 编辑为 V2。
 - Audit 无 outbox/DLQ/exactly-once；文件无物理孤儿 GC。
 - Compose 是单机单节点，无 HA、内部 TLS、Secret Manager 或 Kubernetes。
 - 压力重启仍可能发生 commit 已成功但 ACK/实时推送丢失；客户端重试和历史可恢复。

@@ -25,6 +25,16 @@
 14. Session list 覆盖置顶/时间排序、peer/preview JOIN、用户维度隐藏与新消息恢复可见；History 覆盖 message-ID 两页 cursor、越权 cursor 拒绝和用户维度 deletion。
 15. 注入 message/sender-session/receiver-session 失败时事务全部回滚且无 ACK/Publish；commit 后 Redis publish 失败仍保留 DB 与 ACK。
 
+## 2A. 好友闭环场景
+
+- 搜索排除自己、只返回启用账号，并正确标记 `isFriend`。
+- 发送申请后再次发送（同向/反向）返回 `1116`；已是好友返回 `1114`；添加自己返回 `1113`。
+- 两个并发请求同意同一申请：恰好一个成功、一个返回 `1118`，`friends` 只有双向两行。
+- 非接收者处理申请返回 `1119`；处理已处理申请返回 `1118`；拒绝不创建好友关系。
+- 好友列表返回 `isOnline`（Redis Presence），Redis 故障时降级为 `false` 且列表仍可用；好友接口不修改 Presence。
+- 备注只影响当前用户方向；删除好友后双向行消失，再次删除返回 `1115`。
+- 前端 `/contacts` 页面：搜索、申请、同意/拒绝、备注、删除、跳转私聊；恶意昵称/申请附言按文本渲染，不产生 DOM 注入。
+
 ## 3. 文件场景
 
 - 图片/普通文件上传与访问。

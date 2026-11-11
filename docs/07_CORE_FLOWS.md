@@ -109,9 +109,25 @@ duplicate retry 只返回同一 ACK，不再改变 session/unread 或发布。Re
 
 V1 群规模按参考项目限制；同步 session 扇出成本记录为大群 V2 优化点。
 
-## 6. 好友申请通过
+## 6. 好友申请与通过
 
-验证记录加锁/事务 -> 确认状态未处理 -> 防重复 friendship -> 建好友关系 -> 更新验证状态 -> commit。前端刷新好友列表。
+```text
+Search users -> GET /api/user/search（排除自己、只返回启用账号、标记 isFriend）
+Send request -> POST /api/user/friends
+  -> 事务内检查双向 friendship（已存在 -> 1114）
+  -> INSERT friend_verifies(status=0)
+  -> pending 生成列唯一键阻止同对用户反向/并发重复申请（1062 -> 1116）
+Approve -> PUT /api/user/valid_status {status=1}
+  -> 事务内 SELECT ... FOR UPDATE 申请行
+  -> 校验 receiver == 当前用户（否则 1119）与 status == 0（否则 1118）
+  -> INSERT 双向 friends（ON DUPLICATE KEY 幂等）
+  -> UPDATE 申请 status=1
+  -> commit
+  -> 前端移除该申请并刷新好友列表
+Reject -> 同一加锁与校验路径，只把 status 置 2，不写 friends
+```
+
+并发两个管理员点击“同意”时，第二个请求阻塞在行锁上，提交后看到 `status=1` 并返回 `1118`，好友关系只会写入一次。`GET /api/user/friends` 从 Redis Presence 读取 `isOnline`；Presence 仍只由 Chat WS 写入，好友流程不改在线状态。
 
 ## 7. 文件消息
 

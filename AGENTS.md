@@ -61,9 +61,33 @@ GIM 是一个用于后端面试/简历展示的即时通信系统。参考源码
 - 每个 Phase 的操作日志必须写明“参考了原项目的什么行为/接口”，并说明 GIM 的自主实现或改进点。
 - 如果确需复用极少量通用常量/类型定义，应在操作日志中明确列出，并保证不包含秘密、作者私有信息或大段业务实现。
 
-## 5. V1 必须完成
+## 5. V1 原始目标清单（保留为 V2 目标，不代表当前全部完成）
 
 注册/登录/注销/JWT；用户资料和配置；好友搜索/申请/验证/删除/备注；在线状态和上线提醒；私聊、群聊；文本/图片/视频文件/普通文件/语音文件/回复/引用/撤回/@/图文；历史记录；最近会话；置顶；未读；文件上传/预览/Hash 去重；WS 心跳、断线清理、自动重连；消息 ACK 和幂等。
+
+### 5.1 范围分层（2026-11-11 收敛，以此为准）
+
+**V1 已实现并有测试/构建证据**：
+
+- 注册、登录、注销、JWT、Gateway → Auth → 业务服务鉴权链。
+- 用户资料只读（`GET /api/user/user_info`）。
+- 好友闭环：搜索、申请、同意/拒绝、好友列表（含 Redis Presence `isOnline`）、方向性备注、删除、好友详情。
+- 私聊与群聊文本消息：两条 WebSocket、Hub/Client + readPump/writePump、心跳、断线清理、`clientMsgId` 幂等、事务后 ACK、历史、最近会话、置顶、未读/已读、撤回以外的会话删除语义（用户维度隐藏）。
+- Presence 存储（仅 Chat WS 维护，好友/Admin 只读）。
+- 文件：流式上传、SHA-256 内容寻址去重、FileObject/UserFile 所有权、鉴权下载、引用删除。
+- Admin：独立 Vue 应用 + 真实管理接口 + 服务端 `Role == 1` 二次校验 + 只读概览。
+- Kafka 结构化审计：共享 producer、每请求独立事件、字段 allowlist/脱敏、consumer 幂等落库、Admin 查询。
+- 工程化：001–008 migration、Compose 单机拓扑、单元测试、前端类型检查/测试/构建。
+
+**V2 计划（未实现，不得在 README/面试材料中声称完成）**：
+
+- 好友上线提醒 `friend.online/offline`、好友申请实时推送。
+- 富消息：图片、视频文件、普通文件、语音、回复/引用、撤回、@、图文（V1 消息协议只接受文本 `type=1`）。
+- `user_confs` 读写 API/UI、`PUT /api/user/user_info` 资料编辑。
+- `DELETE /api/chat/chat` 隐藏会话、`POST /api/user/valid` 旧路径兼容别名、`POST /api/auth/open_login`。
+- 接收方 delivery/read receipt、pending 跨刷新持久化。
+- WS 一次性 Ticket、Gateway 本地验签、多实例 WS 跨节点路由、HA/Kubernetes/内部 TLS、文件孤儿 GC、审计 outbox/DLQ。
+
 
 ## 三仓库复审后的强制补充规则
 
