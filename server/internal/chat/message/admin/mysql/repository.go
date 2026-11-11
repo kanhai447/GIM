@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	chatadmin "github.com/kanhai447/GIM/server/internal/chat/message/admin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+const maxDeadlockAttempts = 3
 
 type Repository struct{ db *gorm.DB }
 
@@ -64,6 +67,12 @@ func (repository *Repository) List(ctx context.Context, query chatadmin.Query) (
 }
 
 func (repository *Repository) Delete(ctx context.Context, messageID uint64) error {
+	return retryDeadlock(ctx, func(attemptContext context.Context) error {
+		return repository.deleteOnce(attemptContext, messageID)
+	})
+}
+
+func (repository *Repository) deleteOnce(ctx context.Context, messageID uint64) error {
 	return repository.db.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		var message struct {
 			ID         uint64 `gorm:"column:id"`
@@ -81,13 +90,59 @@ func (repository *Repository) Delete(ctx context.Context, messageID uint64) erro
 		if err := transaction.Table("chat_messages").Where("id = ?", messageID).Update("admin_deleted_at", time.Now().UTC()).Error; err != nil {
 			return fmt.Errorf("delete admin chat message: %w", err)
 		}
-		for _, pair := range [][2]uint64{{message.SenderID, message.ReceiverID}, {message.ReceiverID, message.SenderID}} {
+		for _, pair := range sessionLockOrder(message.SenderID, message.ReceiverID) {
 			if err := repairSession(transaction, pair[0], pair[1], messageID); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+// sessionLockOrder returns both session keys ordered by ascending user ID.
+// Message persistence locks the sender and receiver sessions in the same order
+// (see chat/message/repository/mysql/repository.go), so admin deletion must
+// follow it; otherwise a concurrent send and delete can deadlock on the pair.
+func sessionLockOrder(senderID, receiverID uint64) [][2]uint64 {
+	pairs := [][2]uint64{{senderID, receiverID}, {receiverID, senderID}}
+	if pairs[0][0] > pairs[1][0] {
+		pairs[0], pairs[1] = pairs[1], pairs[0]
+	}
+	return pairs
+}
+
+// retryDeadlock rebuilds a whole failed transaction at most
+// maxDeadlockAttempts times when MySQL reports error 1213. Every other error is
+// returned unchanged, and the bounded backoff honours context cancellation.
+func retryDeadlock(ctx context.Context, operation func(context.Context) error) error {
+	var lastErr error
+	for attempt := 1; attempt <= maxDeadlockAttempts; attempt++ {
+		err := operation(ctx)
+		if err == nil || !isDeadlock(err) {
+			return err
+		}
+		lastErr = err
+		if attempt == maxDeadlockAttempts {
+			break
+		}
+		timer := time.NewTimer(deadlockBackoff(attempt))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return fmt.Errorf("admin chat delete after deadlock retries: %w", lastErr)
+}
+
+func deadlockBackoff(attempt int) time.Duration {
+	return time.Duration(attempt) * 10 * time.Millisecond
+}
+
+func isDeadlock(err error) bool {
+	var mysqlError *mysqldriver.MySQLError
+	return errors.As(err, &mysqlError) && mysqlError.Number == 1213
 }
 
 func repairSession(transaction *gorm.DB, userID, peerID, deletedID uint64) error {
@@ -98,11 +153,11 @@ func repairSession(transaction *gorm.DB, userID, peerID, deletedID uint64) error
 	}
 	err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).Table("chat_sessions").
 		Select("id, last_message_id, last_read_message_id").Where("user_id = ? AND peer_user_id = ?", userID, peerID).Take(&session).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("lock chat session after admin delete: %w", err)
+	}
 	if errors.Is(err, gorm.ErrRecordNotFound) || session.LastMessageID == nil || *session.LastMessageID != deletedID {
 		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("lock chat session after admin delete: %w", err)
 	}
 	low, high := userID, peerID
 	if low > high {

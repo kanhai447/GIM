@@ -80,6 +80,9 @@ func TestAdminRepositoriesAndManagementActions(t *testing.T) {
 		t.Fatalf("delete chat message: %v", err)
 	}
 	assertTombstoned(t, ctx, rawDB, "chat_messages", chatPage.Items[0].ID)
+	// Deleting the last visible message must repair both session pointers and
+	// hide the sessions instead of leaving them pointing at the tombstone.
+	assertChatSessionsRepaired(t, ctx, rawDB, chatPage.Items[0].ID)
 
 	groups := groupadmin.New(groupadminmysql.New(gormDB), nil)
 	groupPage, err := groups.List(ctx, groupadmin.Query{Limit: 20})
@@ -209,6 +212,45 @@ func assertTombstoned(t *testing.T, ctx context.Context, db *sql.DB, table strin
 	query := "SELECT admin_deleted_at FROM `" + table + "` WHERE id = ?"
 	if err := db.QueryRowContext(ctx, query, id).Scan(&deleted); err != nil || !deleted.Valid {
 		t.Fatalf("%s %d tombstone valid=%t err=%v", table, id, deleted.Valid, err)
+	}
+}
+
+// assertChatSessionsRepaired verifies the C1 normal path: deleting the last
+// visible private message clears the session pointer, resets unread to zero and
+// hides both participants' sessions.
+func assertChatSessionsRepaired(t *testing.T, ctx context.Context, db *sql.DB, deletedID uint64) {
+	t.Helper()
+	rows, err := db.QueryContext(ctx,
+		`SELECT user_id, last_message_id, unread_count, hidden_at FROM chat_sessions ORDER BY user_id`)
+	if err != nil {
+		t.Fatalf("query repaired chat sessions: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	seen := 0
+	for rows.Next() {
+		var userID uint64
+		var lastMessageID sql.NullInt64
+		var unread uint32
+		var hiddenAt sql.NullTime
+		if err := rows.Scan(&userID, &lastMessageID, &unread, &hiddenAt); err != nil {
+			t.Fatalf("scan repaired chat session: %v", err)
+		}
+		seen++
+		if lastMessageID.Valid && uint64(lastMessageID.Int64) == deletedID {
+			t.Fatalf("session %d still points at deleted message %d", userID, deletedID)
+		}
+		if unread != 0 {
+			t.Fatalf("session %d unread = %d after last message deletion, want 0", userID, unread)
+		}
+		if !hiddenAt.Valid {
+			t.Fatalf("session %d was not hidden after its last message was deleted", userID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate repaired chat sessions: %v", err)
+	}
+	if seen != 2 {
+		t.Fatalf("repaired chat sessions = %d, want 2", seen)
 	}
 }
 
