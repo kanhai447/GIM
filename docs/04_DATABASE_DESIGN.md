@@ -144,7 +144,9 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 ### 7.4 Friend
 
 - `friends` 正式采用 A→B、B→A 双行：`id, user_id, friend_id, remark, created_at, updated_at`，唯一 `(user_id, friend_id)` 且禁止自好友。接受申请须在同一服务事务写双向行并更新申请。
-- `friend_verifies` 状态固定为 0 pending、1 accepted、2 rejected。pending 时生成规范化 low/high user ID，唯一键阻止同一对用户反向或并发重复申请；已处理历史不受该键限制。
+- `friends.remark` 是方向性的：`(user_id, friend_id)` 行的备注只影响 `user_id` 自己的好友视图，删除好友时双向行一起删除。
+- `friend_verifies` 状态固定为 0 pending、1 accepted、2 rejected。pending 时生成规范化 low/high user ID，唯一键阻止同一对用户反向或并发重复申请；已处理历史不受该键限制。`message` 保存申请附言（最多 64 字符）。
+- User 服务的 friend 模块是这两张表的唯一业务写入路径：`POST/PUT/DELETE /api/user/friends`、`PUT /api/user/valid_status`。Admin 接口不修改好友关系；`GET /api/user/friends` 只读 Redis Presence，不写回任何在线状态。
 
 ### 7.5 Private Chat
 

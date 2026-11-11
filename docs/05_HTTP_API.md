@@ -30,23 +30,30 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 
 ## 3. User
 
-保持参考路径：
+### 3.1 已实现（V1）
 
-- `GET /api/user/user_info`
-- `PUT /api/user/user_info`
-- `GET /api/user/friend_info?friendID=`
-- `GET /api/user/friends`
-- `PUT /api/user/friends` 修改备注
-- `DELETE /api/user/friends`
-- `GET /api/user/search`
-- `POST /api/user/valid`
-- `GET /api/user/valid`
-- `PUT /api/user/valid_status`
-- `POST /api/user/friends` 添加好友
+- `GET /api/user/user_info`：当前登录用户的最小公开资料。
+- `GET /api/user/search?keyword=&limit=`：按账号/昵称模糊或精确数字 ID 搜索启用用户；`keyword` 必填（兼容旧参数 `search`），`limit` 默认 20、最大 50；排除调用者自己，返回 `isFriend`。
+- `POST /api/user/friends` `{friendID,message?}`：发送好友申请；`message` 最多 64 字符。已是好友返回 `1114`，同对用户已有 pending 申请（含反向）返回 `1116`，不能添加自己返回 `1113`。
+- `GET /api/user/valid?status=&limit=`：当前用户收到的申请列表，默认 `status=0`（pending），`status=all` 返回全部状态；`limit` 默认 20、最大 50；按申请 ID 倒序。
+- `PUT /api/user/valid_status` `{validID,status}`：`status` 仅允许 `1=accepted`、`2=rejected`。服务端在事务内锁定申请行，校验接收者、pending 状态，同意时写双向好友关系并更新状态；并发处理同一申请只有一个成功，另一个返回 `1118`。
+- `GET /api/user/friends?limit=`：当前用户好友列表，`limit` 默认/最大 50，按好友关系 ID 倒序，返回 `remark` 与 `isOnline`。
+- `PUT /api/user/friends` `{friendID,remark}`：修改当前用户方向的好友备注（最多 32 字符）；对方视角的备注不受影响。
+- `DELETE /api/user/friends?friendID=`：删除双方好友关系；双方都不是好友时返回 `1115`。
+- `GET /api/user/friend_info?friendID=`：好友详情；非好友与不存在统一返回 `1115`，避免用户枚举。
 
-`GET /api/user/user_info` 的最小公开资料包含 `userID/account/nickname/avatar/role/status`，不得返回 `pwd_hash`。调用方用户 ID 由后续 Gateway/Auth 链路通过可信 `User-ID` Header 注入；浏览器直接提供该 Header 不是安全边界。
+好友路由统一从 Gateway 注入的可信 `User-ID` 取调用者身份，请求体中的用户字段不作为身份来源。
 
-好友返回必须包含 `isOnline`，值来自 Redis Presence。
+`GET /api/user/friends` 与 `GET /api/user/friend_info` 返回 `isOnline`，值来自 Redis `gim:presence:user:{uid}` 中未过期的 Chat WS contribution。Presence 查询带 500ms 超时；Redis 不可用时降级为 `isOnline=false` 而不是让好友列表失败。Presence 仍只由 Chat WebSocket 维护，好友接口只读。
+
+好友错误码：`1113` 不能添加自己、`1114` 已是好友、`1115` 不是好友、`1116` 已有待处理申请、`1117` 申请不存在、`1118` 申请已处理、`1119` 无权处理该申请。未认证返回 HTTP 401 / `1203`。
+
+### 3.2 V2 / 未实现
+
+- `PUT /api/user/user_info`：用户资料编辑。
+- `POST /api/user/valid`：参考实现的主动申请入口。V1 由 `POST /api/user/friends` 承担；如需旧路径兼容别名，V2 再补，不在本轮实现。
+- `friend.online` / `friend.offline` 实时上线提醒：V2，本轮好友列表只在请求时读取 Presence，不新增 WS 事件。
+- `user_confs` 读写 API/UI：V2。
 
 ## 4. Chat
 

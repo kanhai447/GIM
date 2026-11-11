@@ -18,6 +18,9 @@ import (
 	useradmin "github.com/kanhai447/GIM/server/internal/user/admin"
 	useradminmysql "github.com/kanhai447/GIM/server/internal/user/admin/mysql"
 	useradminhttp "github.com/kanhai447/GIM/server/internal/user/admin/transport/http"
+	"github.com/kanhai447/GIM/server/internal/user/friend"
+	friendmysql "github.com/kanhai447/GIM/server/internal/user/friend/repository/mysql"
+	friendhttp "github.com/kanhai447/GIM/server/internal/user/friend/transport/http"
 	userhttp "github.com/kanhai447/GIM/server/internal/user/transport/http"
 	"github.com/zeromicro/go-zero/rest"
 )
@@ -94,8 +97,10 @@ func run(args []string) error {
 	}
 	defer etcdClient.Close()
 
+	presenceStore := presence.NewRedisStore(redisClient.Raw())
 	users := user.New(mysqlClient.DB())
-	adminUsers := useradmin.New(useradminmysql.New(mysqlClient.DB()), presence.NewRedisStore(redisClient.Raw()))
+	adminUsers := useradmin.New(useradminmysql.New(mysqlClient.DB()), presenceStore)
+	friends := friend.New(friendmysql.New(mysqlClient.DB()), users.Service, presenceStore)
 	server, err := rest.NewServer(restConfig)
 	if err != nil {
 		return err
@@ -103,6 +108,7 @@ func run(args []string) error {
 	serviceruntime.RegisterHealthz(server)
 	userhttp.RegisterRoutes(server, users.Service)
 	useradminhttp.RegisterRoutes(server, adminUsers, auditProducer)
+	friendhttp.RegisterRoutes(server, friends)
 
 	registry, err := discovery.NewRegistry(etcdClient.Raw(), registrationConfig.LeaseTTL)
 	if err != nil {
