@@ -54,7 +54,7 @@ go vet ./...                      -> PASS
 gofmt -l .                        -> 无输出
 go test ./... -count=1            -> PASS（69 个包 ok，无 FAIL）
 docker compose config --quiet     -> PASS
-docker compose config --services  -> 18 个 service（原 19，group-rpc 已消失）
+docker compose config --services  -> 17 个 service（删除前 18；day-6 修正：原记录“18/19”为误计，实际 18→17）
 grep gim-group-rpc|9094|GROUP_RPC  -> 除历史 agent_logs 外无残留
 ```
 

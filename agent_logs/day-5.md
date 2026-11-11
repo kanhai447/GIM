@@ -16,7 +16,7 @@
 - [x] 好友后端 8 条路由、事务并发同意、Presence 只读、7 个稳定错误码、9 组 service 测试、8 组 HTTP 测试、1 个 gated MySQL 并发集成测试。
 - [x] 好友前端 `/contacts` 页面、API、store、两个组件、3 个测试文件；Web 测试 16/90 → 19/103。
 - [x] AGENTS/README/三个子 README/docs 05/06/07/10/面试材料与实现对齐。
-- [x] 删除 group-rpc 及生成代码，Compose 19 → 18 services，构建/测试/compose config 全绿。
+- [x] 删除 group-rpc 及生成代码，Compose 18 → 17 services（day-6 修正：原记录“19 → 18”为误计），构建/测试/compose config 全绿。
 - [ ] 真实 MySQL 集成测试 / race / Compose 全栈（环境不可用，见下）。
 
 ## Phase 记录
@@ -56,7 +56,7 @@
 - tests: PASS（69 packages）
 - race: NOT RUN（环境不可用）
 - frontend: PASS（Web 19/103、Admin 11/25、build PASS）
-- compose config: PASS（18 services）
+- compose config: PASS（17 services；day-6 修正原“18”误计）
 - repository safety: PASS
 - GitHub checkpoint: **PARTIAL**。`05dc348`、`729b8aa`、`a97bee6`、`0723004`、`f0d3b6d` 已 push 到 `origin/main`；`83db97a`（文档）、`bcacbae`（删除 group-rpc）、`3032875`（收尾日志）及推送状态修正提交仍在本地。收尾阶段 GitHub 不可达：`Recv failure: Connection was reset` / `Failed to connect to github.com port 443`，重试两次失败，未使用 `--force`。
 
