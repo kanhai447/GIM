@@ -66,7 +66,7 @@ grep gim-group-rpc|9094|GROUP_RPC  -> 除历史 agent_logs 外无残留
 ## Git
 
 - commit：`bcacbae refactor(group): remove the unused group-rpc service`
-- push：随本日志一同推送。
+- push：**失败（本地 commit 保留）**。GitHub 连接在收尾阶段不可达（`Recv failure: Connection was reset` / `Could not connect to server`），重试两次未成功；未使用 `--force`。
 - tag：无。
 
 ## 遗留

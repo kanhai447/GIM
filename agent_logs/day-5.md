@@ -58,7 +58,7 @@
 - frontend: PASS（Web 19/103、Admin 11/25、build PASS）
 - compose config: PASS（18 services）
 - repository safety: PASS
-- GitHub checkpoint: 本轮 commit 已 push 到 `origin/main`（见最终汇总；无 `--force`）
+- GitHub checkpoint: **PARTIAL**。`05dc348`、`729b8aa`、`a97bee6`、`0723004`、`f0d3b6d` 已 push 到 `origin/main`；`83db97a`（文档）、`bcacbae`（删除 group-rpc）、`3032875`（收尾日志）及推送状态修正提交仍在本地。收尾阶段 GitHub 不可达：`Recv failure: Connection was reset` / `Failed to connect to github.com port 443`，重试两次失败，未使用 `--force`。
 
 ## 次日入口
 

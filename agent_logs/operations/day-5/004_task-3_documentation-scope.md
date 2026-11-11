@@ -56,7 +56,7 @@ git diff --check                              -> PASS
 ## Git
 
 - commit：`83db97a docs: align the v1 scope statement with the implementation`
-- push：随本日志一同推送。
+- push：**失败（本地 commit 保留）**。`git push origin main` 先返回 `Recv failure: Connection was reset`，随后重试两次返回 `Failed to connect to github.com port 443 after ~21s: Could not connect to server`；未使用 `--force`，未删除本地 checkpoint。
 - tag：无。
 
 ## 遗留

@@ -54,3 +54,4 @@
 
 - 本轮四个任务均已完成：C1/C2、好友闭环、文档收缩、删除 group-rpc。
 - 未打新 tag；未执行 `--force` push。
+- **Push 状态**：`05dc348`、`729b8aa`、`a97bee6`、`0723004`、`f0d3b6d` 已推送到 `origin/main`；`83db97a`、`bcacbae`、`3032875` 及推送状态修正提交仅本地。收尾时 GitHub 不可达（`Recv failure: Connection was reset` / `Could not connect to server`），重试两次失败。恢复网络后执行 `git push origin main` 即可补齐。
