@@ -38,9 +38,9 @@ fim_admin-master     管理端 Vue3 Admin
        +----------+---------+---------+----------+----------+
        |          |                   |          |          |
     gim_user   gim_chat            gim_group   gim_file  gim_settings
-    API/RPC    API/RPC             API/RPC     API/RPC   API/RPC
-       \          |                   /            |
-        +---------+----- gRPC/etcd --+-------------+
+     API        API                 API         API        API
+       |
+     User RPC  <--- HTTP APIs / etcd for discovery
                             |
                          MySQL/Redis
 
@@ -52,6 +52,8 @@ fim_admin-master     管理端 Vue3 Admin
                             |
                           MySQL
 ```
+
+当前只有 **User RPC** 一个内部 gRPC 服务（Auth/Chat/Group 通过 `INTERNAL_API_HOST:USER_RPC_PORT` 调用）。原设计的 Group RPC 已实现但无调用方，已在本轮收敛中删除；Group API 直接使用 MySQL/Redis/User RPC。所有对外 API 仍通过 etcd 注册与发现。
 
 ## 3. 请求链路
 

@@ -15,7 +15,6 @@ RUN --mount=type=cache,id=gim-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-admin-bootstrap ./cmd/admin-bootstrap && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-gateway ./cmd/gateway && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-user-rpc ./cmd/user-rpc && \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-group-rpc ./cmd/group-rpc && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-user-api ./cmd/user-api && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-auth-api ./cmd/auth-api && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gim-chat-api ./cmd/chat-api && \

@@ -1,6 +1,6 @@
 # Docker Compose（单机开发环境）
 
-本配置在一张 Docker bridge network 上运行 GIM V1 全栈：MySQL、Redis、单节点 KRaft Kafka、单节点 etcd、migration、User/Group RPC、七个 API/Consumer、Gateway，以及由非特权 Nginx 提供的 Web/Admin production build。
+本配置在一张 Docker bridge network 上运行 GIM V1 全栈：MySQL、Redis、单节点 KRaft Kafka、单节点 etcd、migration、User RPC、七个 API/Consumer、Gateway，以及由非特权 Nginx 提供的 Web/Admin production build。
 
 ## Prerequisites
 

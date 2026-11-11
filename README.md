@@ -30,7 +30,6 @@ flowchart LR
     G --> S[Settings API]
     G --> L[Logs API]
     U --> UR[User RPC]
-    GR --> RR[Group RPC]
     AU --> UR
     C --> UR
     GR --> UR
@@ -42,9 +41,7 @@ flowchart LR
     F --> O[(File volume)]
 ```
 
-V1 保留 `Gateway -> Auth Service -> Business Service` 鉴权链。Gateway 删除客户端伪造的 `User-ID`、`Role`、`ValidPath`，再写入 Auth 的权威结果；Admin 目标服务仍执行角色二次校验。私聊和群聊使用两条连接及各自的 Hub/Client，Chat 连接独占全局 Presence 维护权。好友接口与 Admin 只读取 Presence，不写在线状态。
-
-> 拓扑说明：图中的 `Group RPC` 进程已实现但**没有任何调用方**（Group API 直接使用 MySQL/Redis/User RPC），属于未使用服务；本轮收敛会将其移除，最终拓扑以任务四提交后的 README 为准。
+V1 保留 `Gateway -> Auth Service -> Business Service` 鉴权链。Gateway 删除客户端伪造的 `User-ID`、`Role`、`ValidPath`，再写入 Auth 的权威结果；Admin 目标服务仍执行角色二次校验。私聊和群聊使用两条连接及各自的 Hub/Client，Chat 连接独占全局 Presence 维护权。好友接口与 Admin 只读取 Presence，不写在线状态。`Group RPC` 已实现但没有任何调用方（Group API 直接使用 MySQL/Redis/User RPC），属于未使用服务，已在本轮收敛中删除；当前只有 User RPC 一个 gRPC 服务。
 
 更完整的说明见 [系统总览](docs/architecture/overview.md)、[可靠性设计](docs/architecture/reliability.md)、[文件与审计](docs/architecture/file-and-audit.md) 和 [架构决策](docs/architecture/decisions.md)。
 

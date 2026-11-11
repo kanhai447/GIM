@@ -18,7 +18,7 @@ Go、go-zero、GORM、MySQL、Redis、etcd、gRPC、Gorilla WebSocket、JWT、Ka
 
 ## 服务架构
 
-Web/Admin 只进入 Gateway；Gateway 调 Auth 后注入可信身份，再路由 User/Chat/Group/File/Settings/Logs。User/Group 提供内部 RPC，etcd 管理发现，MySQL 是持久化事实源，Redis 负责撤销/Presence/实时跨实例投递，Kafka 只承担审计。
+Web/Admin 只进入 Gateway；Gateway 调 Auth 后注入可信身份，再路由 User/Chat/Group/File/Settings/Logs。User 提供内部 RPC，etcd 管理 API 发现，MySQL 是持久化事实源，Redis 负责撤销/Presence/实时跨实例投递，Kafka 只承担审计。
 
 ## 核心难点与我做了什么
 

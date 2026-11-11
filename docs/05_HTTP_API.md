@@ -88,9 +88,9 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 
 ## 5. Group
 
-保持参考项目已有 group 路由：创建/更新/删除、成员、角色、邀请、验证、搜索、禁言、历史、session、top、my 等。
+V1 实现的 group 路由如下。参考项目存在但 GIM 未实现的路由（如群资料更新、群搜索、群 top、管理员完整群设置）属于 V2，不在本节承诺。
 
-Day 3 / Checkpoint 1 已实现的基础路由如下；所有操作者 ID 只取 Gateway 注入的可信 `User-ID`，请求体中的 `ownerId/operatorId/userId` 不作为当前操作者身份：
+所有操作者 ID 只取 Gateway 注入的可信 `User-ID`，请求体中的 `ownerId/operatorId/userId` 不作为当前操作者身份：
 
 - `POST /api/group/group`：创建群。兼容 `mode/name/size/isSearch/userIdList`，也接受 `title/avatar/abstract/joinPolicy`；未显式提交加群策略时默认需要审批。`groups + owner group_members + 创建时邀请成员` 同事务提交。
 - `GET /api/group/group/:id`：成员读取群基础资料、当前角色和成员数；已解散群按不存在处理。
@@ -104,9 +104,9 @@ Day 3 / Checkpoint 1 已实现的基础路由如下；所有操作者 ID 只取 
 - `PUT /api/group/valid/status` `{validId,status}`：status 仅允许 `1=accepted`、`2=rejected`；owner/admin 可处理。accepted 状态变更与 member insert 同事务。
 - `PUT /api/group/member/prohibition` `{groupId,memberId,prohibitionTime}`：分钟数存在时设置临时禁言，省略/null 时解除；权限矩阵与踢人一致，不能禁言 owner。
 
-Group 内部 RPC 只提供后续 Group WS/消息服务需要的最小边界：`GetGroup`、`IsMember`、`GetMemberRole`、`IsMuted`。本 Checkpoint 不提供 Group WebSocket、群消息、ACK、history/session/read 实现。
+Group 不提供内部 RPC 服务：原 Group RPC 已实现但没有任何调用方，已在本轮收敛中删除。Group API 直接使用 MySQL、Redis 与 User RPC，不复用第二套服务边界。
 
-Day 3 / Checkpoint 2 新增 `GET /api/group/ws/chat?token=<JWT>` WebSocket Upgrade。Gateway 先调用 Auth 并覆盖外部伪造的身份 Header，Group API 只读取可信 `User-ID/Role`。该用户级连接不绑定单个群；当前仅提供连接/心跳/typed error foundation，不处理或持久化群消息。
+Group WebSocket 为 `GET /api/group/ws/chat?token=<JWT>`。Gateway 先调用 Auth 并覆盖外部伪造的身份 Header，Group API 只读取可信 `User-ID/Role`。该用户级连接不绑定单个群；文本消息通过 `group.send/group.ack/group.message` 处理（见 `docs/06_WEBSOCKET_PROTOCOL.md`），连接生命周期不修改全局 Presence。
 
 Group 基础业务错误码：`2301` 参数错误、`2302` 群不存在、`2303` 已是成员、`2304` 不是成员、`2305` 无权限、`2306` 重复 pending request、`2307` request 不存在、`2308` request 状态无效、`2309` 目标用户不存在、`2310` owner 不能退出、`2311` 禁言状态服务暂不可用、`2312` 群禁止加入、`2313` 成员达到上限。数据库/Redis/RPC 原始错误不进入响应。
 

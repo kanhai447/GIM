@@ -153,20 +153,6 @@ services:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 9091"]
       <<: *api-healthcheck
 
-  group-rpc:
-    <<: *gim-app
-    command: ["/app/gim-group-rpc"]
-    depends_on:
-      migration:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      user-rpc:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 9094"]
-      <<: *api-healthcheck
-
   user-api:
     <<: *gim-app
     command: ["/app/gim-user-api"]

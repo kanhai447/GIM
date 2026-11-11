@@ -14,7 +14,7 @@ GIM V1 是单主机、单节点基础设施上的可运行 IM 系统。它验证
 | Auth | 注册/登录/注销、JWT 验证、Redis 撤销 | User RPC、Redis |
 | User | 用户资料、配置和 Admin 用户管理 | MySQL、User RPC |
 | Chat | 私聊 WS、Presence、消息/会话/历史 | MySQL、Redis、User RPC |
-| Group | 群管理、群聊 WS、消息/会话/历史 | MySQL、Redis、User/Group RPC |
+| Group | 群管理、群聊 WS、消息/会话/历史 | MySQL、Redis、User RPC |
 | File | 流式上传、去重、列表、下载、引用删除 | MySQL、File volume |
 | Settings | 公共配置、用户配置、Admin overview/settings | MySQL |
 | Logs | Kafka consumer、审计落库、Admin 查询 | Kafka、MySQL |
