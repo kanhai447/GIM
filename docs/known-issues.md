@@ -10,6 +10,8 @@
 | V-2 | Compose 全栈 build/up + healthy | **PASS**；17 services = 15 healthy + 2 一次性 job exit 0 |
 | V-3 | Kafka 真实 produce/consume/persist/restart | **PASS**；`GIM_KAFKA_INTEGRATION=1`，broker `127.0.0.1:19092`，2 个用例通过 |
 | V-5 | 浏览器好友 E2E | **PASS**；Chrome + Compose Web，11 步（注册→搜索→申请→同意→备注→删除） |
+| V-7 | 聊天图片集成（MySQL/Redis/WS） | **PASS**；ACK、接收、历史、重复 clientMsgId 仅 1 行、归属/MIME/大小错误码、接收方下载授权 |
+| V-8 | 浏览器图片 E2E | **PASS**；Chrome + Compose，上传→发送→接收→预览 |
 
 ## 待补验证 / 未覆盖
 
@@ -17,21 +19,24 @@
 |---|---|---|
 | V-4 | 完整性能阶梯 / soak / restart / 文件吞吐 | 本轮只复跑 HTTP profile c10 与 Private 10 conn @10 msg/s；未做 25/50/100/200 连接阶梯、50 msg/s、5 分钟 soak、restart 稳定性与文件吞吐档位。历史数字仍是 2026-10-15 记录 |
 | V-6 | 远端 CI 结果 | GitHub Actions 配置存在，但本环境无 API 访问；仅 local equivalent PASS，远端为 `NOT OBSERVED` |
+| V-9 | 图片代码 `-race` | 图片功能在 race 验证之后加入，未单独复跑；建议下一轮 |
+| V-10 | 群聊图片浏览器 E2E / 图片性能 | 群聊图片仅单测；未做图片吞吐/预览性能 |
 
 ## 业务/实现限制（V2 或后续）
 
 | 编号 | 问题 | 说明 |
 |---|---|---|
-| K-1 | 仅支持文本消息 | 图片/视频/文件/语音/回复/引用/撤回/@/图文均未进入消息协议 |
+| K-1 | 视频/文件/语音/回复/引用/撤回/@/图文未实现 | 图片消息已在 V2 Phase 1 实现（`type=2`，仅图片）；其余富消息仍未进入协议 |
 | K-2 | 无接收方 delivery/read receipt | ACK 仅表示服务端持久化/接受 |
 | K-3 | 好友 `isOnline` 非实时 | 只在 HTTP 列表/详情请求时读取 Redis Presence，无 `friend.online/offline` 推送 |
 | K-4 | 好友申请只提供接收方向 | 未提供“我发出的申请”历史列表；`POST /api/user/valid` 旧路径未实现 |
 | K-5 | pending 消息不跨刷新持久化 | 前端只在当前页面内保留 pending/ACK 状态 |
-| K-6 | File 未与消息协议集成 | 上传成功不等于发送文件消息 |
+| K-6 | 普通文件/语音/视频未与消息协议集成 | 图片消息已集成（`type=2`）；上传成功不等于发送普通文件消息 |
 | K-7 | 文件孤儿对象无 GC | 删除最后一个引用不删除物理对象 |
 | K-8 | Audit 无 outbox/DLQ | 长时间 Kafka 故障允许丢失审计事件 |
 | K-9 | `user_confs` 无读写 API/UI | 仅 Admin 限制更新会按需写入四项限制字段 |
 | K-10 | 群消息无 1213 重试 | 群写入按成员 ID 升序降低风险，但未像私聊那样做有界重试 |
+| K-11 | 图片尺寸仅客户端提示 | 服务端不解码图片，`width/height` 只做 1..20000 合法性校验；不用于安全判断 |
 
 ## 工程/运维限制
 
@@ -44,6 +49,7 @@
 | E-5 | Windows native race 不可用 | 32-bit MinGW 不兼容；64-bit MinGW 缺 libc headers；Linux Docker 为验证路径（本轮已 PASS） |
 | E-6 | 远端 GitHub Actions 结果未观察 | 本环境无 API 访问，仅 local equivalent PASS |
 | E-7 | 未使用导出函数无自动扫描 | 当前以“包级可达性 + 手工 grep”为准；`internal/chat.UnavailableInboundHandler` 仅测试使用，保留为测试替身 |
+| E-8 | 图片下载授权跨读消息表 | 非所有者下载时在 File 服务内查询 `chat_messages`/`group_messages` 的 JSON 引用，`JSON_EXTRACT` 无索引；仅影响图片下载路径 |
 
 ## 使用约定
 

@@ -35,6 +35,23 @@ A ChatSocket
 
 关键顺序：**message/session 事务提交，再 ACK，再 best-effort 推送**。Redis publish/receiver backpressure 失败不会回滚消息或把 ACK 变成失败；B 后续可从 history 恢复。幂等重试 `createdNew=false`，只重发同一 messageId 的 ACK，不再次增加 unread、修改 session 或推送 receiver。
 
+## 2.1 图片消息
+
+```text
+Web 选择图片
+ -> POST /api/file/image（multipart 字段 image）-> 服务端嗅探 MIME/大小/文件名 -> 存储或 SHA-256 复用
+ -> 返回 user_files.id + url/mimeType/size
+ -> Web 以 msg.type=2 + imageMsg.fileID 发送 chat.send / group.send
+ -> 服务端 validate：type=2、fileID>0、width/height 合法
+ -> 归属校验：user_files.id 属于 sender，并 JOIN file_objects
+ -> MIME 必须 image/*；file_objects.size <= IMAGE_MESSAGE_MAX_BYTES
+ -> 用 DB 的 url/mimeType/size 规范化 payload（客户端提交值不作为真相）
+ -> 与文本相同的 message + session/unread 事务
+ -> COMMIT -> ACK -> best-effort 推送 -> history 返回同一结构
+```
+
+上传失败不得发送消息。失败码：文件不存在/非本人 `2211`/`2412`、非图片 `2212`/`2413`、超限 `2213`/`2414`、参数非法 `2214`/`2415`；失败不落库、不 ACK。消息只存元数据，不存二进制；预览/下载仍走受保护的 `GET /api/file/:id`。
+
 ## 3. 私聊已读
 
 用户打开会话/看到指定 messageId -> HTTP `PUT /api/chat/read` -> 验证该消息属于 A/B -> 锁定 A->B session -> 单调推进 A 的 lastReadMessageId -> 按 cursor 后仍存在的入站消息重算 unread -> commit。并发新消息必须在该 session 行锁之后原子增加 unread，因此不会把 read cursor 之后的新消息误清零。V1 不向对方发送已读回执。
@@ -61,7 +78,7 @@ Client -> Gateway query token -> Auth -> trusted User-ID/Role -> Group WS
  -> normal/abnormal/timeout/slow/shutdown: unregister this Client only
 ```
 
-一名用户只需一条 Group Socket Manager，可有多个设备/tab Client；不是一群一个 socket。当前 `group.send` 明确返回未实现错误。后续消息处理才按目标 group 调用 `IsMember/GetMemberRole/IsMuted/GetGroup`。Group Hub 没有 Presence transition，所有生命周期路径均不访问 `gim:presence:*`。
+一名用户只需一条 Group Socket Manager，可有多个设备/tab Client；不是一群一个 socket。`group.send` 按目标 group 调用 `IsMember/GetMemberRole/IsMuted/GetGroup`；文本 `type=1` 与图片 `type=2` 走同一事务、ACK 与推送路径（图片额外做归属/MIME/大小校验）。Group Hub 没有 Presence transition，所有生命周期路径均不访问 `gim:presence:*`。
 
 ### 群领域与成员基础（Day 3 / Checkpoint 1）
 

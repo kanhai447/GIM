@@ -16,9 +16,13 @@ GIM 是一个面向后端工程能力展示的即时通信系统：Go 微服务 
 - Kafka 结构化审计：共享 bounded producer、每请求独立事件、字段 allowlist/脱敏、consumer `event_id` 幂等落库、Admin 查询。
 - 工程化：001–008 migration、17 个 Compose service、单测、前端类型检查/测试/构建、仓库安全脚本。
 
+**V2 Phase 1（已实现）**
+
+- 图片消息 `type=2`：先 `POST /api/file/image` 上传，再通过 `chat.send` / `group.send` 发送 `imageMsg.fileID`；服务端校验文件归属、`image/*` MIME 与大小后，在同一事务落库并 ACK/推送，历史 DTO 与 WS 同构；Web 支持选择图片、上传、发送、渲染与点击预览。
+
 **未实现（V2，不得声称完成）**
 
-- 富消息：图片、视频文件、普通文件、语音、回复/引用、撤回、@、图文（V1 只接受文本 `type=1`）。
+- 富消息：视频文件、普通文件、语音、回复/引用、撤回、@、图文（**图片消息已在 V2 Phase 1 实现**，见下）。
 - 好友上线提醒 `friend.online/offline`、好友申请方向的完整历史列表。
 - `user_confs` 读写、`PUT /api/user/user_info`、`DELETE /api/chat/chat`、`POST /api/user/valid`、`POST /api/auth/open_login`。
 - 接收方 delivery/read receipt、WS 一次性 Ticket、Gateway 本地验签、多实例 WS 路由。
@@ -185,9 +189,10 @@ pnpm type-check; pnpm test; pnpm build
 - **Compose 全栈**：`docker compose up -d --build` **PASS**；17 services = 15 running healthy + `migration`/`storage-init` exit 0。
 - **Kafka 真实消费**：`GIM_KAFKA_INTEGRATION=1`（Compose broker）**2 个用例 PASS**。
 - **浏览器好友 E2E**：Chrome + Compose Web，注册→搜索→申请→同意→备注→删除 **11 步 PASS**。
+- **图片消息（V2 Phase 1）**：后端图片单测 + 聊天图片真实 MySQL/Redis/WS 集成 **PASS**（ACK、接收、历史、重复 clientMsgId 仅 1 行、归属/MIME/大小错误码、接收方下载授权）；浏览器 E2E **10 步 PASS**；Web `vue-tsc` + **21 files / 114 tests** + build PASS。群聊图片目前仅单测。
 - **性能最小场景**：HTTP profile c10/10s 27281/27281、2728 req/s、p95 4.834 ms；Private 10 conn/10s@10 msg/s 100/100 ACK、100/100 delivery、p95 22.859 ms、correctness PASS。
-- 既有验证（2026-11-11）：后端单测 **69 包 PASS**；真实依赖集成 **20 PASS / 1 SKIP / 0 FAIL**（该 SKIP 的 Kafka 用例已由本轮补齐）；Web **19 files / 103 tests** + build PASS；Admin **11 files / 25 tests** + build PASS；`docker compose config` PASS；仓库安全脚本 PASS。
-- **仍未验证**：完整性能阶梯（25/50/100/200 连接、50 msg/s）、5 分钟 soak、restart 稳定性、文件吞吐档位；远端 CI 结果为 `NOT OBSERVED`。
+- 既有验证（2026-11-11）：后端单测 **69 包 PASS**；真实依赖集成 **20 PASS / 1 SKIP / 0 FAIL**（该 SKIP 的 Kafka 用例已由第五轮补齐）；Web 当时 **19 files / 103 tests** + build PASS；Admin **11 files / 25 tests** + build PASS；`docker compose config` PASS；仓库安全脚本 PASS。
+- **仍未验证**：完整性能阶梯（25/50/100/200 连接、50 msg/s）、5 分钟 soak、restart 稳定性、文件吞吐档位、图片代码 race、群聊图片 E2E；远端 CI 结果为 `NOT OBSERVED`。
 
 ## Tag
 
@@ -196,7 +201,7 @@ pnpm type-check; pnpm test; pnpm build
 
 ## 已知限制
 
-- 仅文本消息；富消息、撤回、@、图文为 V2。
+- 图片消息已支持（`type=2`，上传后引用 `user_files.id`，点击预览）；视频/文件/语音/回复/引用/撤回/@/图文仍为 V2。
 - 无接收方 delivery/read receipt；ACK 只表示服务端已持久化/接受。
 - 好友 `isOnline` 在页面加载时读取，不是实时推送；申请列表只提供接收方向。
 - pending 消息不跨浏览器刷新持久化；File 尚未与消息协议集成。

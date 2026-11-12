@@ -1,6 +1,6 @@
 # 验证状态
 
-本文件只记录**真实执行过**的验证结果与**明确未执行**的项目；不把 SKIP/NOT RUN 写成 PASS。最近更新：2026-11-12（第五轮补验证）。
+本文件只记录**真实执行过**的验证结果与**明确未执行**的项目；不把 SKIP/NOT RUN 写成 PASS。最近更新：2026-11-12（第五轮补验证 + V2 Phase 1 图片消息）。
 
 ## 本轮新增验证（2026-11-12）
 
@@ -13,6 +13,18 @@
 | **浏览器好友 E2E** | **PASS** | Chrome + `playwright-core`，目标 `http://127.0.0.1:5173`（Nginx → Gateway） | 11 步：注册 A/B、登录、搜索、申请、同意、好友列表、备注、删除、双方列表清空 |
 | **Kafka 真实消费** | **PASS** | `GIM_ENV_FILE=.tmp/env.compose-host GIM_KAFKA_INTEGRATION=1 go test ./tests -run TestKafkaAudit -count=1 -v`，broker `127.0.0.1:19092` | `TestKafkaAuditProduceConsumePersistQueryRestartAndIdempotency` PASS（1.59s）；`TestKafkaAuditUnavailableBrokerKeepsPublishBounded` PASS |
 | **性能最小场景** | **PASS（仅两档）** | `go run ./tools/loadtest prepare/http/private/cleanup`，全部经 Gateway | HTTP profile c10/10s：27281/27281，2728 req/s，p95 4.834 ms；Private 10 conn/10s@10 msg/s：100/100 ACK、100/100 delivery、p95 22.859 ms、correctness PASS |
+
+## V2 Phase 1 图片消息（2026-11-12）
+
+| 项目 | 结果 | 命令 / 环境 | 证据 |
+|---|---|---|---|
+| 后端构建/单测 | **PASS** | `go build ./...`、`go vet ./...`、`gofmt -l .`、`go test ./... -count=1`（69 packages） | 图片解析、服务端归一化、归属/MIME/大小校验、幂等、错误码 |
+| **聊天图片集成（真实 MySQL/Redis/WS）** | **PASS** | `GIM_ENV_FILE=<absolute .env.local>`；`go test ./tests -run TestChatImage -count=1 -v` | `TestChatImageMessageWebSocketHistoryAndValidation` PASS：ACK、接收方 `chat.message`、历史、重复 clientMsgId 仅 1 行、`2211/2212/2213` 不落库、接收方可解析文件、非参与者 `ErrNotFound` |
+| 群聊图片 | **PASS（单测）** | `go test ./internal/group/message -count=1` | 归一化、幂等冲突、`2412–2415`；未单独跑群聊图片 WS E2E |
+| Web | **PASS** | `vue-tsc --noEmit`；`vitest run`（21 files / 114 tests）；`vite build` | WS 解析、上传后发送、pending/ACK、渲染、预览、失败重试、未知占位 |
+| **浏览器图片 E2E** | **PASS** | Chrome + Compose 17 services（15 healthy + 2 exit 0） | 10 步：注册 A/B、登录、好友、A 上传并发送、B 收到图片、B 打开预览、关闭。首轮曾因接收方无下载权限失败，修复（`a1ecf64`）后 PASS |
+| 图片相关 race | **NOT RUN** | 上一轮 race 覆盖 V1 代码；图片代码未单独跑 | 建议下一轮补 |
+| 群聊图片浏览器 E2E / 图片性能 | **NOT RUN** | 本轮未做 | 可选 |
 
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
@@ -35,6 +47,7 @@
 | 完整性能阶梯（25/50/100/200 WS 连接、50 msg/s） | **NOT RUN** | 本轮只复跑最小两档；未做阶梯与容量探索 | 可选后续轮次 |
 | 5 分钟 soak / restart 稳定性 | **NOT RUN** | 历史结果仍为 2026-10-15 记录，未复跑 | 可选后续轮次 |
 | 文件吞吐档位（1 MiB/10 MiB、并发） | **NOT RUN** | 本轮未跑 file 负载 | 可选后续轮次 |
+| 图片代码 `-race` / 群聊图片 E2E | **NOT RUN** | 图片功能在 race 验证之后加入，未单独复跑；群聊图片仅单测 | 下一轮 |
 | 远端 GitHub Actions 结果 | **NOT OBSERVED** | 本环境无 GitHub API 访问；仅 local equivalent PASS | — |
 
 > 历史性能数字（`docs/performance/baseline.md`）是 2026-10-15 的记录；本轮最小场景结果只代表当前机器当前栈，不构成容量承诺，也不替代历史完整档位。
@@ -75,3 +88,4 @@ cd ..\admin; pnpm type-check; pnpm test; pnpm build
 - 2026-10-15：V1 基线（`gim-v1`）的性能、soak、restart 与 Linux Docker race 证据见 [性能基线](performance/baseline.md) 与 `agent_logs/operations/day-4/`。
 - 2026-11-11：真实依赖集成与好友 E2E，见 `agent_logs/operations/day-6/`。
 - 2026-11-12：race / Compose / Kafka / 浏览器 E2E / 性能最小场景，见 `agent_logs/operations/day-8/`。
+- 2026-11-12：V2 Phase 1 图片消息（单测 / 聊天集成 / 浏览器 E2E），见 `agent_logs/operations/day-10/`。

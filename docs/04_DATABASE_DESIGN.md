@@ -51,6 +51,8 @@
 
 关键约束：`UNIQUE(send_user_id, client_msg_id)`。
 
+`msg` JSON 复用同一列承载消息 payload：文本为 `{"type":1,"textMsg":{"content":"..."}}`，图片为 `{"type":2,"imageMsg":{"fileID":123,"url":"/api/file/123","width":800,"height":600,"size":123456,"mimeType":"image/png"}}`。图片消息只存元数据，`fileID` 指向 `user_files.id`、`url/mimeType/size` 来自 `file_objects`；**不新增消息表/文件表，也不新增列**。图片消息的 `msg_preview` 固定为 `[图片]`。
+
 索引：
 
 - `(send_user_id, rev_user_id, id)`
@@ -84,6 +86,8 @@
 新增 `client_msg_id VARCHAR(64) NOT NULL`；约束 `UNIQUE(send_user_id, client_msg_id)`；索引 `(group_id, id)`, `(send_user_id, id)`。
 
 保留 `group_member_id` 以记录发送时成员身份。
+
+`msg` JSON 与 `chat_messages` 同构：文本 `type=1`，图片 `type=2`（`imageMsg` 只存 `user_files.id` 与元数据）；群聊图片 `msg_preview` 同样为 `[图片]`。无新增表/列。
 
 ### group_sessions
 
