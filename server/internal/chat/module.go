@@ -17,12 +17,6 @@ type Module struct {
 
 type InboundFactory func(*Hub) (InboundHandler, error)
 
-func New(values platformconfig.Values, transitions ...LocalConnectionTransitionObserver) (*Module, error) {
-	return NewWithInboundFactory(values, func(*Hub) (InboundHandler, error) {
-		return UnavailableInboundHandler{}, nil
-	}, transitions...)
-}
-
 func NewWithInboundFactory(values platformconfig.Values, factory InboundFactory, transitions ...LocalConnectionTransitionObserver) (*Module, error) {
 	if factory == nil {
 		return nil, errors.New("chat inbound factory is required")

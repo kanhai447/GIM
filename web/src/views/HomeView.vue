@@ -1,14 +1,15 @@
 <template>
   <section class="welcome-panel">
     <div>
-      <span class="eyebrow">Day 1 foundation</span>
+      <span class="eyebrow">GIM V1</span>
       <h1>通信从可靠的基础开始</h1>
-      <p>身份、路由与服务端数据底座已就绪。实时私聊、群聊和文件能力会在后续 Checkpoint 按可靠性设计逐步接入。</p>
+      <p>登录、好友、私聊、群聊、文件与结构化审计已接入。消息先持久化再 ACK，会话与未读由服务端统一维护，断线后可从历史恢复。</p>
     </div>
     <div class="status-grid">
-      <article><strong>Auth</strong><span>已接入</span></article>
-      <article><strong>Chat</strong><span>待 Day 2</span></article>
-      <article><strong>Group / File</strong><span>待 Day 3</span></article>
+      <article><strong>私聊 / 群聊</strong><span>双 WebSocket · ACK · 幂等</span></article>
+      <article><strong>好友</strong><span>搜索 · 申请 · 备注</span></article>
+      <article><strong>文件</strong><span>流式上传 · SHA-256 去重</span></article>
+      <article><strong>审计</strong><span>结构化事件 · Admin 查询</span></article>
     </div>
   </section>
 </template>
@@ -18,7 +19,7 @@
 h1 { max-width: 620px; margin: 14px 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.06; }
 p { max-width: 650px; color: #d9e5f9; line-height: 1.8; }
 .status-grid { display: grid; gap: 12px; }
-.status-grid article { display: flex; justify-content: space-between; padding: 18px; border: 1px solid rgba(255,255,255,.16); border-radius: 14px; background: rgba(255,255,255,.08); }
-.status-grid span { color: #bdd1f2; }
+.status-grid article { display: flex; justify-content: space-between; gap: 12px; padding: 18px; border: 1px solid rgba(255,255,255,.16); border-radius: 14px; background: rgba(255,255,255,.08); }
+.status-grid span { color: #bdd1f2; text-align: right; }
 @media (max-width: 900px) { .welcome-panel { grid-template-columns: 1fr; } }
 </style>

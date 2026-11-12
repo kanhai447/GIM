@@ -37,6 +37,7 @@
 | E-4 | Admin 构建有 chunk-size warning | 非阻塞 |
 | E-5 | Windows native race 不可用 | 工具链限制，Linux Docker 为既定验证路径 |
 | E-6 | 远端 GitHub Actions 结果未观察 | 本环境无 API 访问，仅 local equivalent PASS |
+| E-7 | 未使用导出函数无自动扫描 | 当前以“包级可达性 + 手工 grep”为准；`internal/chat.UnavailableInboundHandler` 仅测试使用，保留为测试替身 |
 
 ## 使用约定
 

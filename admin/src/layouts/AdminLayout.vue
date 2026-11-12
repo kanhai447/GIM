@@ -45,7 +45,7 @@ async function logout(): Promise<void> {
     </a-layout-sider>
     <a-layout>
       <a-layout-header class="admin-header">
-        <div><strong>{{ route.meta.title }}</strong><span>Day 4 · Admin Integration</span></div>
+        <div><strong>{{ route.meta.title }}</strong><span>GIM V1 · Admin</span></div>
         <div class="admin-user">
           <a-avatar :size="34" :image-url="auth.user?.avatar || undefined">{{ auth.user?.nickname.slice(0, 1) }}</a-avatar>
           <span>{{ auth.user?.nickname }}</span>
