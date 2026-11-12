@@ -34,3 +34,9 @@ type Repository interface {
 	// the user's logical reference. Database unique keys remain the final race guard.
 	Attach(context.Context, domain.FileObject, domain.UserFile) (domain.FileMetadata, bool, bool, error)
 }
+
+// AccessibleRepository resolves a user file for a chat/group image message
+// recipient who does not own the original reference.
+type AccessibleRepository interface {
+	FindAccessibleByID(context.Context, uint64, uint64) (domain.FileMetadata, error)
+}

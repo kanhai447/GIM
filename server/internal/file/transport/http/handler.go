@@ -177,7 +177,7 @@ func (handler *Handler) Download(writer stdhttp.ResponseWriter, request *stdhttp
 		writeError(writer, apperror.Business(fileservice.CodeInvalid, "身份信息无效"))
 		return
 	}
-	metadata, err := handler.files.Get(request.Context(), userID, pathvar.Vars(request)["id"])
+	metadata, err := handler.files.GetAccessible(request.Context(), userID, pathvar.Vars(request)["id"])
 	if err != nil {
 		writeError(writer, err)
 		return

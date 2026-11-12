@@ -141,11 +141,11 @@ read cursor 只允许单调推进；目标消息必须属于该群。partial rea
 Day 3 / Checkpoint 5 的精确用户文件契约：
 
 - `POST /api/file/file`：multipart 字段 `file`，通用流式上传。
-- `POST /api/file/image`：multipart 字段 `image` 的兼容入口；与通用上传共用安全存储，不在本 Checkpoint 实现图片消息或前端。
+- `POST /api/file/image`：multipart 字段 `image`；与通用上传共用安全存储，图片消息使用该入口（见下文）。
 - `GET /api/file/user-files?beforeId=&limit=`：当前用户文件列表，默认 20、最大 100，使用 UserFile ID cursor。
 - `GET /api/file/user-files/:id`：当前用户文件安全元数据。
 - `DELETE /api/file/user-files/:id`：仅删除当前用户的 UserFile 引用；V1 保留 FileObject/物理对象供共享引用和后续 GC。
-- `GET /api/file/:id`：当前用户下载。数字为 UserFile ID；UUID 兼容 FileObject UID，但仍必须存在当前用户引用。响应使用 server-detected MIME、`Content-Length`、`Content-Disposition: attachment` 和 `X-Content-Type-Options: nosniff`，正文流式输出。
+- `GET /api/file/:id`：下载。数字为 UserFile ID；UUID 兼容 FileObject UID（仅所有者）。允许“拥有该 UserFile 引用”或“作为引用该文件的聊天/群聊图片消息参与者（私聊发送者/接收者、群成员）”下载；其他用户统一返回 `2503`，避免枚举。响应使用 server-detected MIME、`Content-Length`、`Content-Disposition: attachment` 和 `X-Content-Type-Options: nosniff`，正文流式输出。
 
 上传响应只包含 `id/uid/fileName/size/mimeType/sha256/url/createdAt/objectCreated/referenceCreated/src` 等安全元数据；`src` 与 `url` 相同以兼容现有 Web 字段。绝不返回 storage root/path。原 `/api/file/files` 仍保留给 Day 4 Admin，不在本 Checkpoint 改成用户列表。
 

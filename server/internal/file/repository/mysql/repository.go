@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/kanhai447/GIM/server/internal/file/domain"
 	filerepo "github.com/kanhai447/GIM/server/internal/file/repository"
@@ -116,6 +117,53 @@ func (repo *Repository) getOwned(ctx context.Context, predicate string, userID u
 		return domain.FileMetadata{}, mapError("get owned object", err)
 	}
 	return domain.FileMetadata{UserFile: uf.domain(), Object: fo.domain()}, nil
+}
+
+// FindAccessibleByID returns a user file when the requester owns it or is a
+// participant of a chat/group image message that references it. The JSON lookup
+// intentionally runs only for non-owners.
+func (repo *Repository) FindAccessibleByID(ctx context.Context, userID, id uint64) (domain.FileMetadata, error) {
+	var uf userFileRecord
+	if err := repo.db.WithContext(ctx).Where("id = ?", id).Take(&uf).Error; err != nil {
+		return domain.FileMetadata{}, mapError("get accessible file", err)
+	}
+	if uf.UserID != userID {
+		allowed, err := repo.canAccessImage(ctx, userID, uf.ID)
+		if err != nil {
+			return domain.FileMetadata{}, err
+		}
+		if !allowed {
+			return domain.FileMetadata{}, filerepo.ErrNotFound
+		}
+	}
+	var fo objectRecord
+	if err := repo.db.WithContext(ctx).Take(&fo, uf.FileObjectID).Error; err != nil {
+		return domain.FileMetadata{}, mapError("get accessible object", err)
+	}
+	return domain.FileMetadata{UserFile: uf.domain(), Object: fo.domain()}, nil
+}
+
+func (repo *Repository) canAccessImage(ctx context.Context, userID, fileID uint64) (bool, error) {
+	value := strconv.FormatUint(fileID, 10)
+	var chatCount int64
+	if err := repo.db.WithContext(ctx).Table("chat_messages").
+		Where("admin_deleted_at IS NULL AND (send_user_id = ? OR rev_user_id = ?)", userID, userID).
+		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.imageMsg.fileID')) = ?", value).
+		Count(&chatCount).Error; err != nil {
+		return false, mapError("check chat image access", err)
+	}
+	if chatCount > 0 {
+		return true, nil
+	}
+	var groupCount int64
+	if err := repo.db.WithContext(ctx).Table("group_messages AS gm").
+		Joins("JOIN group_members AS member ON member.group_id = gm.group_id AND member.user_id = ?", userID).
+		Where("gm.admin_deleted_at IS NULL").
+		Where("JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.imageMsg.fileID')) = ?", value).
+		Count(&groupCount).Error; err != nil {
+		return false, mapError("check group image access", err)
+	}
+	return groupCount > 0, nil
 }
 
 func (repo *Repository) ListByUser(ctx context.Context, userID, beforeID uint64, limit int) ([]domain.FileMetadata, error) {

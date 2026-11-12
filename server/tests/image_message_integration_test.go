@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -14,6 +15,8 @@ import (
 	"github.com/kanhai447/GIM/server/internal/chat/message"
 	chatmysql "github.com/kanhai447/GIM/server/internal/chat/message/repository/mysql"
 	"github.com/kanhai447/GIM/server/internal/chat/protocol"
+	filerepo "github.com/kanhai447/GIM/server/internal/file/repository"
+	filemysql "github.com/kanhai447/GIM/server/internal/file/repository/mysql"
 	platformconfig "github.com/kanhai447/GIM/server/internal/platform/config"
 	platformredis "github.com/kanhai447/GIM/server/internal/platform/redis"
 )
@@ -139,6 +142,14 @@ func TestChatImageMessageWebSocketHistoryAndValidation(t *testing.T) {
 		if err := database.Table("chat_messages").Where("send_user_id = ? AND client_msg_id = ?", senderID, clientMsgID).Count(&count).Error; err != nil || count != 0 {
 			t.Fatalf("%s persisted rows = %d, %v", test.name, count, err)
 		}
+	}
+
+	fileRepository := filemysql.New(database)
+	if _, err := fileRepository.FindAccessibleByID(context.Background(), receiverID, imageFileID); err != nil {
+		t.Fatalf("receiver cannot resolve the image file: %v", err)
+	}
+	if _, err := fileRepository.FindAccessibleByID(context.Background(), offlineID, imageFileID); !errors.Is(err, filerepo.ErrNotFound) {
+		t.Fatalf("non-participant image access = %v, want ErrNotFound", err)
 	}
 }
 

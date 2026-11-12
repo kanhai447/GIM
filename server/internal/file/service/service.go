@@ -36,6 +36,7 @@ type Config struct{ MaxUploadBytes int64 }
 
 type Service struct {
 	repository filerepo.Repository
+	accessible filerepo.AccessibleRepository
 	storage    storage.Storage
 	maxBytes   int64
 	locks      hashLocks
@@ -45,7 +46,8 @@ func New(repository filerepo.Repository, storage storage.Storage, config Config)
 	if repository == nil || storage == nil || config.MaxUploadBytes <= 0 {
 		return nil, errors.New("invalid file service dependencies")
 	}
-	return &Service{repository: repository, storage: storage, maxBytes: config.MaxUploadBytes, locks: hashLocks{items: make(map[string]*hashLock)}}, nil
+	accessible, _ := repository.(filerepo.AccessibleRepository)
+	return &Service{repository: repository, accessible: accessible, storage: storage, maxBytes: config.MaxUploadBytes, locks: hashLocks{items: make(map[string]*hashLock)}}, nil
 }
 
 func (service *Service) Upload(ctx context.Context, userID uint64, originalName string, reader io.Reader) (domain.UploadResult, error) {
@@ -142,6 +144,20 @@ func (service *Service) Get(ctx context.Context, userID uint64, identifier strin
 		return domain.FileMetadata{}, invalid("文件标识无效")
 	}
 	return service.mapOwned(service.repository.GetOwnedByUID(ctx, userID, identifier))
+}
+
+// GetAccessible allows the owner or a participant of a chat/group image message
+// that references the file to download it. UUID lookups remain owner-only.
+func (service *Service) GetAccessible(ctx context.Context, userID uint64, identifier string) (domain.FileMetadata, error) {
+	if userID == 0 {
+		return domain.FileMetadata{}, invalid("身份信息无效")
+	}
+	identifier = strings.TrimSpace(identifier)
+	id, err := strconv.ParseUint(identifier, 10, 64)
+	if err != nil || id == 0 || service.accessible == nil {
+		return service.Get(ctx, userID, identifier)
+	}
+	return service.mapOwned(service.accessible.FindAccessibleByID(ctx, userID, id))
 }
 
 func (service *Service) List(ctx context.Context, userID, beforeID uint64, limit int) ([]domain.FileMetadata, error) {
