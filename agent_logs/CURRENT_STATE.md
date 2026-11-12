@@ -42,7 +42,7 @@
 
 - `git push origin main`：成功，`bce78cc..76d2032 main -> main`。
 - `git push origin gim-v1.1`：成功，`* [new tag] gim-v1.1 -> gim-v1.1`。
-- 远端 `refs/heads/main` = `76d2032`（与推送时本地 HEAD 一致）。
+- 远端 `refs/heads/main`：先更新到 `76d2032`；状态记录提交 `da563b7` 推送后，`origin/main` 与本地 HEAD 一致（即本文件所在提交之后的远端状态）。
 - 远端 tags：`gim-v1`（annotated `3db4382` → `09994cb`，未变化）、`gim-v1.1`（annotated `87949b5` → `55bbb8e`）。
 - 未使用 `--force`；未移动/删除任何 tag。
 
