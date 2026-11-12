@@ -63,9 +63,21 @@ type TextMessage struct {
 	Content string `json:"content"`
 }
 
+// ImageMessage references an uploaded user_files row. URL, MIMEType and Size are
+// filled by the server from file_objects; Width/Height are optional display hints.
+type ImageMessage struct {
+	FileID   uint64 `json:"fileID"`
+	URL      string `json:"url,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+	MIMEType string `json:"mimeType,omitempty"`
+}
+
 type MessagePayload struct {
-	Type    uint8        `json:"type"`
-	TextMsg *TextMessage `json:"textMsg,omitempty"`
+	Type     uint8         `json:"type"`
+	TextMsg  *TextMessage  `json:"textMsg,omitempty"`
+	ImageMsg *ImageMessage `json:"imageMsg,omitempty"`
 }
 
 type GroupSendData struct {

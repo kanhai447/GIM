@@ -129,6 +129,31 @@ func (repository *Repository) GetByID(ctx context.Context, messageID uint64) (me
 	return repository.result(row, err)
 }
 
+type imageFileRecord struct {
+	ID       uint64 `gorm:"column:id"`
+	Size     int64  `gorm:"column:size"`
+	MIMEType string `gorm:"column:mime_type"`
+}
+
+// GetOwnedImage resolves user_files.id only when it belongs to userID, returning
+// the server-detected MIME type and stored size from file_objects.
+func (repository *Repository) GetOwnedImage(ctx context.Context, userID, fileID uint64) (message.ImageFile, error) {
+	var row imageFileRecord
+	err := repository.db.WithContext(ctx).
+		Table("user_files AS uf").
+		Select("uf.id AS id, fo.size AS size, fo.mime_type AS mime_type").
+		Joins("JOIN file_objects AS fo ON fo.id = uf.file_object_id").
+		Where("uf.id = ? AND uf.user_id = ?", fileID, userID).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return message.ImageFile{}, message.ErrImageFileNotFound
+	}
+	if err != nil {
+		return message.ImageFile{}, fmt.Errorf("query chat image file: %w", err)
+	}
+	return message.ImageFile{ID: row.ID, Size: row.Size, MIMEType: row.MIMEType}, nil
+}
+
 func (repository *Repository) result(row record, err error) (message.Message, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return message.Message{}, message.ErrNotFound

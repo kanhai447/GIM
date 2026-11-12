@@ -34,6 +34,7 @@ type Config struct {
 	WriteWait         time.Duration
 	MaxTextBytes      int
 	MaxPayloadBytes   int
+	MaxImageBytes     int
 	DependencyTimeout time.Duration
 	DeliveryTimeout   time.Duration
 }
@@ -78,6 +79,10 @@ func FromValues(values platformconfig.Values) (Config, error) {
 	if err != nil || maxPayloadBytes < maxTextBytes || maxPayloadBytes > int(maximumReadLimit) {
 		return Config{}, errors.New("configuration key CHAT_MESSAGE_MAX_PAYLOAD_BYTES must contain text and not exceed the WebSocket read limit maximum")
 	}
+	maxImageBytes, err := optionalInt(values, "IMAGE_MESSAGE_MAX_BYTES", 10<<20)
+	if err != nil || maxImageBytes < 1 || maxImageBytes > 1<<30 {
+		return Config{}, errors.New("configuration key IMAGE_MESSAGE_MAX_BYTES must be between 1 and 1073741824")
+	}
 	dependencyTimeout, err := optionalDuration(values, "CHAT_MESSAGE_DEPENDENCY_TIMEOUT", defaultDependency)
 	if err != nil || dependencyTimeout <= 0 || dependencyTimeout > 30*time.Second {
 		return Config{}, errors.New("configuration key CHAT_MESSAGE_DEPENDENCY_TIMEOUT must be positive and no greater than 30s")
@@ -89,7 +94,7 @@ func FromValues(values platformconfig.Values) (Config, error) {
 	return Config{
 		Path: path, SendBuffer: buffer, AllowedOrigins: origins, ReadLimit: int64(readLimit),
 		PongWait: pongWait, PingPeriod: pingPeriod, WriteWait: writeWait, MaxTextBytes: maxTextBytes,
-		MaxPayloadBytes: maxPayloadBytes, DependencyTimeout: dependencyTimeout, DeliveryTimeout: deliveryTimeout,
+		MaxPayloadBytes: maxPayloadBytes, MaxImageBytes: maxImageBytes, DependencyTimeout: dependencyTimeout, DeliveryTimeout: deliveryTimeout,
 	}, nil
 }
 

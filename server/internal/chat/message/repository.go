@@ -13,7 +13,21 @@ var (
 	ErrDuplicate                = errors.New("duplicate chat message")
 	ErrSessionNotFound          = errors.New("chat session not found")
 	ErrMessageNotInConversation = errors.New("chat message does not belong to conversation")
+	ErrImageFileNotFound        = errors.New("chat image file not found")
 )
+
+// ImageFile is the verified metadata of a user-owned uploaded image.
+type ImageFile struct {
+	ID       uint64
+	Size     int64
+	MIMEType string
+}
+
+// ImageRepository resolves an image reference without trusting client-supplied
+// URL/MIME/size. It is optional so existing repositories remain valid.
+type ImageRepository interface {
+	GetOwnedImage(context.Context, uint64, uint64) (ImageFile, error)
+}
 
 type Message struct {
 	ID          uint64

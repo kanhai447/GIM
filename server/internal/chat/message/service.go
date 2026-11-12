@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	TextMessageType = uint8(1)
+	TextMessageType  = uint8(1)
+	ImageMessageType = uint8(2)
 
 	CodeInvalidMessage      = uint32(2201)
 	CodeRecipientMissing    = uint32(2202)
@@ -25,6 +27,10 @@ const (
 	CodeSessionMissing      = uint32(2208)
 	CodeInvalidCursor       = uint32(2209)
 	CodeInvalidReadMessage  = uint32(2210)
+	CodeImageFileInvalid    = uint32(2211)
+	CodeImageMIMEType       = uint32(2212)
+	CodeImageTooLarge       = uint32(2213)
+	CodeImagePayload        = uint32(2214)
 )
 
 const (
@@ -51,11 +57,12 @@ func (err *PublicError) Unwrap() error { return err.cause }
 type Config struct {
 	MaxTextBytes      int
 	MaxPayloadBytes   int
+	MaxImageBytes     int
 	DependencyTimeout time.Duration
 }
 
 func DefaultConfig() Config {
-	return Config{MaxTextBytes: 4096, MaxPayloadBytes: 16 * 1024, DependencyTimeout: 2 * time.Second}
+	return Config{MaxTextBytes: 4096, MaxPayloadBytes: 16 * 1024, MaxImageBytes: 10 << 20, DependencyTimeout: 2 * time.Second}
 }
 
 type SendRequest struct {
@@ -76,11 +83,12 @@ type Service struct {
 	sessions   SessionRepository
 	recipients RecipientValidator
 	friends    FriendshipRepository
+	images     ImageRepository
 	config     Config
 }
 
 func NewService(messages Repository, recipients RecipientValidator, friends FriendshipRepository, config Config) (*Service, error) {
-	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.DependencyTimeout <= 0 {
+	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.MaxImageBytes < 1 || config.DependencyTimeout <= 0 {
 		return nil, errors.New("invalid chat message service configuration")
 	}
 	sends, ok := messages.(SendRepository)
@@ -89,9 +97,10 @@ func NewService(messages Repository, recipients RecipientValidator, friends Frie
 	}
 	history, _ := messages.(HistoryRepository)
 	sessions, _ := messages.(SessionRepository)
+	images, _ := messages.(ImageRepository)
 	return &Service{
 		messages: messages, sends: sends, history: history, sessions: sessions,
-		recipients: recipients, friends: friends, config: config,
+		recipients: recipients, friends: friends, images: images, config: config,
 	}, nil
 }
 
@@ -144,9 +153,18 @@ func (service *Service) SendPrivateMessage(ctx context.Context, senderID uint64,
 		return SendResult{}, public(CodeFriendshipRequired, "仅好友之间可以发送私聊消息", nil)
 	}
 
+	payload := request.Message
+	if payload.Type == ImageMessageType {
+		normalized, normalizeErr := service.normalizeImage(ctx, senderID, payload)
+		if normalizeErr != nil {
+			return SendResult{}, normalizeErr
+		}
+		payload = normalized
+	}
+
 	persisted, err := service.sends.PersistWithSessions(ctx, Message{
 		SenderID: senderID, ReceiverID: request.ReceiverID, ClientMsgID: request.ClientMsgID,
-		Type: request.Message.Type, Preview: preview(request.Message.TextMsg.Content), Payload: request.Message,
+		Type: payload.Type, Preview: previewOf(payload), Payload: payload,
 	})
 	if err == nil {
 		if !sameLogicalMessage(persisted.Message, request) {
@@ -302,12 +320,21 @@ func (service *Service) validate(senderID uint64, request SendRequest) error {
 	if !clientMsgIDPattern.MatchString(request.ClientMsgID) {
 		return public(CodeInvalidMessage, "clientMsgId 格式无效", nil)
 	}
-	if request.Message.Type != TextMessageType || request.Message.TextMsg == nil {
+	switch request.Message.Type {
+	case TextMessageType:
+		if request.Message.TextMsg == nil {
+			return public(CodeInvalidMessage, "暂不支持该消息类型", nil)
+		}
+		content := request.Message.TextMsg.Content
+		if strings.TrimSpace(content) == "" || !utf8.ValidString(content) || len([]byte(content)) > service.config.MaxTextBytes {
+			return public(CodeInvalidMessage, "文本消息内容无效或过长", nil)
+		}
+	case ImageMessageType:
+		if err := validateImagePayload(request.Message); err != nil {
+			return err
+		}
+	default:
 		return public(CodeInvalidMessage, "暂不支持该消息类型", nil)
-	}
-	content := request.Message.TextMsg.Content
-	if strings.TrimSpace(content) == "" || !utf8.ValidString(content) || len([]byte(content)) > service.config.MaxTextBytes {
-		return public(CodeInvalidMessage, "文本消息内容无效或过长", nil)
 	}
 	payload, err := json.Marshal(request.Message)
 	if err != nil || len(payload) > service.config.MaxPayloadBytes {
@@ -316,14 +343,75 @@ func (service *Service) validate(senderID uint64, request SendRequest) error {
 	return nil
 }
 
+const maxImageDimension = 20000
+
+func validateImagePayload(payload protocol.MessagePayload) error {
+	image := payload.ImageMsg
+	if image == nil || image.FileID == 0 {
+		return public(CodeImagePayload, "图片消息参数无效", nil)
+	}
+	if image.Width < 0 || image.Height < 0 || image.Width > maxImageDimension || image.Height > maxImageDimension || image.Size < 0 {
+		return public(CodeImagePayload, "图片消息参数无效", nil)
+	}
+	return nil
+}
+
+func (service *Service) normalizeImage(ctx context.Context, senderID uint64, payload protocol.MessagePayload) (protocol.MessagePayload, error) {
+	if service.images == nil {
+		return payload, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	imageContext, cancel := context.WithTimeout(ctx, service.config.DependencyTimeout)
+	defer cancel()
+	file, err := service.images.GetOwnedImage(imageContext, senderID, payload.ImageMsg.FileID)
+	if err != nil {
+		if errors.Is(err, ErrImageFileNotFound) {
+			return payload, public(CodeImageFileInvalid, "图片文件不存在或无权使用", nil)
+		}
+		return payload, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	if !strings.HasPrefix(strings.ToLower(file.MIMEType), "image/") {
+		return payload, public(CodeImageMIMEType, "文件不是图片", nil)
+	}
+	if file.Size < 0 || file.Size > int64(service.config.MaxImageBytes) {
+		return payload, public(CodeImageTooLarge, "图片超过大小限制", nil)
+	}
+	normalized := payload
+	image := *payload.ImageMsg
+	image.URL = fmt.Sprintf("/api/file/%d", file.ID)
+	image.MIMEType = file.MIMEType
+	image.Size = file.Size
+	normalized.ImageMsg = &image
+	return normalized, nil
+}
+
+func previewOf(payload protocol.MessagePayload) string {
+	if payload.Type == ImageMessageType {
+		return "[图片]"
+	}
+	if payload.TextMsg == nil {
+		return ""
+	}
+	return preview(payload.TextMsg.Content)
+}
+
 func public(code uint32, message string, cause error) error {
 	return &PublicError{Code: code, Message: message, cause: cause}
 }
 
 func sameLogicalMessage(existing Message, request SendRequest) bool {
-	return existing.ReceiverID == request.ReceiverID && existing.Type == request.Message.Type &&
-		existing.Payload.TextMsg != nil && request.Message.TextMsg != nil &&
-		existing.Payload.TextMsg.Content == request.Message.TextMsg.Content
+	if existing.ReceiverID != request.ReceiverID || existing.Type != request.Message.Type {
+		return false
+	}
+	switch existing.Type {
+	case TextMessageType:
+		return existing.Payload.TextMsg != nil && request.Message.TextMsg != nil &&
+			existing.Payload.TextMsg.Content == request.Message.TextMsg.Content
+	case ImageMessageType:
+		return existing.Payload.ImageMsg != nil && request.Message.ImageMsg != nil &&
+			existing.Payload.ImageMsg.FileID == request.Message.ImageMsg.FileID
+	default:
+		return false
+	}
 }
 
 func belongsToConversation(value Message, first, second uint64) bool {

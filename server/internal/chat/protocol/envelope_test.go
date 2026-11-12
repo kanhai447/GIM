@@ -22,6 +22,18 @@ func TestDecodeDataUsesTypedStrictBoundary(t *testing.T) {
 	}
 }
 
+func TestDecodeImageMessagePayload(t *testing.T) {
+	data, err := DecodeData[ChatSendData](json.RawMessage(`{"revUserID":42,"msg":{"type":2,"imageMsg":{"fileID":7,"width":800,"height":600}}}`))
+	if err != nil || data.ReceiverID != 42 || data.Message.Type != 2 ||
+		data.Message.ImageMsg == nil || data.Message.ImageMsg.FileID != 7 ||
+		data.Message.ImageMsg.Width != 800 || data.Message.ImageMsg.Height != 600 {
+		t.Fatalf("DecodeData() = %#v, %v", data, err)
+	}
+	if _, err := DecodeData[ChatSendData](json.RawMessage(`{"revUserID":42,"msg":{"type":2,"imageMsg":{"fileID":7,"senderId":1}}}`)); err == nil {
+		t.Fatal("DecodeData() accepted an unknown image field")
+	}
+}
+
 func TestDecodeRejectsInvalidEnvelope(t *testing.T) {
 	for _, payload := range [][]byte{
 		nil,
