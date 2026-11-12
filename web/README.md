@@ -1,25 +1,38 @@
 # GIM Web
 
-Independent Vue 3 user application for GIM. It uses TypeScript, Vite, Pinia, Vue Router, Axios and Element Plus.
+GIM 用户端：Vue 3 + TypeScript + Pinia + Vue Router + Axios + Element Plus + Vite。
+
+## 启动 / 构建 / 测试
 
 ```powershell
 Copy-Item .env.example .env.local
 pnpm install
+pnpm dev          # 本地开发（Vite 代理 /api 到 VITE_DEV_GATEWAY_TARGET，含 WebSocket Upgrade）
 pnpm type-check
 pnpm test
 pnpm build
 ```
 
-`VITE_API_BASE_URL=/` keeps browser HTTP requests same-origin. Chat WebSocket also defaults to the current origin and converts `http/https` to `ws/wss`; `VITE_WS_BASE_URL` is only needed when the public Gateway WebSocket origin differs. During local development, Vite proxies `/api` to `VITE_DEV_GATEWAY_TARGET`, including WebSocket Upgrade. Local `.env.local`, tokens, message content, service credentials and signing material must never be committed.
+`VITE_API_BASE_URL=/` 保持同源；Chat/Group WebSocket 默认连接当前 origin 并自动把 `http/https` 转成 `ws/wss`，需要跨域时设置 `VITE_WS_BASE_URL`。`.env.local`、token、消息正文与服务凭据不得提交。
 
-## Pages
+## 页面
 
-- `/login`, `/register`: account login and registration.
-- `/` — overview.
-- `/contacts` — friend loop: search users, send requests, accept/reject received requests, edit a directional remark, delete a friend, open a private chat. Online state comes from `GET /api/user/friends` (`isOnline`, Redis Presence) and is refreshed when the page loads; no friend Presence WebSocket event exists in V1.
-- `/chat/:peerId?` — private text chat over the Chat WebSocket with `clientMsgId` ACK, retry and reconnect.
-- `/group/:groupId?` — group text chat over the Group WebSocket.
-- `/files` — streaming upload, deduplicated user file list, download and reference deletion.
-- `/profile` — read-only profile.
+- `/login`、`/register`：登录、注册。
+- `/`：概览。
+- `/contacts`：通讯录——搜索用户、发送申请、同意/拒绝、好友列表（在线状态）、备注编辑、删除好友、跳转私聊。
+- `/chat/:peerId?`：私聊文本消息；`clientMsgId` + ACK + 超时重试 + 指数退避重连 + 会话/未读重拉。
+- `/group/:groupId?`：群聊文本消息（独立 Group WS）。
+- `/files`：流式上传、去重文件列表、下载、删除引用。
+- `/profile`：只读个人资料。
 
-All friend UI renders user input through Vue text interpolation and `<pre>`; it never uses `v-html`. Recipient-side delivery/read receipts and rich message types remain V2.
+## 行为边界
+
+- 好友 `isOnline` 来自 `GET /api/user/friends`（Redis Presence），进入页面时刷新；V1 没有 `friend.online/offline` 实时推送。
+- pending 消息只在当前页面内保留，不跨刷新持久化。
+- 仅文本消息；富消息为 V2。
+- 所有用户输入使用文本插值渲染，不使用 `v-html`。
+
+## 测试
+
+- 单元/组件：`pnpm test`（Vitest + happy-dom）。
+- 浏览器 smoke（需要运行中的全栈）：`pnpm test:e2e:chat`、`pnpm test:e2e:group`、`pnpm test:e2e:file`；本轮未运行，见 `docs/validation-status.md`。

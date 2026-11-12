@@ -1,47 +1,48 @@
 # GIM Server
 
-`server/` is the independent Go backend for GIM. It does not import or compile code from `reference/`.
+`server/` 是 GIM 的独立 Go 后端，不 import/编译 `reference/` 中的任何代码。
 
-## Command boundaries
-
-- `cmd/gateway` — public HTTP/WebSocket entrypoint, Auth call, identity header injection.
-- `cmd/auth-api` — register / login / logout / authentication.
-- `cmd/user-api` + `cmd/user-rpc` — profile, friends, Admin user management, internal user RPC.
-- `cmd/chat-api` — private chat HTTP + Chat WebSocket + Presence + Redis delivery.
-- `cmd/group-api` — group HTTP, group messages/sessions and Group WebSocket (uses MySQL/Redis/User RPC directly).
-- `cmd/file-api` — streaming upload, content-addressed storage, owned download/delete.
-- `cmd/settings-api` — public settings, Admin settings and read-only Admin overview.
-- `cmd/logs-api` — Admin-only structured audit query and Kafka consumer.
-- `cmd/migrate`, `cmd/admin-bootstrap` — one-shot migration and first-admin tools.
-
-V1 implements text private/group messaging, the friend loop, file ownership, Admin management and the bounded Kafka audit pipeline. Rich message types, friend online notifications, `user_confs` editing and delivery/read receipts are V2 and are not exposed.
-
-## Layout
+## 目录
 
 ```text
-cmd/          service entrypoints
-internal/     GIM-owned shared and domain implementation
-api/          generated gRPC contracts (user, group)
-migrations/   versioned MySQL migrations (001-008)
-tests/        gated integration tests (require GIM_ENV_FILE)
-tools/        load harness
+cmd/         11 个进程入口（服务 + migrate/admin-bootstrap 工具）
+internal/    GIM 自有实现（domain/service/repository/transport/platform）
+api/         生成的 gRPC 契约（当前仅 user）
+migrations/  MySQL 版本化迁移（001-008，含 up/down）
+tests/       真实依赖集成测试（GIM_ENV_FILE 门控）
+tools/       负载工具
 ```
 
-Runtime secrets come from the ignored root `.env.local`. Committed configuration must contain placeholders only.
+## 进程入口
 
-## Network boundary
+| cmd | 作用 |
+|---|---|
+| `gateway` | 唯一公网 HTTP/WS 入口：调用 Auth、清洗/注入身份、反向代理 |
+| `auth-api` | 注册 / 登录 / 注销 / authentication |
+| `user-api` | 用户资料、好友闭环、Admin 用户管理 |
+| `user-rpc` | 内部 User gRPC（Auth/Chat/Group 调用） |
+| `chat-api` | 私聊 HTTP、Chat WS、Presence、Redis 实时投递 |
+| `group-api` | 群 HTTP、群消息/session、Group WS |
+| `file-api` | 流式上传、内容寻址存储、鉴权下载/删除 |
+| `settings-api` | 公开配置、Admin 配置与只读概览 |
+| `logs-api` | Kafka consumer 与 Admin 审计查询 |
+| `migrate` | 一次性 migration（`up` / `down -steps N` / `status`） |
+| `admin-bootstrap` | 一次性创建首个管理员（从环境变量读取，不写死密码） |
 
-Production deployments expose the Gateway as the only public backend entrypoint. Auth, User, Chat, Group, File, Settings, and Logs API listeners are internal services registered below `/gim/services/{service}/{instance}` in etcd and must not be exposed directly to the Internet.
+V1 已实现：文本私聊/群聊、好友闭环、文件所有权、Admin 管理、bounded Kafka 审计。富消息、好友上线提醒、`user_confs` 编辑、delivery/read receipt 为 V2。
 
-The Gateway removes any client-provided `User-ID`, `Role`, and `ValidPath` values, calls Auth `/api/auth/authentication`, and only then injects trusted `User-ID` / `Role` values. Target-service Admin middleware may trust these headers only when the internal API is reachable exclusively through the Gateway/private network.
+## 依赖与配置
 
-Auth/User service processes build registration parameters from `INTERNAL_API_HOST`, their configured API port/instance ID, and `ETCD_SERVICE_TTL`, register with a lease, and close the registration during graceful shutdown. Business service addresses are never hardcoded in Gateway.
+需要 MySQL、Redis、etcd；Kafka 可选（未配置时审计 producer/consumer 自动禁用，核心 IM 不受影响）。
+运行配置来自被 Git 忽略的根 `.env.local`；仓库只提交 `.env.example` 中的 `CHANGE_ME` 占位。
 
-With MySQL, Redis, etcd and (optionally) Kafka running, migrations applied, and the ignored environment file configured, start the services from separate PowerShell terminals in this order:
+## 启动顺序
 
 ```powershell
+cd server
 $env:GIM_ENV_FILE = '..\.env.local'
-go run ./cmd/migrate -command up
+
+go run ./cmd/migrate -env ..\.env.local -command up
 go run ./cmd/user-rpc
 go run ./cmd/user-api
 go run ./cmd/auth-api
@@ -53,14 +54,37 @@ go run ./cmd/logs-api
 go run ./cmd/gateway
 ```
 
-`user-api`, `auth-api`, `chat-api`, `group-api`, `file-api`, `settings-api` and `logs-api` register leased endpoints in etcd and revoke them on graceful exit. Auth, Chat and Group connect to User RPC at `INTERNAL_API_HOST:USER_RPC_PORT`. RPC is an internal configured dependency rather than a Gateway-discovered HTTP service. Only Gateway should be exposed publicly.
+- `user-api`/`auth-api`/`chat-api`/`group-api`/`file-api`/`settings-api`/`logs-api` 在 etcd `/gim/services/{service}/{instance}` 注册 lease，优雅退出时 revoke。
+- Auth/Chat/Group 通过 `INTERNAL_API_HOST:USER_RPC_PORT` 调用 User RPC；RPC 是内部配置依赖，不经 Gateway 发现。
+- 正式部署只暴露 Gateway；内部 API/RPC 不得直接映射公网，否则可绕过 Gateway 伪造身份头。
 
-## Friend API
+## 测试
 
-`user-api` serves `/api/user/search`, `/api/user/friends` (GET/POST/PUT/DELETE), `/api/user/valid`, `/api/user/valid_status` and `/api/user/friend_info`. Acceptance writes both friendship rows and the request status in one transaction; `GET /api/user/friends` reads Redis Presence (`isOnline`) without modifying it. See `docs/05_HTTP_API.md` for payloads and error codes.
+```powershell
+go build ./...
+go vet ./...
+gofmt -l .
+go test ./... -count=1
 
-## WebSockets
+# 真实依赖集成测试（MySQL/Redis/etcd；Kafka 用例需 GIM_KAFKA_INTEGRATION=1）
+$env:GIM_ENV_FILE = '<absolute path to env file>'
+go test ./tests -count=1 -v
 
-Group WebSocket uses `/api/group/ws/chat?token=<JWT>` through Gateway/Auth; private chat uses `/api/chat/ws/chat?token=<JWT>`. Configure allowed origins, bounded queues and heartbeat values from `.env.example`. Both sockets are user-level multi-device sockets; only Chat WS contributes to global Presence.
+# Linux/64-bit C 工具链下的 race
+go test -race ./... -count=1
+```
 
-`logs-api` serves the admin-only structured audit list/detail routes and consumes `gim.audit.events` into MySQL. All business services share the same bounded producer implementation; Kafka failure degrades audit visibility but never changes committed business success. Apply migration 007 before starting Logs and configure Kafka only through deployment environment values.
+当前验证状态见 `docs/validation-status.md`；未修复问题见 `docs/known-issues.md`。
+
+## 网络边界与安全
+
+- Gateway 删除客户端提供的 `User-ID`、`Role`、`ValidPath` 与 `X-Request-ID`，调用 Auth 后只注入 Auth 返回的身份。
+- Admin 接口在目标服务再次校验 `Role == 1`；前端路由不是安全边界。
+- 日志不记录密码、JWT、Authorization、Cookie、Secret、消息正文或物理存储路径。
+- 运行时秘密只来自环境变量/被忽略的 env 文件，不进入仓库与 Settings 表。
+
+## 数据库
+
+- 001–008 版本化 migration，禁止 AutoMigrate 改生产结构。
+- `admin_deleted_at` 为管理端 tombstone；不物理删除消息行。
+- 表/索引/约束清单见 `docs/04_DATABASE_DESIGN.md` §7.11。
