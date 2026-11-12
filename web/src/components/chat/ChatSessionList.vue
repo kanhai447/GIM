@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { ChatSession } from '@/types/chat'
+import { messagePreviewText } from '@/utils/message'
 
 defineProps<{ sessions: ChatSession[]; currentPeerID: number | null; loading: boolean }>()
 const emit = defineEmits<{ select: [peerID: number]; toggleTop: [peerID: number, isTop: boolean] }>()
 
 function preview(session: ChatSession): string {
-  return session.lastMessage?.msg.textMsg.content || '暂无消息'
+  return messagePreviewText(session.lastMessage)
 }
 
 function formatTime(value: string): string {

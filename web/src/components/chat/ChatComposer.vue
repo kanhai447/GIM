@@ -2,9 +2,13 @@
 import { computed, ref } from 'vue'
 import type { ChatConnectionState } from '@/types/chat'
 
-const props = defineProps<{ disabled: boolean; connectionState: ChatConnectionState }>()
-const emit = defineEmits<{ send: [content: string] }>()
+const props = withDefaults(defineProps<{ disabled: boolean; connectionState: ChatConnectionState; uploading?: boolean }>(), {
+  uploading: false,
+})
+const emit = defineEmits<{ send: [content: string]; image: [file: File] }>()
 const content = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
+const busy = computed(() => props.disabled || props.uploading)
 const hint = computed(() => props.connectionState === 'connected'
   ? '已连接'
   : props.connectionState === 'reconnecting'
@@ -13,7 +17,7 @@ const hint = computed(() => props.connectionState === 'connected'
 
 function submit(): void {
   const value = content.value.trim()
-  if (!value || props.disabled) return
+  if (!value || busy.value) return
   emit('send', value)
   content.value = ''
 }
@@ -23,14 +27,29 @@ function handleKeydown(event: KeyboardEvent): void {
   event.preventDefault()
   submit()
 }
+
+function chooseImage(): void {
+  if (!busy.value) fileInput.value?.click()
+}
+
+function onImageSelected(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file && !busy.value) emit('image', file)
+}
 </script>
 
 <template>
   <footer class="composer">
-    <div class="composer-status" :data-connection="connectionState">{{ hint }}</div>
+    <div class="composer-status" :data-connection="connectionState">{{ uploading ? '图片上传中…' : hint }}</div>
     <div class="composer-row">
-      <el-input v-model="content" type="textarea" :rows="3" resize="none" maxlength="4000" show-word-limit :disabled="disabled" placeholder="输入消息，Enter 发送，Shift + Enter 换行" @keydown="handleKeydown" />
-      <el-button type="primary" :disabled="disabled || !content.trim()" @click="submit">发送</el-button>
+      <el-input v-model="content" type="textarea" :rows="3" resize="none" maxlength="4000" show-word-limit :disabled="busy" placeholder="输入消息，Enter 发送，Shift + Enter 换行" @keydown="handleKeydown" />
+      <div class="composer-actions">
+        <input ref="fileInput" class="file-input" type="file" accept="image/*" @change="onImageSelected" />
+        <el-button :disabled="busy" :loading="uploading" @click="chooseImage">图片</el-button>
+        <el-button type="primary" :disabled="busy || !content.trim()" @click="submit">发送</el-button>
+      </div>
     </div>
   </footer>
 </template>
@@ -41,4 +60,6 @@ function handleKeydown(event: KeyboardEvent): void {
 .composer-status[data-connection='connected'] { color: #2f855a; }
 .composer-status[data-connection='reconnecting'] { color: #b7791f; }
 .composer-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.composer-actions { display: flex; gap: 8px; align-items: center; }
+.file-input { display: none; }
 </style>

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { chatApi } from '@/api/chat'
 import { PublicApiError } from '@/api/client'
+import { fileApi } from '@/api/file'
 import { ChatSocketClient } from '@/service/ws/chat_socket'
 import {
   latestServerMessageID,
@@ -46,6 +47,7 @@ export const useChatStore = defineStore('chat', () => {
   const connectionState = ref<ChatConnectionState>('disconnected')
   const currentUserID = ref(0)
   const lastError = ref('')
+  const uploadingImage = ref(false)
 
   let token = ''
   let socket: ChatSocketClient | null = null
@@ -255,6 +257,35 @@ export const useChatStore = defineStore('chat', () => {
     return clientMsgId
   }
 
+  async function sendImage(file: File): Promise<string | null> {
+    const peerID = currentPeerID.value
+    if (!peerID || !currentUserID.value) return null
+    uploadingImage.value = true
+    try {
+      const uploaded = await fileApi.uploadImage(file)
+      const clientMsgId = newClientMsgID()
+      messagesFor(peerID).push({
+        localID: `client:${clientMsgId}`,
+        sendUserID: currentUserID.value,
+        revUserID: peerID,
+        clientMsgId,
+        msg: {
+          type: 2,
+          imageMsg: { fileID: uploaded.id, url: uploaded.url, size: uploaded.size, mimeType: uploaded.mimeType },
+        },
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      })
+      sendPending(clientMsgId)
+      return clientMsgId
+    } catch (error) {
+      handleRequestFailure(error, '图片上传失败')
+      return null
+    } finally {
+      uploadingImage.value = false
+    }
+  }
+
   function retryMessage(clientMsgId: string): void {
     const message = findByClientMsgID(clientMsgId)
     if (!message || message.sendUserID !== currentUserID.value) return
@@ -436,6 +467,8 @@ export const useChatStore = defineStore('chat', () => {
     loadLatest,
     loadOlder,
     sendText,
+    sendImage,
+    uploadingImage,
     retryMessage,
     markConversationRead,
     setConversationActive,

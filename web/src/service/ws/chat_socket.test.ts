@@ -134,6 +134,21 @@ describe('ChatSocketClient', () => {
     expect(JSON.parse(sockets[0]!.sent[0]!)).toEqual(frame)
   })
 
+  it('parses image messages and rejects malformed image metadata', () => {
+    const image = {
+      event: 'chat.message',
+      data: {
+        messageId: 1, sendUserID: 2, revUserID: 3, clientMsgId: 'c1', createdAt: 'now',
+        msg: { type: 2, imageMsg: { fileID: 9, url: '/api/file/9', width: 800, height: 600, size: 1024, mimeType: 'image/png' } },
+      },
+    }
+    expect(parseChatServerEnvelope(JSON.stringify(image))?.event).toBe('chat.message')
+    const zeroFile = { ...image, data: { ...image.data, msg: { ...image.data.msg, imageMsg: { ...image.data.msg.imageMsg, fileID: 0 } } } }
+    expect(parseChatServerEnvelope(JSON.stringify(zeroFile))).toBeNull()
+    const badWidth = { ...image, data: { ...image.data, msg: { ...image.data.msg, imageMsg: { ...image.data.msg.imageMsg, width: 'wide' } } } }
+    expect(parseChatServerEnvelope(JSON.stringify(badWidth))).toBeNull()
+  })
+
   it('parses typed server events and ignores malformed or unknown frames', () => {
     const { client, sockets, envelopes } = setup()
     client.connect()

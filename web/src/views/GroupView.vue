@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
         @retry="group.retryMessage"
       />
       <p v-if="group.lastError" class="group-error">{{ group.lastError }}</p>
-      <GroupComposer :disabled="group.currentUnavailable" :connection-state="group.connectionState" @send="group.sendText" />
+      <GroupComposer :disabled="group.currentUnavailable" :connection-state="group.connectionState" :uploading="group.uploadingImage" @send="group.sendText" @image="group.sendImage" />
     </main>
     <main v-else class="conversation-empty"><div><strong>选择一个群聊</strong><span>群会话和“我的群”独立展示，历史按消息游标加载。</span></div></main>
     <GroupInfoPanel v-if="group.currentGroup" :group="group.currentGroup" :members="group.currentMembers" :current-user-i-d="group.currentUserID" @mute="setMute" />

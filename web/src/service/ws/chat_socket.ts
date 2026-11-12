@@ -7,6 +7,7 @@ import type {
   ChatServerEnvelope,
   PrivateChatMessage,
 } from '@/types/chat'
+import { isValidImagePayload } from '@/utils/message'
 
 const OPEN = 1
 const AUTH_CLOSE_CODES = new Set([1008, 4001, 4003, 4401, 4403])
@@ -44,8 +45,9 @@ function isPositiveNumber(value: unknown): value is number {
 function isMessage(value: unknown): value is PrivateChatMessage {
   if (!isRecord(value) || !isPositiveNumber(value.messageId) || !isPositiveNumber(value.sendUserID) || !isPositiveNumber(value.revUserID)) return false
   if (typeof value.clientMsgId !== 'string' || typeof value.createdAt !== 'string' || !isRecord(value.msg)) return false
-  const text = value.msg.textMsg
-  return value.msg.type === 1 && isRecord(text) && typeof text.content === 'string'
+  const message = value.msg
+  return (message.type === 1 && isRecord(message.textMsg) && typeof message.textMsg.content === 'string') ||
+    (message.type === 2 && isValidImagePayload(message.imageMsg))
 }
 
 export function parseChatServerEnvelope(raw: string): ChatServerEnvelope | null {

@@ -23,6 +23,7 @@ const harness = vi.hoisted(() => ({
   history: vi.fn(),
   markRead: vi.fn(),
   setTop: vi.fn(),
+  uploadImage: vi.fn(),
   sockets: [] as FakeSocketInstance[],
 }))
 
@@ -33,6 +34,10 @@ vi.mock('@/api/chat', () => ({
     markRead: harness.markRead,
     setTop: harness.setTop,
   },
+}))
+
+vi.mock('@/api/file', () => ({
+  fileApi: { uploadImage: harness.uploadImage },
 }))
 
 vi.mock('@/service/ws/chat_socket', () => ({
@@ -88,6 +93,7 @@ describe('chat store', () => {
     harness.history.mockReset().mockResolvedValue({ list: [firstMessage], hasMore: false })
     harness.markRead.mockReset().mockResolvedValue({ ...session, unreadCount: 0, lastReadMessageID: 10 })
     harness.setTop.mockReset().mockResolvedValue({ ...session, isTop: true })
+    harness.uploadImage.mockReset()
   })
 
   it('starts one socket and loads server-ordered sessions', async () => {
@@ -132,6 +138,35 @@ describe('chat store', () => {
     const secondFrame = latestSocket().send.mock.calls.at(-1)?.[0]
     expect(firstFrame?.clientMsgId).toBe(clientMsgId)
     expect(secondFrame?.clientMsgId).toBe(clientMsgId)
+  })
+
+  it('uploads an image before sending type=2 and keeps the same clientMsgId on retry', async () => {
+    harness.uploadImage.mockResolvedValue({ id: 42, url: '/api/file/42', size: 2048, mimeType: 'image/png' })
+    const store = await startStore()
+    await store.openConversation(2)
+    latestSocket().options.onStateChange('connected')
+    const clientMsgId = await store.sendImage(new File(['image-bytes'], 'photo.png', { type: 'image/png' }))
+    expect(clientMsgId).not.toBeNull()
+    expect(harness.uploadImage).toHaveBeenCalledOnce()
+    expect(latestSocket().send.mock.calls.at(-1)?.[0].data.msg).toEqual({
+      type: 2,
+      imageMsg: { fileID: 42, url: '/api/file/42', size: 2048, mimeType: 'image/png' },
+    })
+    expect(store.currentMessages.find((item) => item.clientMsgId === clientMsgId)?.msg.type).toBe(2)
+    store.retryMessage(clientMsgId!)
+    expect(latestSocket().send.mock.calls.at(-1)?.[0].clientMsgId).toBe(clientMsgId)
+  })
+
+  it('does not send an image message when the upload fails', async () => {
+    harness.uploadImage.mockRejectedValue(new PublicApiError('图片上传失败', 2502))
+    const store = await startStore()
+    await store.openConversation(2)
+    latestSocket().options.onStateChange('connected')
+    const clientMsgId = await store.sendImage(new File(['x'], 'bad.png', { type: 'image/png' }))
+    expect(clientMsgId).toBeNull()
+    expect(store.lastError).toBe('图片上传失败')
+    expect(store.currentMessages.some((item) => item.msg.type === 2)).toBe(false)
+    expect(latestSocket().send).not.toHaveBeenCalled()
   })
 
   it('moves pending to sent and assigns messageId on ACK without adding a duplicate', async () => {

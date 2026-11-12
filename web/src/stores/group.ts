@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { PublicApiError } from '@/api/client'
+import { fileApi } from '@/api/file'
 import { groupApi } from '@/api/group'
 import { GroupSocketClient } from '@/service/ws/group_socket'
 import { latestGroupMessageID, mergeGroupMessages } from '@/stores/group_reconcile'
@@ -58,6 +59,7 @@ export const useGroupStore = defineStore('group', () => {
   const connectionState = ref<GroupConnectionState>('disconnected')
   const currentUserID = ref(0)
   const lastError = ref('')
+  const uploadingImage = ref(false)
   const currentUnavailable = ref(false)
 
   let token = ''
@@ -318,6 +320,36 @@ export const useGroupStore = defineStore('group', () => {
     return clientMsgId
   }
 
+  async function sendImage(file: File): Promise<string | null> {
+    const groupID = currentGroupID.value
+    if (!groupID || !currentUserID.value || currentUnavailable.value) return null
+    uploadingImage.value = true
+    try {
+      const uploaded = await fileApi.uploadImage(file)
+      const clientMsgId = newClientMsgID()
+      messagesFor(groupID).push({
+        localID: `client:${clientMsgId}`,
+        groupID,
+        sendUserID: currentUserID.value,
+        clientMsgId,
+        msg: {
+          type: 2,
+          imageMsg: { fileID: uploaded.id, url: uploaded.url, size: uploaded.size, mimeType: uploaded.mimeType },
+        },
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+        retryable: true,
+      })
+      sendPending(clientMsgId)
+      return clientMsgId
+    } catch (error) {
+      lastError.value = safeRequestError(error, '图片上传失败')
+      return null
+    } finally {
+      uploadingImage.value = false
+    }
+  }
+
   function retryMessage(clientMsgId: string): void {
     const message = findByClientMsgID(clientMsgId)
     if (!message || message.sendUserID !== currentUserID.value || message.retryable === false) return
@@ -533,6 +565,8 @@ export const useGroupStore = defineStore('group', () => {
     loadLatest,
     loadOlder,
     sendText,
+    sendImage,
+    uploadingImage,
     retryMessage,
     markGroupRead,
     setGroupActive,

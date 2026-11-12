@@ -31,6 +31,20 @@ async function downloadEnvelopeError(blob: Blob, status?: number): Promise<Publi
   return new PublicApiError('下载响应格式异常', undefined, status)
 }
 
+function uploadRequest(url: string, form: FormData, file: File, onProgress?: (progress: number) => void): Promise<FileUploadResult> {
+  return apiRequest<FileUploadResult>({
+    method: 'POST',
+    url,
+    data: form,
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120_000,
+    onUploadProgress: (event: AxiosProgressEvent) => {
+      const total = event.total || file.size
+      if (total > 0) onProgress?.(Math.min(99, Math.round((event.loaded / total) * 100)))
+    },
+  })
+}
+
 export const fileApi = {
   list(beforeId?: number, limit = 20): Promise<UserFilePage> {
     return apiRequest<UserFilePage>({ method: 'GET', url: '/api/file/user-files', params: { beforeId, limit } })
@@ -43,17 +57,13 @@ export const fileApi = {
   upload(file: File, onProgress?: (progress: number) => void): Promise<FileUploadResult> {
     const form = new FormData()
     form.append('file', file, file.name)
-    return apiRequest<FileUploadResult>({
-      method: 'POST',
-      url: '/api/file/file',
-      data: form,
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120_000,
-      onUploadProgress: (event: AxiosProgressEvent) => {
-        const total = event.total || file.size
-        if (total > 0) onProgress?.(Math.min(99, Math.round((event.loaded / total) * 100)))
-      },
-    })
+    return uploadRequest('/api/file/file', form, file, onProgress)
+  },
+
+  uploadImage(file: File, onProgress?: (progress: number) => void): Promise<FileUploadResult> {
+    const form = new FormData()
+    form.append('image', file, file.name)
+    return uploadRequest('/api/file/image', form, file, onProgress)
   },
 
   async download(id: number): Promise<Blob> {

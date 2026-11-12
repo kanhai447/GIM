@@ -151,6 +151,21 @@ describe('group protocol parsing', () => {
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'error', clientMsgId: 'c1', error: { code: 2405, message: 'muted' } }))?.event).toBe('error')
   })
 
+  it('parses image messages and rejects malformed image metadata', () => {
+    const image = {
+      event: 'group.message',
+      data: {
+        messageId: 1, groupID: 2, sendUserID: 3, clientMsgId: 'c1', createdAt: 'now',
+        msg: { type: 2, imageMsg: { fileID: 9, url: '/api/file/9', width: 800, height: 600, size: 1024, mimeType: 'image/png' } },
+      },
+    }
+    expect(parseGroupServerEnvelope(JSON.stringify(image))?.event).toBe('group.message')
+    const zeroFile = { ...image, data: { ...image.data, msg: { ...image.data.msg, imageMsg: { ...image.data.msg.imageMsg, fileID: 0 } } } }
+    expect(parseGroupServerEnvelope(JSON.stringify(zeroFile))).toBeNull()
+    const badSize = { ...image, data: { ...image.data, msg: { ...image.data.msg, imageMsg: { ...image.data.msg.imageMsg, size: -1 } } } }
+    expect(parseGroupServerEnvelope(JSON.stringify(badSize))).toBeNull()
+  })
+
   it('rejects invalid numeric and message fields', () => {
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'group.ack', clientMsgId: 'c1', data: { messageId: 0, groupID: 2, createdAt: 'now' } }))).toBeNull()
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'group.message', data: { messageId: 1, groupID: 2, sendUserID: 3, clientMsgId: 'c1', msg: { type: 2 }, createdAt: 'now' } }))).toBeNull()

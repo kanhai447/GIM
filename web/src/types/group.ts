@@ -7,12 +7,26 @@ export interface GroupTextPayload {
   }
 }
 
+export interface GroupImagePayload {
+  type: 2
+  imageMsg: {
+    fileID: number
+    url?: string
+    width?: number
+    height?: number
+    size?: number
+    mimeType?: string
+  }
+}
+
+export type GroupMessagePayload = GroupTextPayload | GroupImagePayload
+
 export interface GroupMessage {
   messageId: number
   groupID: number
   sendUserID: number
   clientMsgId: string
-  msg: GroupTextPayload
+  msg: GroupMessagePayload
   createdAt: string
 }
 
@@ -80,7 +94,7 @@ export interface GroupSendEnvelope {
   clientMsgId: string
   data: {
     groupID: number
-    msg: GroupTextPayload
+    msg: GroupMessagePayload
   }
 }
 

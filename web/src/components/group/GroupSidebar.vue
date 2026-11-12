@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 
 import type { CreateGroupInput, GroupSession, GroupSummary } from '@/types/group'
+import { messagePreviewText } from '@/utils/message'
 
 defineProps<{
   sessions: GroupSession[]
@@ -19,7 +20,7 @@ const groupName = ref('')
 const memberIDs = ref('')
 
 function preview(session: GroupSession): string {
-  return session.lastMessage?.msg.textMsg.content || '暂无消息'
+  return messagePreviewText(session.lastMessage)
 }
 
 function formatTime(value: string): string {

@@ -1,4 +1,5 @@
 import type { ChatMessageItem, PrivateChatMessage } from '@/types/chat'
+import { messagePreviewText } from '@/utils/message'
 
 export function peerIDForMessage(message: Pick<PrivateChatMessage, 'sendUserID' | 'revUserID'>, currentUserID: number): number {
   return message.sendUserID === currentUserID ? message.revUserID : message.sendUserID
@@ -56,5 +57,5 @@ export function latestServerMessageID(messages: ChatMessageItem[]): number | und
 }
 
 export function messagePreview(message: Pick<PrivateChatMessage, 'msg'>): string {
-  return message.msg.textMsg.content
+  return messagePreviewText(message)
 }

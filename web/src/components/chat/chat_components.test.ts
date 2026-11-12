@@ -72,6 +72,7 @@ describe('private chat components', () => {
 
   it('renders HTML-like message content as literal text', () => {
     const unsafeLooking = message('sent', '4')
+    if (unsafeLooking.msg.type !== 1) throw new Error('expected a text payload')
     unsafeLooking.msg.textMsg.content = '<b>hello</b>'
     const wrapper = mount(ChatMessageList, {
       props: { messages: [unsafeLooking], currentUserID: 1, hasMore: false, loading: false },

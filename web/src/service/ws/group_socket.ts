@@ -7,6 +7,7 @@ import type {
   GroupSendEnvelope,
   GroupServerEnvelope,
 } from '@/types/group'
+import { isValidImagePayload } from '@/utils/message'
 
 const OPEN = 1
 const AUTH_CLOSE_CODES = new Set([1008, 4001, 4003, 4401, 4403])
@@ -44,8 +45,9 @@ function isPositiveInteger(value: unknown): value is number {
 function isGroupMessage(value: unknown): value is GroupMessage {
   if (!isRecord(value) || !isPositiveInteger(value.messageId) || !isPositiveInteger(value.groupID) || !isPositiveInteger(value.sendUserID)) return false
   if (typeof value.clientMsgId !== 'string' || typeof value.createdAt !== 'string' || !isRecord(value.msg)) return false
-  const text = value.msg.textMsg
-  return value.msg.type === 1 && isRecord(text) && typeof text.content === 'string'
+  const message = value.msg
+  return (message.type === 1 && isRecord(message.textMsg) && typeof message.textMsg.content === 'string') ||
+    (message.type === 2 && isValidImagePayload(message.imageMsg))
 }
 
 export function parseGroupServerEnvelope(raw: string): GroupServerEnvelope | null {

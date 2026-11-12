@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MessageBubble from '@/components/chat/MessageBubble.vue'
 import type { ChatMessageItem } from '@/types/chat'
 
 defineProps<{ messages: ChatMessageItem[]; currentUserID: number; hasMore: boolean; loading: boolean }>()
@@ -27,7 +28,8 @@ function formatTime(value: string): string {
         :class="{ mine: message.sendUserID === currentUserID }"
         :data-status="message.status"
       >
-        <div class="bubble">{{ message.msg.textMsg.content }}</div>
+        <div v-if="message.msg.type === 1" class="bubble"><MessageBubble :msg="message.msg" /></div>
+        <div v-else class="image-bubble-wrap"><MessageBubble :msg="message.msg" /></div>
         <div class="message-meta">
           <time>{{ formatTime(message.createdAt) }}</time>
           <span v-if="message.status === 'pending'" class="pending-label">发送中</span>
@@ -54,6 +56,7 @@ function formatTime(value: string): string {
 .message { display: flex; flex-direction: column; align-items: flex-start; }
 .message.mine { align-items: flex-end; }
 .bubble { max-width: min(72%, 620px); padding: 11px 14px; border: 1px solid #e3e8ef; border-radius: 4px 15px 15px; background: #fff; color: #25324a; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; box-shadow: 0 5px 14px rgba(40, 57, 86, .05); }
+.image-bubble-wrap { max-width: min(72%, 620px); }
 .mine .bubble { border-color: #315ea8; border-radius: 15px 4px 15px 15px; background: #315ea8; color: #fff; }
 .message-meta { display: flex; gap: 7px; align-items: center; margin-top: 5px; color: #9aa4b3; font-size: 10px; }
 .pending-label { color: #b47a27; }
