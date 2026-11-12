@@ -4,6 +4,10 @@
 - **开始状态**：`HEAD = 830956d`。
 - **结束状态**：本任务提交 `chore: remove dead code and unused config`。
 
+## 目标
+
+删除有 grep 证据的孤儿包/死组件/无调用方构造函数，清理无读取的配置键与过期 checkpoint/Day 文案；保留业务实现与测试，删除后 build/vet/test 与前端检查全部通过。
+
 ## 5.1 孤儿包与死代码
 
 | 对象 | grep 证据 | 处理 |
@@ -44,6 +48,12 @@ grep `TODO|FIXME|later checkpoint|added by later|remain later|later work|Day [0-
 | `admin/src/layouts/AdminLayout.vue` | “Day 4 · Admin Integration” | 改为 “GIM V1 · Admin” |
 
 结果：代码与 UI 中无剩余 `TODO/FIXME`、无 checkpoint/later work 文案。
+
+## 问题与修复
+
+- 最初用字面量 grep 扫描配置键，`*_API_PORT`/`*_RPC_PORT` 等动态构造键被误报为“无读取”；改为同时识别 `prefix+"_API_PORT"`、`prefix+"_RPC_PORT"`、`*_API_HOST`/`*_API_INSTANCE_ID` 后重新确认，只删除真正无读取的 4 个键。
+- 未使用导出函数没有自动扫描工具；`chat.New` 经全仓调用点 grep 确认无调用后删除，其余导出符号的自动扫描登记为 `docs/known-issues.md` E-7。
+- 未发现业务缺陷；本任务未改业务逻辑。
 
 ## 验证
 

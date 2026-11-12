@@ -4,6 +4,10 @@
 - **开始状态**：`HEAD = origin/main = afdb552`，工作区干净；tag `gim-v1` 存在。
 - **结束状态**：本任务提交 `docs: align contracts with implementation`。
 
+## 目标
+
+让 `docs/05`、`docs/04`、`docs/06`、`docs/01` 与当前实现逐条一致：补齐已实现但未记录的路由/索引/事件，并把未实现项明确标注为 V2，不删除原有条目。
+
 ## 1. HTTP 路由比对
 
 方法：提取 `server/**/*.go`（排除 `_test.go`）中的 `rest.Route{Path: ...}` 字面量，补上配置驱动的 `/api/chat/ws/chat`、`/api/group/ws/chat` 与 `/healthz`；对 docs/05 提取 `/api/...` 路径并归一化 `:param`/`{param}` → `*`。
@@ -93,6 +97,11 @@ git diff --check                  -> PASS
 go build ./...                    -> PASS（确认未误改代码）
 docker compose config --quiet     -> PASS
 ```
+
+## 问题与修复
+
+- 路由比对脚本只提取 `/api/...`，`/healthz` 不在该前缀内，曾被误报为“未文档化”；实际已在 docs/05 §1 补充说明，比对结论中已注明。
+- docs/04 的索引/约束此前只有 prose、没有标识符；本轮以 migration 为准补 §7.11，未发现实现缺表/缺索引。
 
 ## Git
 

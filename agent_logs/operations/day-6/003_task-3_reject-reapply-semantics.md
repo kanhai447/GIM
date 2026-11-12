@@ -4,6 +4,10 @@
 - **开始状态**：`HEAD = 14aebef`（已推送），working tree clean。
 - **结束状态**：本任务提交 `test(user): cover reject-then-reapply ...`。
 
+## 目标
+
+明确“好友申请被拒绝后能否再次申请”的产品语义：审查现有事务/唯一键，用真实服务链路取证，补测试与文档；若需改 schema 或状态机则先停下询问。
+
 ## 当前实现审查
 
 - `server/internal/user/friend/repository/mysql/repository.go`
@@ -59,6 +63,11 @@ VET=0
 ```
 
 该用例同时覆盖本轮要求的三种场景：拒绝后再次申请（成功）、重复 pending（`1116`）、已好友申请（`1114`）。
+
+## 问题与修复
+
+- 无代码缺陷：现有实现已符合“拒绝后允许再次申请、同时只允许一条 pending”的推荐语义，未改 schema/状态机。
+- 文档原先未写明该语义；本轮补入 docs/05 与 docs/07。
 
 ## Git
 

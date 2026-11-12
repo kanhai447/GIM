@@ -4,6 +4,10 @@
 - **开始状态**：branch `main`，working tree clean，`HEAD = 14aebef`，`origin/main = f0d3b6d`。
 - **结束状态**：`HEAD = origin/main = 14aebef`，working tree clean。
 
+## 目标
+
+把 round 2 遗留、因网络不可达未推送的 4 个本地 commit 补推到 `origin/main`，并确认本地与远端一致。
+
 ## 步骤与真实输出
 
 ```text
@@ -27,6 +31,10 @@ git rev-parse HEAD / origin/main -> 14aebef / 14aebef
 - 4 个本地 commit 全部推送成功，本地与远端一致。
 - 未使用 `--force`，未删除任何远端分支/tag。
 - 本轮任务一不新增 commit。
+
+## 问题与修复
+
+- 无。前一轮的推送失败是瞬时网络问题；本轮 `fetch` 与 `push` 均一次成功，未使用 `--force`。
 
 ## 日志
 

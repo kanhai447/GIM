@@ -5,6 +5,10 @@
 - **结束状态**：无代码改动；生成物全部在 `K:\it\gim\.tmp\`（Git ignored）。
 - **结论**：集成测试、migration、好友端到端 **真实通过**；race 与 Compose 全栈 **NOT RUN**（原因见下）。
 
+## 目标
+
+在本机可用的真实依赖上验证 migration、20 个集成测试与好友端到端；对无法执行的项目如实记录 NOT RUN/SKIP，不用单测冒充集成结果。
+
 ## 1. 环境盘点
 
 | 依赖 | 状态 | 证据 |
@@ -134,6 +138,13 @@ E6 apply-when-friends code=1114 msg=对方已经是好友
 ```
 
 即：**拒绝后允许再次申请**，pending 唯一键只约束未处理申请。
+
+## 问题与修复
+
+- `GIM_ENV_FILE=..\.env.local` 在 `go test ./tests` 下按包目录解析，文件找不到；改用绝对路径后 PASS。
+- PowerShell `Set-Content -Encoding utf8` 写入 BOM，migrate 报 `invalid configuration at line 1`；改为无 BOM 写入后 PASS。
+- Docker/Kafka 缺失导致 race、Compose build/up、Kafka 真实消费无法执行；按红线记录 NOT RUN/SKIP，未伪造 PASS。
+- 好友 E2E 首轮脚本把 `PUT /api/user/valid_status` 误写成 POST，返回 405；修正方法后完整 10 步 PASS。
 
 ## 8. 本轮任务二结论
 

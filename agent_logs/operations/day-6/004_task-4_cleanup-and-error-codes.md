@@ -4,6 +4,10 @@
 - **开始状态**：`HEAD = d3be2c9`，working tree clean。
 - **结束状态**：本任务提交 `chore: drop unused rpc env keys and document friend error codes`。
 
+## 目标
+
+清理无用 RPC 环境键、核查 group api 残留、确认 1113–1119 错误码已文档化且无冲突；删除仅限有 grep 证据的对象。
+
 ## 5.1 清理未使用的 RPC 环境键
 
 grep 证据（清理前）：
@@ -66,6 +70,12 @@ docker compose config --services -> 17 个 service
 ```
 
 **计数修正**：`docker compose config --services` 实际为 **17**（删除 group-rpc 前为 18）。round-2 的 day-5 日志/汇总写成“19 → 18”属误计，本轮已在对应历史记录中加注修正，不改变任何代码或 compose 内容。
+
+## 问题与修复
+
+- 发现 Compose service 数历史误计（19/18），实际 18→17；已在 day-5 记录与汇总中加注修正，不改变 compose 内容。
+- `server/api/group/v1` 已不存在且无 import，无需删除；`server/api` 仅剩 user 契约。
+- 错误码无冲突：1113–1119 只被 friend 包使用，1110–1112 为 Admin 用户管理。
 
 ## Git
 

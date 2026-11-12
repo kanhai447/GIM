@@ -4,6 +4,10 @@
 - **开始状态**：`HEAD = c180523`。
 - **结束状态**：本任务提交 `docs: rewrite readmes to current state`。
 
+## 目标
+
+把根 README 与三个子 README 从历史 checkpoint 叙述改写为当前事实：V1/V2 范围、17 service 拓扑、真实启动/测试命令、验证状态与已知限制；同时新增 `docs/validation-status.md` 与 `docs/known-issues.md` 作为后续引用入口。
+
 ## 修改文件
 
 | 文件 | 变更 |
@@ -34,6 +38,12 @@ docker compose config --quiet     -> PASS
 ```
 
 前端未改动，无需 vue-tsc/vitest/build。
+
+## 问题与修复
+
+- 根 README 需要引用验证状态与已知问题，但两个文件尚不存在；本轮一并创建，避免死链。
+- `server/README.md` 原写 `api/ … (user, group)`，与删除 group-rpc 后的事实不符；已改为仅 user。
+- 未发现需要修复的业务代码问题；本任务只改文档。
 
 ## Git
 
