@@ -2,7 +2,7 @@
 
 GIM 是一个面向后端工程能力展示的即时通信系统：Go 微服务 + 用户端 Web + 独立 Admin，覆盖鉴权、好友闭环、私聊/群聊 WebSocket、可靠消息、文件流式上传、结构化审计与可复现的 Compose 拓扑。
 
-当前状态：**V1 = COMPLETED**（文本 IM + 文件 + 好友闭环 + Admin + 审计）。基线 tag 为 `gim-v1`；`gim-v1.1` 计划在第五轮完成 race/Compose/Kafka 补验后创建。真实验证范围见 [验证状态](docs/validation-status.md)。
+当前状态：**V1 = COMPLETED**（文本 IM + 文件 + 好友闭环 + Admin + 审计）。基线 tag 为 `gim-v1`，本轮整理与补验证后的版本为 `gim-v1.1`；真实验证范围见 [验证状态](docs/validation-status.md)。
 
 ## V1 范围
 
@@ -179,19 +179,20 @@ pnpm type-check; pnpm test; pnpm build
 
 ## 验证状态
 
-最近一次真实验证（2026-11-11，见 [验证状态](docs/validation-status.md)）：
+最近一次真实验证（2026-11-12，见 [验证状态](docs/validation-status.md)）：
 
-- 后端单测：`go test ./...` **PASS**（69 个包）。
-- 真实依赖集成：**20 PASS / 1 SKIP / 0 FAIL**（MySQL/Redis/etcd；Kafka broker 缺失导致 1 个用例 SKIP）。
-- 好友端到端：真实 Gateway 链路 **10 步 PASS**。
-- Web：**19 files / 103 tests** + type-check + build PASS；Admin：**11 files / 25 tests** + type-check + build PASS。
-- `docker compose config --quiet` PASS（17 services）。
-- **未验证**：race（工具链/Docker 限制）、Compose build/up、Kafka 真实消费、性能基线复跑。第五轮补验。
+- **race**：Linux Docker `go test -race ./... -count=1` **PASS**（`golang:1.25-bookworm`，挂载 module cache，`GOPROXY=off`；无 race warning）。
+- **Compose 全栈**：`docker compose up -d --build` **PASS**；17 services = 15 running healthy + `migration`/`storage-init` exit 0。
+- **Kafka 真实消费**：`GIM_KAFKA_INTEGRATION=1`（Compose broker）**2 个用例 PASS**。
+- **浏览器好友 E2E**：Chrome + Compose Web，注册→搜索→申请→同意→备注→删除 **11 步 PASS**。
+- **性能最小场景**：HTTP profile c10/10s 27281/27281、2728 req/s、p95 4.834 ms；Private 10 conn/10s@10 msg/s 100/100 ACK、100/100 delivery、p95 22.859 ms、correctness PASS。
+- 既有验证（2026-11-11）：后端单测 **69 包 PASS**；真实依赖集成 **20 PASS / 1 SKIP / 0 FAIL**（该 SKIP 的 Kafka 用例已由本轮补齐）；Web **19 files / 103 tests** + build PASS；Admin **11 files / 25 tests** + build PASS；`docker compose config` PASS；仓库安全脚本 PASS。
+- **仍未验证**：完整性能阶梯（25/50/100/200 连接、50 msg/s）、5 分钟 soak、restart 稳定性、文件吞吐档位；远端 CI 结果为 `NOT OBSERVED`。
 
 ## Tag
 
 - `gim-v1`：2026-10-15 的 V1 基线（历史 checkpoint，不移动、不删除）。
-- `gim-v1.1`：计划在第五轮完成 race / Compose / Kafka 验证后创建；本轮不打 tag。
+- `gim-v1.1`：本轮的 annotated tag，指向完成“项目整理 + 补验证 + 验证状态更新”的最终 commit。包含 C1/C2 修复、好友闭环、文档/README/代码整洁，以及 **race / Compose / Kafka / 浏览器 E2E 验证**；性能仅覆盖最小两档，**不包含完整性能阶梯、soak 或容量验证**。
 
 ## 已知限制
 

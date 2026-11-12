@@ -1,49 +1,43 @@
 # GIM Current State
 
 - **PROJECT:** GIM
-- **V1 STATUS:** COMPLETED（文本 IM + 文件 + 好友闭环 + Admin + 审计；范围见 `AGENTS.md` §5.1）
-- **Current Round:** 2026-11-12 Day 7 — 项目整理（文档一致性、README、代码整洁、日志结构、Git 整洁）：COMPLETED
+- **V1 STATUS:** COMPLETED（文本 IM + 文件 + 好友闭环 + Admin + 审计；V1.1 完成补验证）
+- **Current Round:** 2026-11-12 Day 8 — race / Compose / Kafka / 浏览器 E2E / 性能最小场景补验证：COMPLETED
 - **Branch:** `main`
+- **Tags:** `gim-v1`（2026-10-15 基线，未移动）、`gim-v1.1`（本轮 annotated tag）
 - **Working Tree:** 本日志提交前 clean
-- **Next Authorized Work:** 第五轮 — 补 race / Compose / Kafka / 性能验证；是否打 `gim-v1.1` 由用户决定
+- **Next Authorized Work:** V2 或补充完整性能阶梯/soak（待用户决定）
 
-## 当前事实
+## 当前验证状态（真实）
 
-- 根 README 与 server/web/admin 子 README 已按当前实现重写；`docs/validation-status.md` 记录真实验证矩阵，`docs/known-issues.md` 记录待补验证与 V2 限制。
-- 契约文档与实现对齐：docs/05（HTTP 路由 + 11xx 错误码）、docs/04（§7.11 表/索引/约束清单）、docs/06（V1 事件清单，friend.online/offline 标 V2）、docs/01（服务职责 + `cmd/` 入口 + 17 services）。
-- 死代码已清理：`internal/project`、`FeaturePlaceholder.vue`、`ModulePlaceholder.vue`、无调用方的 `chat.New`。
-- 无读取配置键已删除：`APP_ENV`、`LOG_LEVEL`、`WEB_ORIGIN`、`ADMIN_ORIGIN`。
-- 过期 UI 文案已改写：HomeView 展示 V1 能力，Admin 头部改为 “GIM V1 · Admin”。
-- `agent_logs/operations/README.md` 统一定义目录/编号/字段约定与修正政策；day-4 的 checkpoint 作用域编号保留并给出映射。
-
-## 验证矩阵（最近真实执行）
-
-| 项目 | 结果 |
+| 项目 | 状态 |
 |---|---|
-| `go build ./...` / `go vet ./...` / `gofmt -l .` | PASS / PASS / 无输出 |
-| `go test ./... -count=1` | PASS（69 个包 ok） |
-| 集成测试（真实 MySQL/Redis/etcd，2026-11-11） | 20 PASS / 1 SKIP / 0 FAIL |
-| 好友端到端（真实 Gateway，2026-11-11） | PASS（10 步） |
-| Web type-check / vitest / build | PASS / 19 files 103 tests / PASS |
-| Admin type-check / vitest / build | PASS / 11 files 25 tests / PASS |
-| `docker compose config --quiet` | PASS（17 services） |
-| `scripts/check-repository-safety.ps1` | PASS |
+| 后端单测 `go test ./...` | PASS（69 包） |
+| Linux Docker race `go test -race ./...` | **PASS**（exit 0，无 race warning） |
+| 真实依赖集成（MySQL/Redis/etcd） | PASS（20 PASS / 1 SKIP；该 SKIP 的 Kafka 用例已补齐） |
+| Kafka 真实 produce/consume/restart/幂等 | **PASS**（Compose broker） |
+| Compose 全栈 build/up | **PASS**（17 services = 15 healthy + 2 exit 0） |
+| 浏览器好友 E2E | **PASS**（Chrome，11 步） |
+| 性能最小场景（HTTP profile c10 / Private 10 conn@10） | **PASS**（限两档，非容量结论） |
+| Web / Admin 类型检查、测试、构建 | PASS（19 files 103 tests / 11 files 25 tests） |
+| 仓库安全脚本 | PASS |
 
-## 未验证项（留第五轮）
+## 仍未验证
 
-- `go test -race ./...`：NOT RUN（32-bit MinGW 不兼容；64-bit MinGW 缺 libc headers；Docker 不可用）。
-- Compose build/up + healthy：NOT RUN（daemon 不可用）。
-- Kafka 真实 produce/consume：SKIP（无 broker）。
-- 性能/soak/restart 与浏览器 E2E：NOT RUN。
-- 详见 `docs/validation-status.md` 与 `docs/known-issues.md`。
+- 完整性能阶梯（25/50/100/200 连接、50 msg/s）、5 分钟 soak、restart 稳定性、文件吞吐档位。
+- 远端 GitHub Actions 结果（`NOT OBSERVED`）。
 
-## V2 / 剩余限制
+## 范围与限制（不变）
 
-- 富消息（图片/视频/文件/语音/回复/引用/撤回/@/图文）、好友上线提醒、`user_confs` 读写、`DELETE /api/chat/chat`、`POST /api/user/valid`、`open_login`、delivery/read receipt、WS Ticket、多实例路由、文件 GC、审计 outbox/DLQ。
-- 好友申请只提供接收方向；`isOnline` 非实时推送。
+- V1 仅文本消息；富消息、撤回、@、图文、好友上线提醒、`user_confs`、`DELETE /api/chat/chat`、delivery/read receipt、WS Ticket、多实例路由、文件 GC、审计 outbox/DLQ 均为 V2/后续。
+- 好友申请仅接收方向；`isOnline` 非实时推送。
+- Compose 单机，无 HA/内部 TLS/Secret Manager。
 
-## Tag 与 Push
+## Tag 说明
 
-- `gim-v1`：保留不动（2026-10-15 V1 基线）。
-- `gim-v1.1`：未创建；待第五轮验证通过后由用户确认。
-- 本轮 commit 已推送到 `origin/main`；未使用 `--force`，未移动/删除任何 tag。
+- `gim-v1`：2026-10-15 的 V1 基线，指向历史 commit，**未移动**。
+- `gim-v1.1`：本轮最终 commit 的 annotated tag；包含项目整理、好友闭环、C1/C2 修复、文档/README/代码整洁，以及 race / Compose / Kafka / 浏览器 E2E 验证；性能仅最小两档，明确不声称完整阶梯或容量验证。
+
+## 环境恢复
+
+- Compose 已 `down`（named volumes 保留）；Docker Desktop 已停止；临时 etcd 已停止；临时 E2E 脚本与含凭据的 host env 已删除。
