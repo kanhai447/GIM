@@ -151,6 +151,13 @@ Day 3 / Checkpoint 5 的精确用户文件契约：
 
 `User-ID/Role` 只信任 Gateway/Auth 覆盖后的 Header；内部 File API 正式部署不得直连公网。文件名移除路径组件并拒绝控制字符、空名、无效 UTF-8 和超过 255 bytes 的值；MIME 以服务端首 512 bytes 嗅探结果为准，不信任客户端声明。默认最大上传为 50 MiB，同时存在 HTTP request cap 与流式 `max+1` cap。零字节文件允许，按空内容 SHA-256 去重并使用服务端嗅探类型。
 
+图片消息与上传的关系（V2 Phase 1）：
+
+- 先调用 `POST /api/file/image`（multipart 字段 `image`）上传，响应中的 `id` 即 `user_files.id`；`url`/`mimeType`/`size` 也来自该响应。
+- 再通过 `chat.send` / `group.send` 发送 `msg.type=2`，`msg.imageMsg.fileID` 填上述 `id`；服务端校验文件归属、`image/*` MIME 与 `IMAGE_MESSAGE_MAX_BYTES`（默认 10 MiB）后落库。
+- 上传与发送是两个步骤；上传失败不得发送消息。消息只存元数据（fileID/url/width/height/size/mimeType），不存二进制；预览/下载仍走 `GET /api/file/:id`。
+- 图片消息不新增 HTTP 端点；历史仍用 `GET /api/chat/history` / `GET /api/group/history/:id`，返回结构与 WS 同构。
+
 File 错误码：`2501` 参数/文件名/multipart 无效、`2502` 超过大小限制、`2503` 文件不存在或当前用户无权访问（不区分以防枚举）、`2504` 服务暂不可用。原始路径、SQL、磁盘或数据库错误不得进入响应。
 
 ## 7. 错误约定
@@ -158,6 +165,21 @@ File 错误码：`2501` 参数/文件名/multipart 无效、`2502` 超过大小�
 优先复用参考项目现有 code。新增错误至少区分：未认证/无权限、参数错误、好友关系不存在、群成员不存在/禁言、重复 clientMsgId（应返回原消息而非失败）、消息不存在/无权撤回、文件超限/类型不允许、系统错误。
 
 Chat Checkpoint 5 使用：`2207` 会话/历史查询参数无效、`2208` session 不存在、`2209` history cursor 无效、`2210` read-through message 无效或不属于当前会话。响应不包含 SQL、表名、DSN 或原始数据库错误。
+
+图片消息错误码（V2 Phase 1）：
+
+| Code | 归属 | 语义 |
+|---|---|---|
+| `2211` | Chat | 图片文件不存在或不属于发送者 |
+| `2212` | Chat | 文件不是图片（MIME 非 `image/*`） |
+| `2213` | Chat | 图片超过大小限制 |
+| `2214` | Chat | 图片消息参数缺失/非法 |
+| `2412` | Group | 图片文件不存在或不属于发送者 |
+| `2413` | Group | 文件不是图片（MIME 非 `image/*`） |
+| `2414` | Group | 图片超过大小限制 |
+| `2415` | Group | 图片消息参数缺失/非法 |
+
+图片校验失败不落库、不发成功 ACK；错误响应不包含存储路径、SQL 或内部错误。`IMAGE_MESSAGE_MAX_BYTES` 默认 10 MiB，与 File 的 50 MiB 上传上限相互独立。
 
 User 基础能力使用：`1001` 参数错误、`1101` 用户不存在、`1102` 账号已存在；数据库原始错误只作为服务端私有 cause，不进入 HTTP/RPC 响应。
 

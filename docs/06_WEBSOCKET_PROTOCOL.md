@@ -88,7 +88,7 @@ wss://host/.../group?token=<JWT>
 }
 ```
 
-Checkpoint 4 只接受文本 `type=1`：`clientMsgId` 为 1–64 字符且只允许字母、数字、`.`、`_`、`:`、`-`；文本 UTF-8 非空且默认最多 4096 bytes，typed message payload 默认最多 16384 bytes。senderID 只取 Gateway 注入身份，不允许客户端提交。
+Checkpoint 4 只接受文本 `type=1`；V2 Phase 1 起同时接受图片 `type=2`（见第 5 节）。`clientMsgId` 为 1–64 字符且只允许字母、数字、`.`、`_`、`:`、`-`；文本 UTF-8 非空且默认最多 4096 bytes；typed message payload 默认最多 16384 bytes；图片 payload 只含元数据，不随文件大小增长。senderID 只取 Gateway 注入身份，不允许客户端提交。
 
 receiver 离线不影响持久化和 ACK；在线 receiver 的所有 Chat Clients best-effort 收到一次 `chat.message`。跨实例统一走 Redis Pub/Sub；publish/本地队列失败不改变 ACK 语义，未来由 history 恢复。幂等重试不再次发布 `chat.message`。
 
@@ -129,7 +129,7 @@ Day 3 / Checkpoint 2 已实现连接层 endpoint：
 
 连接经 Gateway -> Auth 后由 Group API 读取可信 `User-ID/Role`。同一用户允许多个 Client；连接本身不携带或绑定 `groupID`。应用帧严格使用本文件 Envelope；malformed payload 返回 `error` code `2401`，未知/尚未实现的事件返回 code `2402`，连接可继续。错误只包含稳定 code/message，不返回内部错误。
 
-Checkpoint 3 已在相同连接层启用文本 `group.send/group.ack/group.message`。sender 只取连接绑定的可信 `User-ID`；客户端不能提交 sender ID。`clientMsgId` 与私聊相同，限制为 1–64 个安全字符；当前只接受 UTF-8 非空、最多 4096 bytes 的 `type=1` 文本，typed payload 最多 16384 bytes。
+Checkpoint 3 已在相同连接层启用文本 `group.send/group.ack/group.message`；V2 Phase 1 起同一连接也接受图片 `type=2`。sender 只取连接绑定的可信 `User-ID`；客户端不能提交 sender ID。`clientMsgId` 与私聊相同，限制为 1–64 个安全字符；文本要求 UTF-8 非空、最多 4096 bytes，typed payload 最多 16384 bytes；图片 payload 只含元数据。
 
 ### `group.send`
 
@@ -163,9 +163,73 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 
 ## 5. 消息类型
 
-沿用参考 `ctype.MsgType` 的类型编号：文本、图片、视频文件、普通文件、语音文件、撤回、回复、引用、@、图文。
+沿用参考 `ctype.MsgType` 的类型编号。V2 Phase 1 实现 **文本 `type=1`** 与 **图片 `type=2`**；其余类型仍未实现。
 
-**V1 只实现文本 `type=1`**：服务端 `validate` 拒绝其他类型（错误 `2201`/`2403`），前端只提供文本输入。图片、视频、普通文件、语音、撤回、回复/引用、@、图文和 VoiceCall/VideoCall 均为 **V2**，不得在 README 或面试材料中描述为已实现。
+| type | 语义 | 状态 |
+|---|---|---|
+| `1` | 文本 | 已实现（V1） |
+| `2` | 图片 | 已实现（V2 Phase 1，仅图片消息，不含视频/语音/文件/回复/引用/撤回/@/图文） |
+| 其他 | 视频文件、普通文件、语音、回复/引用、撤回、@、图文 | V2 / 未实现；服务端返回 `2201`/`2403` |
+
+### 5.1 图片消息 payload
+
+`chat.send` 与 `group.send` 的 `msg` 使用同一结构：
+
+```json
+{
+  "type": 2,
+  "imageMsg": {
+    "fileID": 123,
+    "url": "/api/file/123",
+    "width": 800,
+    "height": 600,
+    "size": 123456,
+    "mimeType": "image/png"
+  }
+}
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `fileID` | 是 | `user_files.id`（上传接口返回的 `id`），必须是发送者自己的引用 |
+| `url` | 否 | 服务端回填为 `/api/file/{fileID}`；客户端提交值被忽略 |
+| `width` / `height` | 否 | 客户端显示提示，若提供必须为 `1..20000`；服务端不解码图片，不据此做安全判断 |
+| `size` | 否 | 服务端以 `file_objects.size` 为准回填，客户端提交值被忽略 |
+| `mimeType` | 否 | 服务端以 `file_objects.mime_type`（首 512 bytes 嗅探结果）为准回填 |
+
+服务端在事务前校验：
+
+1. `fileID > 0`，且 `user_files.user_id = senderID`；不存在或不属于发送者统一返回 `2211`/`2412`（不区分，避免枚举）。
+2. `file_objects.mime_type` 必须以 `image/` 开头，否则 `2212`/`2413`。
+3. `file_objects.size <= IMAGE_MESSAGE_MAX_BYTES`（默认 10 MiB），否则 `2213`/`2414`。
+4. `type=2` 必须携带 `imageMsg.fileID`；`width`/`height` 若提供必须为合法正数，否则 `2214`/`2415`。
+
+校验通过后，服务端用数据库元数据规范化 payload（`url`、`mimeType`、`size`）再落库；`msg` 只存元数据，不存二进制，不返回原始文件路径。历史查询 `GET /api/chat/history`、`GET /api/group/history/:id` 与 `chat.message`/`group.message` 使用同一结构。
+
+### 5.2 ACK 与幂等
+
+图片与文本走同一事务（insert message + 更新 session/unread），ACK 语义不变：事务成功提交后才返回 `messageId`/`createdAt`。`clientMsgId` 幂等比较包含 `type` 与 `fileID`：同一 sender/clientMsgId 改成另一张图片返回 `2205`/`2407`，不能生成第二条消息。
+
+### 5.3 图片消息错误码
+
+| 场景 | Chat | Group |
+|---|---|---|
+| 文件不存在或不属于发送者 | `2211` | `2412` |
+| 文件不是图片（MIME 非 `image/*`） | `2212` | `2413` |
+| 图片超过大小限制 | `2213` | `2414` |
+| 图片参数缺失/非法 | `2214` | `2415` |
+| 未知消息类型 | `2201` | `2403` |
+| 同一 clientMsgId 复用于不同逻辑消息 | `2205` | `2407` |
+
+错误只返回稳定 code/message，不返回 SQL、DSN、存储路径或内部错误；校验失败不落库、不发送成功 ACK。
+
+### 5.4 兼容性
+
+- `type=1` 文本的字段、校验、ACK、历史、前端渲染完全不变。
+- `type=2` 是新增类型，不新增表/列；复用 `chat_messages.msg` / `group_messages.msg` 现有 JSON 列。
+- 旧客户端收到 `type=2` 可能无法渲染；GIM Web 对无法识别的消息显示占位，不崩溃、不影响其他消息。
+- 旧服务端收到 `type=2` 返回 `2201`/`2403`（当前行为）。
+- 图片上传与发消息是两个步骤：先 `POST /api/file/image`（multipart 字段 `image`）拿到 `user_files.id`，再发送图片消息；上传失败不得发送。
 
 ## 6. 撤回
 
@@ -185,9 +249,9 @@ Group WS 的任一设备 normal/abnormal/timeout/slow/shutdown 只移除对应 C
 
 | 连接 | Client → Server | Server → Client | 状态 |
 |---|---|---|---|
-| Chat WS | `chat.send` | `chat.ack`, `chat.message`, `error` | 已实现 |
-| Group WS | `group.send` | `group.ack`, `group.message`, `error` | 已实现 |
+| Chat WS | `chat.send` | `chat.ack`, `chat.message`, `error` | 已实现（文本 `type=1`、图片 `type=2`） |
+| Group WS | `group.send` | `group.ack`, `group.message`, `error` | 已实现（文本 `type=1`、图片 `type=2`） |
 | Chat WS | — | `friend.online`, `friend.offline` | V2 / 未实现 |
-| 两条连接 | 富消息（图片/视频/文件/语音/回复/引用/撤回/@/图文） | 同左 | V2 / 未实现 |
+| 两条连接 | 视频/普通文件/语音/回复/引用/撤回/@/图文 | 同左 | V2 / 未实现（图片已实现） |
 
 Control frame Ping/Pong 不属于业务事件，见第 7 节。
