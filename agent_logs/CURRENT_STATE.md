@@ -37,6 +37,7 @@
 
 - `gim-v1`：2026-10-15 的 V1 基线，指向历史 commit，**未移动**。
 - `gim-v1.1`：本轮最终 commit 的 annotated tag；包含项目整理、好友闭环、C1/C2 修复、文档/README/代码整洁，以及 race / Compose / Kafka / 浏览器 E2E 验证；性能仅最小两档，明确不声称完整阶梯或容量验证。
+- **Push 状态**：`gim-v1.1` 已在本地创建（指向 `55bbb8e`），但 `git push origin main` 与 `git push origin gim-v1.1` 因网络不可达失败（`Recv failure: Connection was reset` / `Could not connect to server`）；未使用 `--force`，远端 tag 未被覆盖或删除。网络恢复后执行 `git push origin main && git push origin gim-v1.1` 即可补齐。
 
 ## 环境恢复
 
