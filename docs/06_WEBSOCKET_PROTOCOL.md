@@ -96,8 +96,10 @@ receiver 是否在线不改变 unread：每条新消息都在事务中使 receiv
 
 ### Presence
 
+**V2 / 未实现。** V1 服务端不发送 `friend.online` / `friend.offline`；在线状态只在 HTTP `GET /api/user/friends`、`GET /api/user/friend_info` 时从 Redis Presence 读取 `isOnline`。以下为 V2 目标格式（保留以便实现时对齐）：
+
 - `friend.online`
-- `friend.offline`（可实现；若参考 UI 只展示上线提醒，离线事件至少更新状态）
+- `friend.offline`（离线事件用于更新状态）
 
 ```json
 {"event":"friend.online","data":{"userID":1002,"at":"..."}}
@@ -178,3 +180,14 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 服务端按标准 close code 关闭；前端非主动 logout 可重连。身份失效类 close 必须禁止无限重连并引导重新登录。
 
 Group WS 的任一设备 normal/abnormal/timeout/slow/shutdown 只移除对应 Client；同用户 sibling 保持。Group WS 不产生全局 online/offline、不得刷新或删除 `gim:presence:*`，禁言或退出某个群也不关闭这个用户级 socket。
+
+## 9. V1 事件清单
+
+| 连接 | Client → Server | Server → Client | 状态 |
+|---|---|---|---|
+| Chat WS | `chat.send` | `chat.ack`, `chat.message`, `error` | 已实现 |
+| Group WS | `group.send` | `group.ack`, `group.message`, `error` | 已实现 |
+| Chat WS | — | `friend.online`, `friend.offline` | V2 / 未实现 |
+| 两条连接 | 富消息（图片/视频/文件/语音/回复/引用/撤回/@/图文） | 同左 | V2 / 未实现 |
+
+Control frame Ping/Pong 不属于业务事件，见第 7 节。

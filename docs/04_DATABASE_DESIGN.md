@@ -190,3 +190,29 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 008 为 `chat_messages` 和 `group_messages` 增加可空 `admin_deleted_at DATETIME(3)`。管理员删除消息使用 tombstone，不物理删除消息行，因此 `(sender, client_msg_id)` 幂等事实和审计可追溯性不会被破坏。用户 history/session/read 查询过滤 tombstone；若删除的是 session 最后一条消息，目标服务在同一事务将 session 指针回退到该用户仍可见的上一条消息，并重算 unread；没有可见消息时隐藏该 session。
 
 008 不为 tombstone 单独增加索引：Admin/用户消息查询仍由既有 conversation/group cursor 主索引先缩小范围，布尔空值过滤不是独立入口。该取舍须通过真实 MySQL 回归验证。
+
+### 7.11 实际索引与约束清单（以 `server/migrations/*.up.sql` 为准）
+
+下表由 001–008 migration 逐表提取，与实现一致；新增表/索引时必须同步本表。
+
+| 表 | migration | UNIQUE | 普通索引 | CHECK 数 |
+|---|---|---|---|---|
+| `users` | 001 | `ux_users_account`, `ux_users_open_id` | — | 2 |
+| `user_confs` | 001 | `ux_user_confs_user` | — | 10 |
+| `friends` | 002 | `ux_friends_user_friend` | `ix_friends_friend_user` | 1 |
+| `friend_verifies` | 002 | `ux_friend_verifies_pending_pair` | `ix_friend_verifies_receiver_status_created`, `ix_friend_verifies_requester_created` | 2 |
+| `chat_messages` | 003 | `ux_chat_messages_sender_client` | `ix_chat_messages_conversation_cursor`, `ix_chat_messages_sender_receiver_cursor`, `ix_chat_messages_receiver_sender_cursor`, `ix_chat_messages_created` | 3 |
+| `chat_sessions` | 003 | `ux_chat_sessions_user_peer` | `ix_chat_sessions_user_sort`, `ix_chat_sessions_peer_user` | 2 |
+| `chat_message_deletions` | 003 | —（主键 `(user_id, message_id)`） | `ix_chat_message_deletions_message` | 0 |
+| `groups` | 004 | — | `ix_groups_owner_status` | 7 |
+| `group_members` | 004 | `ux_group_members_group_user` | `ix_group_members_group_role_user`, `ix_group_members_user_group` | 1 |
+| `group_verifies` | 004 | `ux_group_verifies_pending` | `ix_group_verifies_group_status_created`, `ix_group_verifies_user_created` | 2 |
+| `group_messages` | 004 | `ux_group_messages_sender_client` | `ix_group_messages_group_cursor`, `ix_group_messages_sender_cursor`, `ix_group_messages_member_cursor` | 2 |
+| `group_sessions` | 004 | `ux_group_sessions_user_group` | `ix_group_sessions_user_sort`, `ix_group_sessions_group_user` | 1 |
+| `group_message_deletions` | 004 | —（主键 `(user_id, message_id)`） | `ix_group_message_deletions_user_group`, `ix_group_message_deletions_message` | 0 |
+| `file_objects` | 005 | `ux_file_objects_uid`, `ux_file_objects_sha256` | — | 1 |
+| `user_files` | 005 | `ux_user_files_user_object_name` | `ix_user_files_user_created`, `ix_user_files_object` | 0 |
+| `settings` | 006 | `ux_settings_key` | `ix_settings_public_key` | 2 |
+| `audit_logs` | 007 | `ux_audit_logs_event_id` | `ix_audit_logs_occurred`, `ix_audit_logs_user_occurred`, `ix_audit_logs_type_occurred`, `ix_audit_logs_service_occurred`, `ix_audit_logs_request` | 4 |
+
+008 只增加 `admin_deleted_at` 列，不新增表、唯一键或索引。全部表使用 InnoDB + `utf8mb4_0900_ai_ci`，业务时间列为 `DATETIME(3)`。

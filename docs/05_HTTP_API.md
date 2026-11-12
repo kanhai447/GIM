@@ -12,6 +12,8 @@ V1 不强制一次性改成 RESTful status 语义。网关/系统级错误仍应
 
 客户端 Token Header V1 保持：`token: <jwt>`。
 
+每个 REST 服务还注册 `GET /healthz`：只返回 `{"status":"ok"}` 表示进程就绪，不暴露配置或依赖细节，供容器 healthcheck 使用，不属于业务 API。
+
 Gateway 接受 `/api/{service}/...`，其中 service 仅允许 `auth/user/chat/group/file/settings/logs` 的显式映射。非法路径使用 `1301`，不支持的服务使用 `1302`，服务未注册/发现不可用使用 `1303`，Auth 不可用/超时使用 `1304`，上游连接失败使用 `1305`，代理超时使用 `1306`。系统级错误使用对应的 4xx/5xx HTTP status，响应仍保持统一 envelope。
 
 Gateway 不解析 JWT，也不维护第二套公开路径。每个合法 API 请求都调用 Auth authentication；Auth 返回 `public=true` 时无身份 Header 放行，返回 `authenticated=true` 时 Gateway 注入 `User-ID` / `Role`。任何客户端提供的 `User-ID`、`Role`、`ValidPath` 均先删除。
@@ -62,6 +64,7 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 - `GET /api/chat/history?peerUserID=&beforeMessageID=&limit=`（兼容 `friendId`）
 - `GET /api/chat/session?limit=`
 - `POST /api/chat/user_top` `{peerUserID,isTop}`（`friendId` 可作为 peer 字段兼容）
+- `GET /api/chat/ws/chat?token=<JWT>`：Chat WebSocket Upgrade（事件见 `docs/06_WEBSOCKET_PROTOCOL.md`）。Gateway 先调用 Auth 并注入可信 `User-ID`/`Role`，Chat API 在 Upgrade 前校验身份与 Origin；路径可用 `CHAT_WS_PATH` 配置，默认值即此路径。
 - `DELETE /api/chat/chat`：**V2 / 未实现**。隐藏会话的 Repository 方法已存在（`chat_sessions.hidden_at`），但未注册 HTTP 路由，Web 也未调用；V1 仅通过新消息恢复可见性。
 
 `GET /api/chat/history` 首次不传 `beforeMessageID`，后续使用上一页返回的 `nextBeforeMessageID`；核心查询为 `id < cursor`，默认 20、最大 100。响应消息按 oldest -> newest 返回，并带 `hasMore/nextBeforeMessageID`。只查询当前可信 `User-ID` 与 peer 的双向消息，cursor 必须属于该会话；`chat_message_deletions` 只过滤当前用户自己的记录。

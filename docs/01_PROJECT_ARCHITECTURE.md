@@ -86,25 +86,40 @@ User Web -> Gateway WS proxy -> Auth validation -> Chat/Group WS endpoint -> Hub
 Gateway 通过 etcd 前缀 `/gim/services/{service}/{instance}` 查找 API 服务，resolver 返回端点列表以保留多实例扩展边界；Day 1 V1 转发选择排序后的首个有效 lease 注册端点。服务以 TTL lease + keepalive 注册并在优雅退出时 revoke。Gateway 路由使用 `auth/user/chat/group/file/settings/logs` 显式映射，禁止从外部路径模糊拼接任意 etcd key。
 
 ### gim_auth
-注册、登录、JWT 签发/验证、logout blacklist、第三方登录兼容。日志不得记录密码、Token 或完整敏感 Header。
+注册、登录、JWT 签发/验证、logout blacklist。第三方登录 `/api/auth/open_login` 为 V2，未实现。日志不得记录密码、Token 或完整敏感 Header。
 
 ### gim_user
-用户资料/配置、搜索、好友、好友验证、Admin 用户列表/限制/删除、基础信息 RPC、Presence 查询。
+用户资料（只读）、用户搜索、好友闭环（申请/同意/拒绝/列表/备注/删除/详情）、Admin 用户列表/限制/禁用/启用、基础信息 RPC、Presence 只读查询。`user_confs` 读写与资料编辑为 V2。
 
 ### gim_chat
-私聊 WS、Hub/Client、消息持久化、ACK/幂等、历史、session、未读/已读、回复/引用/撤回；Admin 私聊记录查询/删除。
+私聊 WS、Hub/Client、文本消息持久化、ACK/幂等、历史、session、未读/已读、用户维度隐藏；Admin 私聊记录查询/删除。回复/引用/撤回与富消息为 V2。
 
 ### gim_group
-群资料/成员/角色/验证/禁言、群 WS、ACK/幂等、群 session、未读；Admin 群列表、群消息查看/删除。
+群创建/解散、成员/角色/邀请/申请/禁言、群 WS、文本消息 ACK/幂等、群 session、未读、用户维度隐藏；Admin 群列表、群消息查看/删除。群资料编辑、群搜索与群 top 为 V2。
 
 ### gim_file
-上传/下载/预览、SHA-256、FileObject/UserFile、Admin 文件列表/删除。
+上传/鉴权下载、SHA-256、FileObject/UserFile、Admin 文件列表/下载/删除。消息协议中的文件类型为 V2。
 
 ### gim_settings
-公开站点配置、Admin 系统配置修改。
+公开站点配置、Admin 系统配置修改、Admin 只读概览。
 
 ### gim_logs
-消费 Kafka 的安全结构化日志，提供 Admin 日志列表/读取/删除。V1 不允许复制原项目的 HTML 日志拼接方案。
+消费 Kafka 的安全结构化日志，提供 Admin 日志列表/详情。V1 不提供日志删除接口，也不允许复制原项目的 HTML 日志拼接方案。
+
+### 4.1 进程入口（`server/cmd/`）
+
+| cmd | 作用 |
+|---|---|
+| `gateway` | 唯一公网 HTTP/WS 入口，调用 Auth、注入身份、反向代理 |
+| `auth-api` | 注册/登录/注销/authentication |
+| `user-api` / `user-rpc` | 用户资料、好友闭环、Admin 用户管理 / 内部 User gRPC |
+| `chat-api` | 私聊 HTTP、Chat WS、Presence 维护、Redis 实时投递 |
+| `group-api` | 群 HTTP、群消息/session、Group WS |
+| `file-api` | 流式上传、内容寻址存储、鉴权下载/删除 |
+| `settings-api` | 公开配置、Admin 配置与只读概览 |
+| `logs-api` | Kafka consumer 与 Admin 日志查询 |
+| `migrate` / `admin-bootstrap` | 一次性 migration / 首个管理员创建工具 |
+
 
 ## 5. 两个前端的处理原则
 
@@ -118,4 +133,4 @@ Gateway 通过 etcd 前缀 `/gim/services/{service}/{instance}` 查找 API 服�
 
 Gateway 在调用 Auth 前必须删除外部请求中的 `User-ID`、`Role`、`ValidPath`；公开请求保持无身份 Header，受保护请求只注入 Auth 返回的可信身份。内部 API 对这些 Header 的信任以网络隔离和仅公开 Gateway 为前提。
 
-Day 4 的 `compose.yaml` 提供单机开发拓扑：Web/Admin 使用 production build + 非特权 Nginx，同源 `/api`（包括 WebSocket Upgrade）代理到 Gateway；Gateway 继续从 etcd 发现七个 API，RPC 使用 Docker DNS 配置的内部端点。只有 Gateway、两个前端与 loopback 调试端口发布到宿主机，业务 API/RPC 保持 Docker network 内部可见。具体启动、Secret、bootstrap 与清理流程见 `docs/deployment/docker-compose.md`。
+Day 4 的 `compose.yaml` 提供单机开发拓扑：Web/Admin 使用 production build + 非特权 Nginx，同源 `/api`（包括 WebSocket Upgrade）代理到 Gateway；Gateway 继续从 etcd 发现七个 API，RPC 使用 Docker DNS 配置的内部端点。只有 Gateway、两个前端与 loopback 调试端口发布到宿主机，业务 API/RPC 保持 Docker network 内部可见。当前 `docker compose config --services` 共 **17 个 service**（含 2 个一次性 job：`migration`、`storage-init`；仅 User RPC 一个 gRPC 服务）。具体启动、Secret、bootstrap 与清理流程见 `docs/deployment/docker-compose.md`。
