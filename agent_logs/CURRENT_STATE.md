@@ -35,9 +35,16 @@
 
 ## Tag 说明
 
-- `gim-v1`：2026-10-15 的 V1 基线，指向历史 commit，**未移动**。
-- `gim-v1.1`：本轮最终 commit 的 annotated tag；包含项目整理、好友闭环、C1/C2 修复、文档/README/代码整洁，以及 race / Compose / Kafka / 浏览器 E2E 验证；性能仅最小两档，明确不声称完整阶梯或容量验证。
-- **Push 状态**：`gim-v1.1` 已在本地创建（指向 `55bbb8e`），但 `git push origin main` 与 `git push origin gim-v1.1` 因网络不可达失败（`Recv failure: Connection was reset` / `Could not connect to server`）；未使用 `--force`，远端 tag 未被覆盖或删除。网络恢复后执行 `git push origin main && git push origin gim-v1.1` 即可补齐。
+- `gim-v1`：2026-10-15 的 V1 基线，指向 `09994cb`，**未移动**。
+- `gim-v1.1`：本轮最终验证状态的 annotated tag，指向 `55bbb8e`；包含项目整理、好友闭环、C1/C2 修复、文档/README/代码整洁，以及 race / Compose / Kafka / 浏览器 E2E 验证；性能仅最小两档，明确不声称完整阶梯或容量验证。
+
+## Push 状态（已同步）
+
+- `git push origin main`：成功，`bce78cc..76d2032 main -> main`。
+- `git push origin gim-v1.1`：成功，`* [new tag] gim-v1.1 -> gim-v1.1`。
+- 远端 `refs/heads/main` = `76d2032`（与推送时本地 HEAD 一致）。
+- 远端 tags：`gim-v1`（annotated `3db4382` → `09994cb`，未变化）、`gim-v1.1`（annotated `87949b5` → `55bbb8e`）。
+- 未使用 `--force`；未移动/删除任何 tag。
 
 ## 环境恢复
 
