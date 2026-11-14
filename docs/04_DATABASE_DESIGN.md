@@ -2,6 +2,8 @@
 
 以下是逻辑模型。Agent 应生成可重复执行的 migration；不要仅依赖开发环境 AutoMigrate。
 
+> 以实现为准（核对日期 2026-11-14）：可执行真相源是 `server/migrations/*.up.sql`；本文与 migration 冲突处已按 001–008 修正。
+
 > V2 范围与不做项见 [v2-scope.md](v2-scope.md)。
 
 ## 1. 通用约定
@@ -21,19 +23,17 @@
 
 ### user_confs
 
-`id, user_id UNIQUE, recall_message, friend_online, sound, secure_link, save_pwd, search_user, verification, verification_question JSON, curtail_chat, curtail_add_user, curtail_create_group, curtail_in_group_chat, created_at, updated_at`
+`id, user_id UNIQUE, recall_message, friend_online, sound, secure_link, save_pwd, search_user, verification, verification_question JSON, curtail_chat, add_user, create_group, in_group_chat, created_at, updated_at`
 
 不要把 DB `online` 当 Presence 真相；在线状态来自 Redis/Chat Hub。
 
 ### friends
 
-保留参考项目双向关系一行模型：`send_user_id, rev_user_id, send_user_notice, rev_user_notice`。
-
-索引：`send_user_id`, `rev_user_id`, `(send_user_id, rev_user_id)`。Service 必须防止反向重复关系和并发重复创建。
+正式采用 A→B、B→A 双行：`id, user_id, friend_id, remark VARCHAR(128), created_at, updated_at`。唯一 `(user_id, friend_id)`；`ix_friends_friend_user(friend_id, user_id)`；CHECK 禁止自好友。Service 必须防止反向重复关系和并发重复创建。
 
 ### friend_verifies
 
-保留 reference 字段。索引：`send_user_id`, `rev_user_id`, `status`, `created_at`。
+正式字段：`id, requester_id, receiver_id, status TINYINT(0/1/2), message VARCHAR(128), pending_low_id/pending_high_id 生成列, created_at, updated_at`。唯一 `(pending_low_id, pending_high_id)`；索引 `(receiver_id,status,created_at,id)`、`(requester_id,created_at,id)`；CHECK 双方不同、status∈0..2。
 
 ## 3. 私聊消息
 
@@ -107,15 +107,15 @@
 
 ### file_objects
 
-`id, uid UUID UNIQUE, sha256 CHAR(64) UNIQUE, size BIGINT, path VARCHAR(512), mime_type VARCHAR(128), created_at, updated_at`
+`id, uid CHAR(36) UNIQUE, sha256 CHAR(64) UNIQUE, size BIGINT UNSIGNED, storage_path VARCHAR(512), mime_type VARCHAR(128), created_at, updated_at`
 
 一份物理内容对应一行。
 
 ### user_files
 
-`id, user_id, file_object_id, file_name, created_at, updated_at`
+`id, user_id, file_object_id, original_name VARCHAR(255), created_at, updated_at`
 
-索引：`user_id`, `file_object_id`；可根据产品语义设置 `UNIQUE(user_id, file_object_id, file_name)` 或允许同名多记录。
+索引：`UNIQUE(user_id, file_object_id, original_name)`；`(user_id, created_at, id)`；`(file_object_id, id)`。
 
 文件秒传：先根据 SHA-256 找 file_object；存在则不重复写物理文件，只创建 user_files 关系。
 
@@ -130,6 +130,8 @@
 ### 7.1 迁移版本与运行策略
 
 迁移版本严格连续：`001_identity`、`002_friend`、`003_chat`、`004_group`、`005_file`、`006_settings`、`007_audit_logs`、`008_admin_management`。`schema_migrations` 记录版本、名称、应用时间和 `dirty` 状态。
+
+`schema_migrations` 由 `server/migrations/runner.go:ensureTable` 创建/维护：`version BIGINT UNSIGNED PRIMARY KEY, name VARCHAR(128), dirty TINYINT(1) DEFAULT 1, applied_at DATETIME(3)`；业务代码不读写，仅迁移 runner 使用。008 只给 `chat_messages`/`group_messages` 增加 `admin_deleted_at`，不新增索引。
 
 MySQL DDL 会隐式提交，无法承诺跨多个 DDL 的事务原子性。Runner 在执行前先写 dirty 状态，成功后清除；失败时后续 UP 会 fail-fast。操作员应检查失败点和备份，再运行已审阅的对应 DOWN，修复原因后重试，禁止直接删除版本记录。部署顺序为备份与兼容性确认、UP、status/健康检查；生产回滚必须先恢复兼容应用并确认可验证备份。
 
@@ -153,14 +155,14 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 
 - `friends` 正式采用 A→B、B→A 双行：`id, user_id, friend_id, remark, created_at, updated_at`，唯一 `(user_id, friend_id)` 且禁止自好友。接受申请须在同一服务事务写双向行并更新申请。
 - `friends.remark` 是方向性的：`(user_id, friend_id)` 行的备注只影响 `user_id` 自己的好友视图，删除好友时双向行一起删除。
-- `friend_verifies` 状态固定为 0 pending、1 accepted、2 rejected。pending 时生成规范化 low/high user ID，唯一键阻止同一对用户反向或并发重复申请；已处理历史不受该键限制。`message` 保存申请附言（最多 64 字符）。
+- `friend_verifies` 状态固定为 0 pending、1 accepted、2 rejected。pending 时生成规范化 low/high user ID，唯一键阻止同一对用户反向或并发重复申请；已处理历史不受该键限制。`message` 保存申请附言（migration 为 `VARCHAR(128)`）。
 - User 服务的 friend 模块是这两张表的唯一业务写入路径：`POST/PUT/DELETE /api/user/friends`、`PUT /api/user/valid_status`。Admin 接口不修改好友关系；`GET /api/user/friends` 只读 Redis Presence，不写回任何在线状态。
 
 ### 7.5 Private Chat
 
 - `chat_messages` 以 `(send_user_id, client_msg_id)` 保证幂等，生成规范化会话双方 ID；`(conversation_low_id, conversation_high_id, id)` 支持双向会话游标历史。
 - `chat_sessions` 每用户/好友唯一，保存 last message、last read、unread、置顶和 `hidden_at`；排序索引为 `(user_id, is_top DESC, last_message_at DESC, id DESC)`。
-- `chat_message_deletions` 主键 `(user_id, message_id)`，仅表达该用户隐藏一条历史，不等于全局撤回。
+- `chat_message_deletions` 主键 `(user_id, message_id)`，设计上表达该用户隐藏一条历史；但当前生产代码**只读不写**（仅测试直接 INSERT），隐藏会话实际使用 `chat_sessions.hidden_at`。
 
 ### 7.6 Group
 
@@ -179,7 +181,7 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 
 ### 7.8 关键事务与验收
 
-- 注册：Auth Hash 后调用 User；实现默认配置写入时，用户与配置必须原子创建。
+- 注册：Auth Hash 后调用 User；当前实现只写 `users`，**不初始化 `user_confs`**；限制接口按需 upsert，`CanChat` 用 `COALESCE(MAX(curtail_chat),0)` 容忍缺行。
 - 接受好友：锁定 pending 申请，写双向关系并更新状态后提交。
 - 发送消息：幂等插入消息并更新相关 session；唯一冲突时读取原消息返回一致结果。
 - 历史/会话使用 message ID 与排序字段游标，不依赖 OFFSET 深分页。
@@ -222,5 +224,6 @@ V1 统一不创建数据库外键。各表属于不同逻辑服务边界，关�
 | `user_files` | 005 | `ux_user_files_user_object_name` | `ix_user_files_user_created`, `ix_user_files_object` | 0 |
 | `settings` | 006 | `ux_settings_key` | `ix_settings_public_key` | 2 |
 | `audit_logs` | 007 | `ux_audit_logs_event_id` | `ix_audit_logs_occurred`, `ix_audit_logs_user_occurred`, `ix_audit_logs_type_occurred`, `ix_audit_logs_service_occurred`, `ix_audit_logs_request` | 4 |
+| `schema_migrations` | runner | PK `(version)` | — | 1（dirty∈0/1） |
 
-008 只增加 `admin_deleted_at` 列，不新增表、唯一键或索引。全部表使用 InnoDB + `utf8mb4_0900_ai_ci`，业务时间列为 `DATETIME(3)`。
+008 只增加 `admin_deleted_at` 列，不新增表、唯一键或索引。全部表使用 InnoDB + `utf8mb4_0900_ai_ci`，业务时间列为 `DATETIME(3)`。`schema_migrations` 由 runner 建表，不属于 001–008。

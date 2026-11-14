@@ -2,7 +2,7 @@
 
 `*.up.sql` / `*.down.sql` are the only executable schema source of truth. Versions must be contiguous, names must pair exactly, and released migration files must not be edited in place.
 
-Current released sequence ends at `007_audit_logs`; never edit 001-006 to add audit fields or indexes.
+Current released sequence ends at `008_admin_management`; never edit 001–007 to add fields or indexes. `008` only adds `admin_deleted_at` to `chat_messages` and `group_messages` (no new indexes).
 
 Run from `server/` with an ignored local environment file:
 
