@@ -18,6 +18,7 @@
 | V-13 | 普通文件消息集成 + E2E | **PASS**（2026-11-14）：type=3 ACK/接收/历史/幂等/错误码；浏览器上传 `report.pdf` → 接收方下载 → 非参与者 `2503` |
 | V-14 | 群聊文件浏览器 E2E | **PASS**（2026-11-14）：B/C 收到并下载、非成员 D `2503`、B 退群后 `2503`、owner 仍可下载 |
 | V-15 | 文件 Phase 全量 race | **PASS**（2026-11-14）：Linux Docker `go test -race ./...`，exit 0，无 race warning |
+| V-16 | 撤回实现（后端/前端/历史/授权） | **PASS**（2026-11-14）：type=4 校验/ACK/推送/历史占位/文件下载撤销；单测 + 真实 MySQL/WS 集成 + 浏览器 E2E（文本+文件撤回） |
 
 ## 待补验证 / 未覆盖
 
@@ -26,13 +27,13 @@
 | V-4 | 完整性能阶梯 / soak / restart / 文件吞吐 | 本轮只复跑 HTTP profile c10 与 Private 10 conn @10 msg/s；未做 25/50/100/200 连接阶梯、50 msg/s、5 分钟 soak、restart 稳定性与文件吞吐档位。历史数字仍是 2026-10-15 记录 |
 | V-6 | 远端 CI 结果 | GitHub Actions 配置存在，但本环境无 API 访问；仅 local equivalent PASS，远端为 `NOT OBSERVED` |
 | V-12 | 图片/文件消息性能 | 未单独测试图片与普通文件的上传/下载吞吐、缩略图或大图预览性能 |
-| V-16 | 撤回实现 | 协议已定义（docs/06 §5.6），后端/前端/历史替换/授权联动均未实现；计划第十一轮 |
+| V-17 | 撤回窗口浏览器 E2E | 单测与真实 MySQL/WS 集成覆盖 `2220`；浏览器 E2E 未等待 120s 窗口，未做短窗口 UI 验证 |
 
 ## 业务/实现限制（V2 或后续）
 
 | 编号 | 问题 | 说明 |
 |---|---|---|
-| K-1 | 视频/语音/回复/引用/撤回/@/图文未实现 | 文本/图片/普通文件已实现（`type=1/2/3`）；其余富消息仍未进入协议 |
+| K-1 | 视频/语音/回复/引用/@/图文未实现 | 文本/图片/普通文件/撤回已实现（`type=1/2/3/4`）；其余富消息仍未进入协议 |
 | K-2 | 无接收方 delivery/read receipt | ACK 仅表示服务端持久化/接受 |
 | K-3 | 好友 `isOnline` 非实时 | 只在 HTTP 列表/详情请求时读取 Redis Presence，无 `friend.online/offline` 推送 |
 | K-4 | 好友申请只提供接收方向 | 未提供“我发出的申请”历史列表；`POST /api/user/valid` 旧路径未实现 |
@@ -43,8 +44,9 @@
 | K-9 | `user_confs` 无读写 API/UI | 仅 Admin 限制更新会按需写入四项限制字段 |
 | K-10 | 群消息无 1213 重试 | 群写入按成员 ID 升序降低风险，但未像私聊那样做有界重试 |
 | K-11 | 图片尺寸仅客户端提示 | 服务端不解码图片，`width/height` 只做 1..20000 合法性校验；不用于安全判断 |
-| K-12 | 撤回实现未完成 | 协议已定义（type=4、`RECALL_WINDOW_SECONDS`、错误码、历史替换、文件授权联动），实现待第十一轮；实现阶段评估是否需要额外列/索引 |
-| K-13 | 管理员撤回未设计 | 仅设计用户撤回自己的消息；管理员撤回（含原因/审计）留待 V2 后续 |
+| K-12 | 撤回已实现 | type=4、`RECALL_WINDOW_SECONDS`、历史占位、文件授权撤销均已实现；已知边界见 K-14 |
+| K-13 | 管理员撤回未设计 | 仅实现用户撤回自己的消息；管理员撤回（含原因/审计）留待 V2 后续 |
+| K-14 | 并发重复撤回无唯一约束 | 同一发送者顺序重复撤回幂等；并发不同 clientMsgId 撤回同一消息在无目标唯一索引时可能产生两条撤回消息（不新增索引） |
 
 ## 工程/运维限制
 
@@ -57,7 +59,7 @@
 | E-5 | Windows native race 不可用 | 32-bit MinGW 不兼容；64-bit MinGW 缺 libc headers；Linux Docker 为验证路径（本轮已 PASS） |
 | E-6 | 远端 GitHub Actions 结果未观察 | 本环境无 API 访问，仅 local equivalent PASS |
 | E-7 | 未使用导出函数无自动扫描 | 当前以“包级可达性 + 手工 grep”为准；`internal/chat.UnavailableInboundHandler` 仅测试使用，保留为测试替身 |
-| E-8 | 图片下载授权跨读消息表 | 非所有者下载时在 File 服务内查询 `chat_messages`/`group_messages` 的 JSON 引用；已改为 `SELECT 1 … LIMIT 1`，但 `JSON_EXTRACT` 无索引，且下载接口无速率限制；仅影响图片下载路径 |
+| E-8 | 图片/文件下载授权跨读消息表 | 非所有者下载时在 File 服务内查询 `chat_messages`/`group_messages` 的 JSON 引用，并用 `NOT EXISTS` 排除被撤回原消息；保持 `SELECT 1 … LIMIT 1`，但 `JSON_EXTRACT` 无索引，且下载接口无速率限制；仅影响非所有者下载路径 |
 | E-9 | 浏览器可能缓存已下载图片 | 退群/tombstone 只阻止新的服务端下载；浏览器已缓存的副本无法回收（客户端缓存语义，已记入 docs/05） |
 
 ## 使用约定

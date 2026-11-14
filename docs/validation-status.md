@@ -52,13 +52,17 @@
 | **文件 Phase 全量 race** | **PASS** | Linux Docker `golang:1.25-bookworm`；`go test -race ./... -count=1`（挂载 module cache，`GOPROXY=off`） | exit 0；含 `internal/chat/...`、`internal/group/...`、`internal/file/...`、`internal/user/friend/...`；无 `WARNING: DATA RACE` |
 | **群聊文件浏览器 E2E** | **PASS** | Chrome + Compose（15 healthy + 2 exit 0） | A 建群邀请 B/C → A 发 `report.pdf`（type=3）→ B/C 收到并下载 → 非成员 D `2503` → B 退群后 `2503` → owner A 仍可下载 |
 
-## 撤回协议设计（2026-11-14）
+## 撤回实现（2026-11-14，第十一轮）
 
-| 项目 | 结果 | 说明 |
-|---|---|---|
-| 撤回协议（type=4） | **设计完成** | docs/06 §5.6：`withdrawMsg.msgID`、时间窗口 `RECALL_WINDOW_SECONDS`（默认 120）、Chat `2218–2221` / Group `2419–2422`、历史占位替换、文件授权联动 |
-| 撤回实现（后端/前端） | **NOT RUN / 未实现** | 本轮只做协议设计；收到 type=4 仍返回 `2201/2403` |
-| 撤回 schema | 无需变更 | 复用 `msg` JSON；不新增 `recalled_at` 列/表/索引 |
+| 项目 | 结果 | 命令 / 环境 | 证据 |
+|---|---|---|---|
+| 后端构建/单测 | **PASS** | `go build` / `go vet` / `gofmt` / `go test ./...`（69 packages） | type=4 解析、校验顺序、时间窗口、幂等、非本人/非参与者/tombstone/已撤回/群非成员、历史替换 |
+| **撤回集成（真实 MySQL/Redis/WS）** | **PASS** | `GIM_ENV_FILE=<absolute .env.local>`；`go test ./tests -run TestRecallMessage -v` | WS 撤回 ACK、接收方 type=4、历史占位不含原文、重复撤回同一 messageId、非本人 `2219`、tombstone `2221`、超窗口 `2220`、撤回后接收方文件下载 `ErrNotFound`、所有者仍可下载 |
+| 文件授权联动 | **PASS** | 同一集成测试 | 授权 SQL 增加 `NOT EXISTS` 排除被撤回原消息；保持 `SELECT 1 … LIMIT 1`，无 schema 变更 |
+| Web | **PASS** | `vue-tsc --noEmit`；`vitest run`（21 files / 131 tests）；`vite build` | 撤回入口/窗口判断、type=4 解析、发送/ACK 替换、推送合并、失败保留原文、占位渲染 |
+| **浏览器撤回 E2E** | **PASS** | Chrome + Compose（15 healthy + 2 exit 0） | A 撤回文本 → B 看到占位且原文消失；A 撤回文件 → B 卡片消失、下载 `2503`；owner 仍 `200` |
+| 撤回窗口浏览器 E2E | **NOT RUN** | 默认窗口 120s，未做短窗口 UI 验证 | 单测/集成覆盖 `2220` |
+| 撤回 schema | 无需变更 | 复用 `msg` JSON；无 `recalled_at` 列/表/索引 | — |
 
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
@@ -83,7 +87,7 @@
 | 文件吞吐档位（1 MiB/10 MiB、并发） | **NOT RUN** | 本轮未跑 file 负载 | 可选后续轮次 |
 | 图片上传/下载吞吐与预览性能 | **NOT RUN** | 未单独做图片性能档位 | 可选后续轮次 |
 | 普通文件消息吞吐/下载性能 | **NOT RUN** | 未单独做文件消息性能档位 | 可选后续轮次 |
-| 撤回实现（后端/前端/E2E） | **NOT RUN** | 本轮只完成协议设计 | 第十一轮 |
+| 撤回窗口浏览器 E2E | **NOT RUN** | 默认 120s，未做短窗口 UI 验证 | 可选 |
 | 远端 GitHub Actions 结果 | **NOT OBSERVED** | 本环境无 GitHub API 访问；仅 local equivalent PASS | — |
 
 > 历史性能数字（`docs/performance/baseline.md`）是 2026-10-15 的记录；本轮最小场景结果只代表当前机器当前栈，不构成容量承诺，也不替代历史完整档位。
@@ -128,3 +132,4 @@ cd ..\admin; pnpm type-check; pnpm test; pnpm build
 - 2026-11-14：图片 Phase 1 收尾（图片 race / 授权专项测试 / 群聊图片 E2E），见 `agent_logs/operations/day-11/`。
 - 2026-11-14：V2 Phase 1 普通文件消息（单测 / 聊天文件集成 / 浏览器文件 E2E），见 `agent_logs/operations/day-12/`。
 - 2026-11-14：文件 Phase 收尾（全量 race / 群聊文件 E2E）+ 撤回协议设计，见 `agent_logs/operations/day-13/`。
+- 2026-11-14：撤回实现（单测 / 集成 / 文件授权 / 浏览器 E2E），见 `agent_logs/operations/day-14/`。

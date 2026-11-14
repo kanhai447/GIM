@@ -53,7 +53,7 @@
 
 `msg` JSON 复用同一列承载消息 payload：文本为 `{"type":1,"textMsg":{"content":"..."}}`，图片为 `{"type":2,"imageMsg":{"fileID":123,"url":"/api/file/123","width":800,"height":600,"size":123456,"mimeType":"image/png"}}`，普通文件为 `{"type":3,"fileMsg":{"fileID":123,"url":"/api/file/123","fileName":"report.pdf","size":123456,"mimeType":"application/pdf"}}`。图片/文件消息只存元数据，`fileID` 指向 `user_files.id`，`url/fileName/size/mimeType` 来自 `user_files`/`file_objects`；**不新增消息表/文件表，也不新增列**。图片 `msg_preview` 为 `[图片]`，文件为 `[文件]`。
 
-撤回（`type=4`，协议已定义、实现待第十一轮）同样复用 `msg` JSON：落库一条 `{"type":4,"withdrawMsg":{"msgID":原消息ID}}` 的撤回消息，原消息行保留用于审计/幂等，读取时替换为撤回占位、`msg_preview="[撤回]"`。**不新增 `recalled_at` 列**；文件授权在读取侧排除被撤回消息引用的原消息。
+撤回（`type=4`，第十一轮已实现）同样复用 `msg` JSON：落库一条 `{"type":4,"withdrawMsg":{"msgID":原消息ID}}` 的撤回消息，原消息行保留用于审计/幂等，读取时替换为撤回占位、`msg_preview="[撤回]"`。**不新增 `recalled_at` 列**；文件授权在读取侧排除被撤回消息引用的原消息。
 
 索引：
 
