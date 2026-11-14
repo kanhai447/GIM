@@ -96,7 +96,7 @@ receiver 是否在线不改变 unread：每条新消息都在事务中使 receiv
 
 ### Presence
 
-**V2 / 未实现。** V1 服务端不发送 `friend.online` / `friend.offline`；在线状态只在 HTTP `GET /api/user/friends`、`GET /api/user/friend_info` 时从 Redis Presence 读取 `isOnline`。以下为 V2 目标格式（保留以便实现时对齐）：
+**协议已定义，实现待下一轮（见 §5.7）。** V1 服务端不发送 `friend.online` / `friend.offline`；在线状态只在 HTTP `GET /api/user/friends`、`GET /api/user/friend_info` 时从 Redis Presence 读取 `isOnline`。事件格式如下：
 
 - `friend.online`
 - `friend.offline`（离线事件用于更新状态）
@@ -326,6 +326,50 @@ payload：
 - 前端撤回入口仅作 120 秒 UX 提示；服务端窗口以配置为准。
 - 同一发送者顺序重复撤回返回同一 ACK；并发不同 clientMsgId 撤回同一消息在无唯一索引下可能产生两条撤回消息（known-issues K-14）。
 
+### 5.7 好友上线提醒（协议已定义，实现待下一轮）
+
+**状态**：仅协议设计；服务端/前端尚未发送或处理 `friend.online`/`friend.offline`。
+
+事件（仅 Chat WS，Group WS 不参与）：
+
+```json
+{"event":"friend.online","data":{"userID":1002,"at":"2026-11-14T12:00:00Z"}}
+{"event":"friend.offline","data":{"userID":1002,"at":"2026-11-14T12:00:00Z"}}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `userID` | 上线/离线的用户 ID（事件的“好友”） |
+| `at` | 服务端生成的事件时间（RFC3339） |
+
+触发条件：
+
+- `friend.online`：该用户全局 Chat 连接数 0→1（首个连接建立并完成 Presence 标记后）。
+- `friend.offline`：该用户全局 Chat 连接数 1→0（最后一个连接断开并移除 Presence 后）。
+- 单机多端：只在同一用户首个本地连接/最后一个本地连接时触发；多实例时必须结合 Redis Presence 判断全局 0→1/1→0，避免 A 实例的本地 0→1 在用户已在线于 B 时误报。
+- 进程崩溃/TTL 过期没有 Hub 回调，不保证发送 `friend.offline`；前端通过 `GET /api/user/friends` 的 `isOnline` 恢复。
+
+通知范围：
+
+- 只通知该用户当前好友（`friends` 表），不广播给非好友或整个连接集合。
+- 好友关系已删除、用户被封禁/停用、或通知时好友查询失败，不推送（best-effort）。
+- 不通知用户自己。
+
+与 Presence 的关系：
+
+- Redis `gim:presence:user:{uid}`（ZSET，按实例贡献 + TTL）是**权威在线状态**；WS 事件只是实时通知。
+- 事件丢失不影响最终一致性：好友列表/详情仍通过 HTTP 读取 Presence。
+- Group WS 不修改 Presence，也不发送好友事件。
+
+实现约束：
+
+- Hub 的 `LocalUserOnline/Offline` 回调不得做网络 I/O；通知通过有界 worker 队列异步执行。
+- 推送复用现有 Chat delivery → Hub 写队列；禁止直接 `Conn.WriteMessage`，不得阻塞 Hub 事件循环。
+- 事件是 best-effort：客户端按 `userID` 幂等更新 `isOnline`，重复/乱序事件不应导致状态错误。
+- 旧客户端忽略未知事件，不崩溃。
+
+兼容性：新增事件不改变 `chat.*`/`group.*` 消息；类型表与错误码不变。
+
 ## 6. 撤回
 
 协议与语义见 §5.6；**第十一轮已实现**（type=4、时间窗口、错误码、历史替换、文件授权联动）。`chat_message_deletions` 仍只表达“仅自己隐藏历史”，与撤回是不同语义。
@@ -346,7 +390,7 @@ Group WS 的任一设备 normal/abnormal/timeout/slow/shutdown 只移除对应 C
 |---|---|---|---|
 | Chat WS | `chat.send` | `chat.ack`, `chat.message`, `error` | 已实现（文本 `type=1`、图片 `type=2`） |
 | Group WS | `group.send` | `group.ack`, `group.message`, `error` | 已实现（文本 `type=1`、图片 `type=2`） |
-| Chat WS | — | `friend.online`, `friend.offline` | V2 / 未实现 |
+| Chat WS | — | `friend.online`, `friend.offline` | 协议已定义，实现待下一轮（§5.7） |
 | 两条连接 | 视频/普通文件/语音/回复/引用/撤回/@/图文 | 同左 | V2 / 未实现（图片已实现） |
 
 Control frame Ping/Pong 不属于业务事件，见第 7 节。

@@ -54,7 +54,7 @@ JWT Claims 使用 `userID`、`role`、`jti`、`iat`、`exp`。签名 Secret 和�
 
 - `PUT /api/user/user_info`：用户资料编辑。
 - `POST /api/user/valid`：参考实现的主动申请入口。V1 由 `POST /api/user/friends` 承担；如需旧路径兼容别名，V2 再补，不在本轮实现。
-- `friend.online` / `friend.offline` 实时上线提醒：V2，本轮好友列表只在请求时读取 Presence，不新增 WS 事件。
+- `friend.online` / `friend.offline` 实时上线提醒：**协议已定义**（docs/06 §5.7），实现待下一轮；好友列表仍在 HTTP 请求时读取 Presence，WS 事件只是实时补充。
 - `user_confs` 读写 API/UI：V2。
 
 ## 4. Chat

@@ -5,8 +5,22 @@
 ```text
 Web -> Gateway -> Auth.login -> User RPC/DB -> JWT -> Web
 Web -> connect Chat WS + Group WS
-Chat Hub 0->1 -> Redis Presence -> notify online friends
+Chat Hub 0->1 -> Redis Presence（好友提醒协议已定义，实现待下一轮；V1 只依赖 HTTP isOnline）
 ```
+
+## 1.1 好友上线提醒（协议已定义，实现待下一轮）
+
+```text
+用户 A 登录 -> Chat WS 建立
+ -> Hub 本地连接 0->1（多实例需结合 Redis Presence 判断全局 0->1）
+ -> Presence worker 写入/刷新本实例 contribution
+ -> 通知 worker 异步查询 A 的好友列表（friends 表）
+ -> 通过 Chat delivery / Hub 写队列向在线好友推送 friend.online{userID:A, at}
+A 最后一个 Chat WS 断开 -> Hub 1->0 -> 移除 Presence contribution
+ -> 若全局无其他 contribution，向在线好友推送 friend.offline
+```
+
+约束：Hub 回调只入队，不做网络 I/O；Group WS 不参与 Presence/好友事件；事件丢失时前端通过 `GET /api/user/friends` 的 `isOnline` 恢复；进程崩溃/TTL 过期不保证 offline 事件。协议细节见 docs/06 §5.7。
 
 ## 2. 私聊发送
 
