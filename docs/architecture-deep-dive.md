@@ -580,49 +580,117 @@
 
 ### 4.14.1 Admin 私聊审计
 
+**涉及文件**
 - 入口：`chat/message/admin/transport/http/handler.go`（`GET/DELETE /api/chat/admin/history`）
 - service/repo：`chat/message/admin/service.go:List/Delete` → `chat/message/admin/mysql/repository.go:List/Delete/deleteOnce/repairSession`
 - 鉴权：`platform/adminapi/adminapi.go:Identity`（严格 `Role=="1"`）
 - 前端：`admin/src/views/ChatsView.vue`、`admin/src/api/admin.ts`
-- 调用：`List`（游标 + 用户过滤）→ `Delete` 事务：`FOR UPDATE` 锁消息 → `admin_deleted_at=UTC` → 按 userID 升序 `repairSession` 两侧 session（重算 last_message/unread 或隐藏）。
-- 错误码：**`2220/2221/2222`**（与撤回的 `2220–2222` 数值重叠，但属于 Admin 模块；见第 8 章差异）；1213 重试 3 次。
-- 边界：读取私聊不产生审计事件；删除不通知在线用户；大会话修复 O(消息数)。
+
+**调用顺序**
+`List`（游标 + 用户过滤）→ `Delete` 事务：`FOR UPDATE` 锁消息 → `admin_deleted_at=UTC` → 按 userID 升序 `repairSession` 两侧 session（重算 last_message/unread 或隐藏）。
+
+**事务边界**
+- 列表只读；删除（软删 + 两侧 session 修复）单事务；1213 重试 3 次；审计在提交后 best-effort。
+
+**并发/幂等/错误码**
+- 错误码 `2220/2221/2222`（与撤回数值重叠，见第 9.1 节）；重复删除第二次 404；行锁顺序与消息持久化一致。
+
+**已知边界**
+- 读取私聊不产生审计事件；删除不通知在线用户；大会话修复 O(消息数)。
+
+**面试可讲的权衡**
+- Tombstone 保留审计/恢复能力，代价是所有查询带 `admin_deleted_at IS NULL`；同步修 session 强一致但增加删除延迟。
 
 ### 4.14.2 Admin 群管理
 
+**涉及文件**
 - 入口：`group/admin/transport/http/handler.go`（群列表/解散/群消息列表/删消息）
 - service/repo：`group/admin/service.go` → `group/admin/mysql/repository.go`
 - 前端：`admin/src/views/GroupsView.vue`、`admin/src/api/admin.ts`
-- 调用：`List`（群 + owner + member/message 计数 + Presence 在线数）→ `Dissolve` 事务（status=2 + 删 members + 隐藏 sessions）→ `DeleteMessage` 事务（tombstone + repairGroupSession）。
-- 错误码：`2320/2321/2322`。
-- 边界：解散不删消息/文件、不通知在线成员；群 WS 无“解散”事件；MemberOnlineCount 逐用户查 Presence。
+
+**调用顺序**
+`List`（群 + owner + member/message 计数 + Presence 在线数）→ `Dissolve` 事务（status=2 + 删 members + 隐藏 sessions）→ `DeleteMessage` 事务（tombstone + repairGroupSession）。
+
+**事务边界**
+- 解散/删消息各单事务；审计在提交后。
+
+**并发/幂等/错误码**
+- 错误码 `2320/2321/2322`；重复解散/删除 404；`repairGroupSession` 对每 session 加 `FOR UPDATE`。
+
+**已知边界**
+- 解散不删消息/文件、不通知在线成员；群 WS 无“解散”事件；MemberOnlineCount 逐用户查 Presence。
+
+**面试可讲的权衡**
+- 状态位解散保留审计但产生孤儿数据；在线人数实时算无额外存储但 N 次 Redis 查询。
 
 ### 4.14.3 Admin 文件管理
 
+**涉及文件**
 - 入口：`file/admin/transport/http/handler.go`（列表/详情/删除/下载）
 - service/repo：`file/admin/service.go` → `file/admin/mysql/repository.go`
 - 前端：`admin/src/views/FilesView.vue`
-- 调用：`List`（user_files JOIN file_objects JOIN users）→ `Delete` 单条 DELETE（只删引用，不删 file_objects）→ `Download` 流式 `ServeContent`。
-- 错误码：`2520/2521/2522`。
-- 边界：无物理 GC；删引用后历史消息 URL 404；管理员下载无二次审批/水印。
+
+**调用顺序**
+`List`（user_files JOIN file_objects JOIN users）→ `Delete` 单条 DELETE（只删引用，不删 file_objects）→ `Download` 流式 `ServeContent`。
+
+**事务边界**
+- 删除单语句；下载无事务。
+
+**并发/幂等/错误码**
+- 错误码 `2520/2521/2522`；`RowsAffected` 判存在，重复删除 404；共享对象删一个引用不影响其他用户。
+
+**已知边界**
+- 无物理 GC；删引用后历史消息 URL 404；管理员下载无二次审批/水印；下载不审计。
+
+**面试可讲的权衡**
+- 引用计数式删除安全、支持共享对象；代价是存储膨胀与离线 GC。
 
 ### 4.14.4 Admin 设置
 
+**涉及文件**
 - 入口：`settings/transport/http/handler.go`（`/api/settings/info` 公开、`/api/settings/admin/info` PUT、`/api/settings/admin/overview`）
-- service/repo：`settings/service/service.go:Get/Update` → `settings/repository/mysql`；overview 独立。
+- service/repo：`settings/service/service.go:Get/Update` → `settings/repository/mysql`；overview 独立
 - 前端：`admin/src/views/SettingsView.vue`、`DashboardView.vue`
-- 调用：`Update` 校验名称/版本/公告 → 固定 key JSON → `UpsertPublic` → 审计 `admin.settings.updated`。
-- 错误码：`2701/2703`；并发后写覆盖，无版本号。
+
+**调用顺序**
+`Update` 校验名称/版本/公告 → 固定 key JSON → `UpsertPublic` → 审计 `admin.settings.updated`。
+
+**事务边界**
+- 5 个 key 批量 upsert；service 无显式事务（repository 是否单事务未逐行核对）。
+
+**并发/幂等/错误码**
+- 错误码 `2701/2703`；Upsert 幂等；并发后写覆盖，无版本号。
+
+**已知边界**
+- 只允许公开业务设置；无变更历史；无配置版本/回滚。
+
+**面试可讲的权衡**
+- 固定 key + JSON 类型安全、可控；扩展需改代码，换取简单。
 
 ### 4.14.5 Admin 日志查询
 
+**涉及文件**
 - 入口：`logs/transport/http/handler.go`（`GET /api/logs/logs`、`:id`）
 - service/repo：`logs/service/service.go:List/Get` → `logs/repository/mysql/repository.go`
 - 前端：`admin/src/views/LogsView.vue`
-- 调用：`isAdmin`（`Role=="1"`）→ 参数校验 → 按 `occurred_at DESC,id DESC` 复合游标查询。
-- 错误码：`2601/2603/2604`；查询本身不产生审计事件。
+
+**调用顺序**
+`isAdmin`（`Role=="1"`）→ 参数校验 → 按 `occurred_at DESC,id DESC` 复合游标查询。
+
+**事务边界**
+- 只读，无事务。
+
+**并发/幂等/错误码**
+- 错误码 `2601/2603/2604`；查询本身不产生审计事件。
+
+**已知边界**
+- 查询不留痕；无导出/脱敏二次处理。
+
+**面试可讲的权衡**
+- 复合游标避免深翻页；代价是查询条件/索引耦合。
 
 ## 4.15 审计日志：LogEvent、脱敏、Kafka producer、consumer 幂等
+
 
 **涉及文件**
 - 事件：`platform/audit/event.go`（`Event/NewEvent/Validate/PartitionKey`）
