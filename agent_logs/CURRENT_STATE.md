@@ -5,7 +5,7 @@
 - **V2 STATUS:** 核心四 Phase 完成（图片 `type=2`、普通文件 `type=3`、撤回 `type=4`、好友上线提醒单机）；范围外项见 [docs/v2-scope.md](../docs/v2-scope.md)
 - **Current Round:** 2026-11-14 Day 17 — V2 收口评估 + `gim-v2.0`：COMPLETED
 - **Branch:** `main`
-- **Tags:** `gim-v1`（09994cb）、`gim-v1.1`（55bbb8e）、`gim-v1.2`（c97618f）、`gim-v1.3`（32a4a55）、`gim-v1.4`（886d55e）、`gim-v2.0`（本轮收口 commit，以 `git rev-list -n 1 gim-v2.0` 为准）；旧 tag 未移动
+- **Tags:** `gim-v1`（09994cb）、`gim-v1.1`（55bbb8e）、`gim-v1.2`（c97618f）、`gim-v1.3`（32a4a55）、`gim-v1.4`（886d55e）、`gim-v2.0`（tag object `71032d5`，target `8e39668`）；旧 tag 未移动
 - **Next Authorized Work:** 到此为止 / 补 user_confs / 管理员撤回 / 性能 / 多实例 Presence（均需另行授权）
 
 ## 当前事实
