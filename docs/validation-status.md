@@ -23,8 +23,15 @@
 | 群聊图片 | **PASS（单测）** | `go test ./internal/group/message -count=1` | 归一化、幂等冲突、`2412–2415`；未单独跑群聊图片 WS E2E |
 | Web | **PASS** | `vue-tsc --noEmit`；`vitest run`（21 files / 114 tests）；`vite build` | WS 解析、上传后发送、pending/ACK、渲染、预览、失败重试、未知占位 |
 | **浏览器图片 E2E** | **PASS** | Chrome + Compose 17 services（15 healthy + 2 exit 0） | 10 步：注册 A/B、登录、好友、A 上传并发送、B 收到图片、B 打开预览、关闭。首轮曾因接收方无下载权限失败，修复（`a1ecf64`）后 PASS |
-| 图片相关 race | **NOT RUN** | 上一轮 race 覆盖 V1 代码；图片代码未单独跑 | 建议下一轮补 |
-| 群聊图片浏览器 E2E / 图片性能 | **NOT RUN** | 本轮未做 | 可选 |
+
+## V2 Phase 1 收尾（2026-11-14）
+
+| 项目 | 结果 | 命令 / 环境 | 证据 |
+|---|---|---|---|
+| **图片代码 race（全量）** | **PASS** | Linux Docker `golang:1.25-bookworm`；`go test -race ./... -count=1`（挂载 module cache，`GOPROXY=off`） | exit 0；含 `internal/chat/...`、`internal/group/...`、`internal/file/...`、`internal/user/friend/...`；无 `WARNING: DATA RACE` |
+| **文件下载授权专项测试** | **PASS** | 真实 MySQL（001–008 schema）；`go test ./tests -run 'TestImageDownloadAuthorizationSemantics\|TestTextMessageDoesNotGrantImageDownload' -v` | 所有者、私聊接收方、群成员、非参与者 `2503`、私聊 tombstone、群 tombstone、退群后 `2503`、未知 fileID `2503`、文本不授权；接收方下载在私聊/群聊集成与 E2E 中验证 |
+| **群聊图片 WS E2E** | **PASS** | Chrome + Compose（15 healthy + 2 exit 0） | A 建群邀请 B/C → A 发送 type=2 → B/C 收到并预览 → 非成员 D `2503` → B 退群后 `2503` → owner A 仍可下载。首轮“退群后 200”确认是浏览器缓存，改 `cache: 'no-store'` 后复跑 PASS |
+| 图片吞吐 / 预览性能 | **NOT RUN** | 本轮未做 | 可选 |
 
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
@@ -47,7 +54,7 @@
 | 完整性能阶梯（25/50/100/200 WS 连接、50 msg/s） | **NOT RUN** | 本轮只复跑最小两档；未做阶梯与容量探索 | 可选后续轮次 |
 | 5 分钟 soak / restart 稳定性 | **NOT RUN** | 历史结果仍为 2026-10-15 记录，未复跑 | 可选后续轮次 |
 | 文件吞吐档位（1 MiB/10 MiB、并发） | **NOT RUN** | 本轮未跑 file 负载 | 可选后续轮次 |
-| 图片代码 `-race` / 群聊图片 E2E | **NOT RUN** | 图片功能在 race 验证之后加入，未单独复跑；群聊图片仅单测 | 下一轮 |
+| 图片上传/下载吞吐与预览性能 | **NOT RUN** | 未单独做图片性能档位 | 可选后续轮次 |
 | 远端 GitHub Actions 结果 | **NOT OBSERVED** | 本环境无 GitHub API 访问；仅 local equivalent PASS | — |
 
 > 历史性能数字（`docs/performance/baseline.md`）是 2026-10-15 的记录；本轮最小场景结果只代表当前机器当前栈，不构成容量承诺，也不替代历史完整档位。
@@ -89,3 +96,4 @@ cd ..\admin; pnpm type-check; pnpm test; pnpm build
 - 2026-11-11：真实依赖集成与好友 E2E，见 `agent_logs/operations/day-6/`。
 - 2026-11-12：race / Compose / Kafka / 浏览器 E2E / 性能最小场景，见 `agent_logs/operations/day-8/`。
 - 2026-11-12：V2 Phase 1 图片消息（单测 / 聊天集成 / 浏览器 E2E），见 `agent_logs/operations/day-10/`。
+- 2026-11-14：图片 Phase 1 收尾（图片 race / 授权专项测试 / 群聊图片 E2E），见 `agent_logs/operations/day-11/`。

@@ -204,7 +204,7 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 3. `file_objects.size <= IMAGE_MESSAGE_MAX_BYTES`（默认 10 MiB），否则 `2213`/`2414`。
 4. `type=2` 必须携带 `imageMsg.fileID`；`width`/`height` 若提供必须为合法正数，否则 `2214`/`2415`。
 
-校验通过后，服务端用数据库元数据规范化 payload（`url`、`mimeType`、`size`）再落库；`msg` 只存元数据，不存二进制，不返回原始文件路径。历史查询 `GET /api/chat/history`、`GET /api/group/history/:id` 与 `chat.message`/`group.message` 使用同一结构。接收方（私聊对端、群成员）可通过 `GET /api/file/{fileID}` 读取该图片；文件服务仅对“消息参与者”放行，其他用户返回 `2503`。
+校验通过后，服务端用数据库元数据规范化 payload（`url`、`mimeType`、`size`）再落库；`msg` 只存元数据，不存二进制，不返回原始文件路径。历史查询 `GET /api/chat/history`、`GET /api/group/history/:id` 与 `chat.message`/`group.message` 使用同一结构。消息 DTO 不含二进制；接收方（私聊对端、群成员）通过 `GET /api/file/{fileID}` 读取，文件服务按“所有者或消息参与者”授权：私聊要求消息未 tombstone 且当前用户是发送者/接收者，群聊要求当前仍是群成员且消息未 tombstone，否则统一 `2503`（详见 `docs/05_HTTP_API.md`）。
 
 ### 5.2 ACK 与幂等
 

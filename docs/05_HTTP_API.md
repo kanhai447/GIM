@@ -158,6 +158,24 @@ Day 3 / Checkpoint 5 的精确用户文件契约：
 - 上传与发送是两个步骤；上传失败不得发送消息。消息只存元数据（fileID/url/width/height/size/mimeType），不存二进制；预览/下载仍走 `GET /api/file/:id`。
 - 图片消息不新增 HTTP 端点；历史仍用 `GET /api/chat/history` / `GET /api/group/history/:id`，返回结构与 WS 同构。
 
+### 文件下载授权（V2 Phase 1）
+
+`GET /api/file/:id` 的访问语义：
+
+| 请求者 | 允许条件 |
+|---|---|
+| 所有者 | `user_files.user_id = 当前用户`；始终允许，即使引用消息已被 tombstone |
+| 私聊发送者/接收方 | 存在一条未 tombstone 的 `chat_messages` 引用该 `user_files.id`，且当前用户是 `send_user_id` 或 `rev_user_id` |
+| 群成员 | 当前仍在 `group_members`（退群/被踢即不在），且存在未 tombstone 的 `group_messages` 引用该文件 |
+| 退群/被踢用户 | **拒绝**（除非同时是文件所有者） |
+| 非参与者 / 文件不存在 | 统一返回 `2503`，不区分“存在但无权”与“不存在” |
+| 文本消息 | 文本内容不构成文件引用；不授权，也不会触发下载请求 |
+
+- 授权只读 `user_files`、`file_objects`、`chat_messages`、`group_messages`、`group_members`，无 schema 变更；JSON 引用使用 `LIMIT 1` 命中即停。
+- `JSON_EXTRACT` 无专用索引，仅影响“非所有者下载”路径；当前无速率限制，二者记录在 `docs/known-issues.md`。
+- 已下载到浏览器的图片副本属于客户端缓存，退群/删除不会回收本地副本；服务端拒绝新的下载请求。
+- 撤回未实现；撤回后的文件授权语义待 V2 定义。
+
 File 错误码：`2501` 参数/文件名/multipart 无效、`2502` 超过大小限制、`2503` 文件不存在或当前用户无权访问（不区分以防枚举）、`2504` 服务暂不可用。原始路径、SQL、磁盘或数据库错误不得进入响应。
 
 ## 7. 错误约定

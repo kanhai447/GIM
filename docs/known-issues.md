@@ -12,6 +12,9 @@
 | V-5 | 浏览器好友 E2E | **PASS**；Chrome + Compose Web，11 步（注册→搜索→申请→同意→备注→删除） |
 | V-7 | 聊天图片集成（MySQL/Redis/WS） | **PASS**；ACK、接收、历史、重复 clientMsgId 仅 1 行、归属/MIME/大小错误码、接收方下载授权 |
 | V-8 | 浏览器图片 E2E | **PASS**；Chrome + Compose，上传→发送→接收→预览 |
+| V-9 | 图片代码 `-race` | **PASS**（2026-11-14）；Linux Docker 全量 `go test -race ./...`，exit 0，无 race warning |
+| V-10 | 群聊图片浏览器 E2E | **PASS**（2026-11-14）；建群邀请 B/C、发送、B/C 收到与预览、非成员 D `2503`、B 退群后 `2503`、owner 仍可下载 |
+| V-11 | 文件下载授权专项测试 | **PASS**（真实 MySQL）：所有者/私聊接收方/群成员/非参与者/tombstone/退群/未知 fileID/文本不授权 |
 
 ## 待补验证 / 未覆盖
 
@@ -19,8 +22,7 @@
 |---|---|---|
 | V-4 | 完整性能阶梯 / soak / restart / 文件吞吐 | 本轮只复跑 HTTP profile c10 与 Private 10 conn @10 msg/s；未做 25/50/100/200 连接阶梯、50 msg/s、5 分钟 soak、restart 稳定性与文件吞吐档位。历史数字仍是 2026-10-15 记录 |
 | V-6 | 远端 CI 结果 | GitHub Actions 配置存在，但本环境无 API 访问；仅 local equivalent PASS，远端为 `NOT OBSERVED` |
-| V-9 | 图片代码 `-race` | 图片功能在 race 验证之后加入，未单独复跑；建议下一轮 |
-| V-10 | 群聊图片浏览器 E2E / 图片性能 | 群聊图片仅单测；未做图片吞吐/预览性能 |
+| V-12 | 图片吞吐 / 预览性能 | 未单独测试图片上传/下载吞吐、缩略图或大图预览性能 |
 
 ## 业务/实现限制（V2 或后续）
 
@@ -37,6 +39,7 @@
 | K-9 | `user_confs` 无读写 API/UI | 仅 Admin 限制更新会按需写入四项限制字段 |
 | K-10 | 群消息无 1213 重试 | 群写入按成员 ID 升序降低风险，但未像私聊那样做有界重试 |
 | K-11 | 图片尺寸仅客户端提示 | 服务端不解码图片，`width/height` 只做 1..20000 合法性校验；不用于安全判断 |
+| K-12 | 撤回后的文件授权语义未定义 | V1 无撤回；若 V2 增加撤回，需明确撤回后接收方是否仍可下载被引用文件 |
 
 ## 工程/运维限制
 
@@ -49,7 +52,8 @@
 | E-5 | Windows native race 不可用 | 32-bit MinGW 不兼容；64-bit MinGW 缺 libc headers；Linux Docker 为验证路径（本轮已 PASS） |
 | E-6 | 远端 GitHub Actions 结果未观察 | 本环境无 API 访问，仅 local equivalent PASS |
 | E-7 | 未使用导出函数无自动扫描 | 当前以“包级可达性 + 手工 grep”为准；`internal/chat.UnavailableInboundHandler` 仅测试使用，保留为测试替身 |
-| E-8 | 图片下载授权跨读消息表 | 非所有者下载时在 File 服务内查询 `chat_messages`/`group_messages` 的 JSON 引用，`JSON_EXTRACT` 无索引；仅影响图片下载路径 |
+| E-8 | 图片下载授权跨读消息表 | 非所有者下载时在 File 服务内查询 `chat_messages`/`group_messages` 的 JSON 引用；已改为 `SELECT 1 … LIMIT 1`，但 `JSON_EXTRACT` 无索引，且下载接口无速率限制；仅影响图片下载路径 |
+| E-9 | 浏览器可能缓存已下载图片 | 退群/tombstone 只阻止新的服务端下载；浏览器已缓存的副本无法回收（客户端缓存语义，已记入 docs/05） |
 
 ## 使用约定
 
