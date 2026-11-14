@@ -145,25 +145,26 @@ func (repo *Repository) FindAccessibleByID(ctx context.Context, userID, id uint6
 
 func (repo *Repository) canAccessImage(ctx context.Context, userID, fileID uint64) (bool, error) {
 	value := strconv.FormatUint(fileID, 10)
-	var chatCount int64
-	if err := repo.db.WithContext(ctx).Table("chat_messages").
+	var chatHit int
+	if err := repo.db.WithContext(ctx).Table("chat_messages").Select("1").
 		Where("admin_deleted_at IS NULL AND (send_user_id = ? OR rev_user_id = ?)", userID, userID).
 		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.imageMsg.fileID')) = ?", value).
-		Count(&chatCount).Error; err != nil {
+		Limit(1).Scan(&chatHit).Error; err != nil {
 		return false, mapError("check chat image access", err)
 	}
-	if chatCount > 0 {
+	if chatHit == 1 {
 		return true, nil
 	}
-	var groupCount int64
+	var groupHit int
 	if err := repo.db.WithContext(ctx).Table("group_messages AS gm").
+		Select("1").
 		Joins("JOIN group_members AS member ON member.group_id = gm.group_id AND member.user_id = ?", userID).
 		Where("gm.admin_deleted_at IS NULL").
 		Where("JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.imageMsg.fileID')) = ?", value).
-		Count(&groupCount).Error; err != nil {
+		Limit(1).Scan(&groupHit).Error; err != nil {
 		return false, mapError("check group image access", err)
 	}
-	return groupCount > 0, nil
+	return groupHit == 1, nil
 }
 
 func (repo *Repository) ListByUser(ctx context.Context, userID, beforeID uint64, limit int) ([]domain.FileMetadata, error) {
