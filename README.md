@@ -207,7 +207,10 @@ pnpm type-check; pnpm test; pnpm build
 ## Tag
 
 - `gim-v1`：2026-10-15 的 V1 基线（历史 checkpoint，不移动、不删除）。
-- `gim-v1.1`：本轮的 annotated tag，指向完成“项目整理 + 补验证 + 验证状态更新”的最终 commit。包含 C1/C2 修复、好友闭环、文档/README/代码整洁，以及 **race / Compose / Kafka / 浏览器 E2E 验证**；性能仅覆盖最小两档，**不包含完整性能阶梯、soak 或容量验证**。
+- `gim-v1.1`：项目整理 + 补验证 + 验证状态更新（C1/C2、好友闭环、race/Compose/Kafka/浏览器 E2E）。
+- `gim-v1.2`：图片消息、普通文件消息、文件授权专项与文件 Phase 收尾。
+- `gim-v1.3`：撤回消息实现 + 撤回收尾（并发/短窗口/race）+ 好友上线提醒协议设计。
+- `gim-v1.4`：好友上线提醒单机实现 + 前后端测试/集成/E2E/race；多实例 Presence、user_confs、管理员撤回仍未实现。
 
 ## 已知限制
 
