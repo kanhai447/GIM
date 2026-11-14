@@ -146,4 +146,284 @@
 
 **边界**：范围外项未实现；不要把 V2.0 讲成“全部 V2 功能完成”。
 
-（第 3–6 节见后续提交）
+## 3. 按功能的设计问答
+
+### 3.1 功能：注册、登录、注销、JWT、logout 黑名单
+
+**一句话回答**
+- Auth 服务统一做密码哈希、JWT 签发/校验与 Redis 撤销；Gateway 每请求调 Auth，业务服务只信任注入的 `User-ID/Role`。
+
+**需求与约束**
+- 注册/登录/注销；JWT 无状态校验；登出后 token 立即失效；V1 固定“Gateway → Auth → 业务服务”。
+
+**方案**
+- 入口 `auth/transport/http/handler.go:Register/Login/Authentication/Logout`；service `auth/service/service.go:Register/Login/Authenticate/Logout`；`auth/token/jwt.go:Issue/Parse`；`auth/revocation/redis.go:Revoke/IsRevoked/Fingerprint`；`auth/credential/password.go:Hash/Compare`；用户数据经 `auth/userclient` → User RPC。
+- 登出把 token SHA-256 指纹写入 Redis，TTL=JWT 剩余时间。
+
+**关键决策与理由**
+- 选择集中 Auth，因为撤权立即生效、业务服务零 JWT 依赖；代价是每请求多一跳、Auth 是关键路径。
+- 选择 JWT + Redis 黑名单，因为无状态校验快、登出又能即时失效；代价是每请求一次 Redis 查询。
+- 选择 bcrypt + 统一 1201 错误，因为防彩虹表/账号枚举；代价是登录 CPU 成本更高。
+
+**权衡**
+- 可用性 vs 一致性：Auth/Redis 故障时业务请求失败（503/超时），不降级为“放行”。
+- 无状态 vs 可撤销：JWT 本身不可撤销，用黑名单补齐。
+
+**失败模式与恢复**
+- Auth 进程崩溃：Gateway 返回 503/1303；客户端重试。
+- Redis 不可用：`Authenticate` 返回内部错误，拒绝请求（不绕过黑名单）。
+- DB 不可用：登录/注册失败；已签发 token 仍可用到过期（除登出检查）。
+- 客户端崩溃：token 仍在有效期内；可重新登录，旧 token 不强制失效（V1 无单点会话）。
+
+**常见追问与回答要点**
+1. 为什么不用 Refresh Token？——V1 目标是简单闭环；短/长 token 轮换属 V2 安全增强。
+2. JWT 被盗怎么办？——登出/改密后黑名单；V1 没有设备管理/强制下线列表。
+3. 为什么登出只存指纹？——不把原始 JWT 写入 Redis/日志，降低泄露面。
+4. 多端登录？——允许多 token；登出只失效当前 token。
+5. 角色怎么传？——JWT role → Auth → Gateway `Role` header → 服务端 `adminapi.Identity` 二次校验。
+
+**已知边界**
+- 内部 API/RPC 无 mTLS，依赖网络边界（E-2）。
+- `/api/auth/open_login` 在 Allowlist 但无路由（A6）；不属于核心功能。
+
+### 3.2 功能：用户资料、Admin 用户管理
+
+**一句话回答**
+- 用户资料只读公开字段；Admin 用户列表/限制/禁用走 `Role==1` 二次校验，列表用游标分页并读 Presence 补 `isOnline`。
+
+**需求与约束**
+- 资料读取不能泄露 `pwd_hash/open_id`；Admin 需要搜索、分页、限制聊天/加好友/建群、禁用/启用。
+
+**方案**
+- 资料：`user/transport/http/profile.go:ServeHTTP` → `user/service/service.go:GetUserByID` → `user/repository/mysql/repository.go:GetByID`。
+- Admin：`user/admin/transport/http/handler.go:List/UpdateRestrictions/Disable/Enable` → `user/admin/service.go` → `user/admin/mysql/repository.go`；`adminapi.Identity` 要求 `Role=="1"`。
+
+**关键决策与理由**
+- 选择服务端二次校验 Role，因为 Gateway 头仍可能被内部误用；代价是每个 Admin handler 重复鉴权。
+- 选择游标分页（`beforeId`+limit+1），因为避免深 OFFSET；代价是不能跳页。
+- 选择 `user_confs` 按需 upsert，因为注册不初始化配置（A3），减少注册事务；代价是查询要容忍缺行。
+
+**权衡**
+- 管理能力 vs 隐私：列表只返回安全字段；但仍能看用户统计，需权限边界。
+- 一致性：限制写入后，登录/发消息读取最新 `user_confs`；无缓存，读放大可接受。
+
+**失败模式与恢复**
+- DB 失败：列表/更新 500，无部分写入（限制更新单事务）。
+- Presence 查询失败：`isOnline` 降级 false，不影响列表。
+- 误禁用：Admin 可 `PUT /api/user/users` 恢复；登录立即读 status。
+
+**常见追问与回答要点**
+1. 为什么禁用不是删除？——保留消息/好友关系与审计；登录返回 1202。
+2. 限制聊天如何生效？——发私聊前 `friends.CanChat` 读 `user_confs.curtail_chat`。
+3. 分页为什么不用 total？——深 COUNT 成本高；用 limit+1/hasMore。
+4. Admin 能改密码吗？——V1 不做；避免管理员接触凭据。
+5. 多个 Admin 并发改同一用户？——后写覆盖，无乐观锁；管理操作低频。
+
+**已知边界**
+- `user_confs` 无用户侧读写 API/UI（K-9）；资料编辑 `PUT /api/user/user_info` 未实现。
+- Admin 限制字段只有四项，不是完整偏好设置。
+
+### 3.3 功能：好友搜索、申请、同意/拒绝、列表、备注、删除、详情
+
+**一句话回答**
+- 好友关系用双向两行（A→B、B→A）+ 方向性 remark；申请用 pending 生成列唯一键防并发重复，同意在事务内写双向行。
+
+**需求与约束**
+- 搜索不能返回自己/已禁用用户；申请不能重复；同意/拒绝只能接收者操作；备注只影响自己方向。
+
+**方案**
+- 入口 `user/friend/transport/http/handler.go`（`/api/user/search`、`/api/user/friends`、`/api/user/friend_info`、`/api/user/valid*`）。
+- service `friend/friend.go:Search/SendRequest/Respond/ListFriends/FriendInfo/UpdateRemark/DeleteFriend`；repo `friend/repository/mysql/repository.go`。
+- 表：`friends`、`friend_verifies`；Presence 只读。
+
+**关键决策与理由**
+- 选择双向两行，因为查询“我的好友”只需 `user_id=?`，简单；代价是写入双份、删除双份。
+- 选择 pending 生成列唯一键，因为同一对用户只能有一条待处理申请（含反向）；代价是 schema 多两个生成列。
+- 选择 `SELECT ... FOR UPDATE` 锁申请行，因为并发同意只能一个成功；代价是事务持有行锁。
+
+**权衡**
+- 读性能 vs 写复杂度：双行读简单；写要事务保证两行一致。
+- 安全 vs 体验：搜索/详情把“不存在/非好友”统一 1115，防枚举；代价是错误信息不精确。
+
+**失败模式与恢复**
+- 同意时进程崩溃：事务回滚，申请仍 pending，可重试。
+- 重复申请：唯一键 1062 → 1116；前端提示已有申请。
+- 删除好友：双向 DELETE 单事务；0 行 → 1115。
+- Presence 失败：`isOnline=false`，不影响好友列表。
+
+**常见追问与回答要点**
+1. 为什么不用单行 A/B 加 low/high？——双行查询更直接；代价是双写。
+2. 并发反向申请？——pending 生成列唯一键仲裁。
+3. 备注为什么方向性？——A 对 B 的备注不应影响 B 的视图。
+4. 被删除好友还能发消息吗？——`AreFriends` 失败 → 2203。
+5. 好友申请实时推送？——V2 后期，当前 HTTP（K-3 历史表述已过时，实际以 K-15 为准；好友申请推送仍未做）。
+
+**已知边界**
+- 只有接收方向申请列表，无“我发出的”（K-4）。
+- 好友申请实时推送未实现；V2 后期项见 `v2-scope.md`。
+
+### 3.4 功能：私聊文本消息（重点）
+
+**一句话回答**
+- WS `chat.send` 进入 `SendPrivateMessage`，以 `(send_user_id, client_msg_id)` 唯一键幂等，在一个事务写消息 + 双方 session，提交后先 ACK 再 Redis 推送。
+
+**需求与约束**
+- 只允许好友；文本 ≤4096B、payload ≤16KB；ACK 表示服务端已持久化；接收方离线可拉历史；V1 无 delivery ACK。
+
+**方案**
+- 入口 `chat/client.go:readPump` → `chat/message/inbound.go:Inbound.Handle` → `chat/message/service.go:SendPrivateMessage`。
+- 校验 `CanChat/GetByID/AreFriends`；`repository/mysql/repository.go:PersistWithSessions` 事务 INSERT + 按 userID 升序 upsert 两侧 `chat_sessions`。
+- ACK：`Hub.SendToClient`；推送：`delivery.Publish` → `LocalDeliveryHandler` → `Hub.SendToUser`。
+
+**关键决策与理由**
+- 选择“事务后 ACK”，因为 ACK 必须代表已落库；代价是 ACK 延迟受 DB 影响。
+- 选择“先 ACK 后广播”，因为发送方感知不能被 Redis 阻塞；代价是接收方可能晚于 ACK 收到。
+- 选择 session 表而非每次聚合消息表，因为未读/置顶/隐藏需要独立状态；代价是发送时多写两行、写放大。
+- 选择 clientMsgId 而非服务端 ID 做幂等，因为客户端重试前还没有服务端 ID；代价是客户端必须生成稳定 UUID。
+
+**权衡**
+- 一致性：消息+session 同事务，读路径简单；代价是单事务锁竞争。
+- 实时性：Pub/Sub at-most-once，丢推送可用历史补偿；代价是实时性不保证。
+- 复杂度：session 冗余 last_message/unread，换查询性能。
+
+**失败模式与恢复**
+- ACK 前崩溃：事务回滚，客户端超时重试；不产生半条消息。
+- ACK 后崩溃：消息已提交，历史可查；接收方靠历史/重连恢复。
+- Redis 推送失败：只记 `realtime delivery degraded`，ACK 已发；历史兜底。
+- 接收方离线：`SendToUser` 投递 0 个连接；上线后拉历史。
+- DB 1213：Chat 有 3 次重试；仍失败返回 2204。
+- ACK 丢失：客户端 failed → 同 clientMsgId 重试 → 服务端返回原消息 ACK。
+
+**常见追问与回答要点**
+1. 多端怎么办？——同一 userID 多个 Client，`SendToUser` 向所有连接投递；ACK 只回发送连接。
+2. 重复发送怎么办？——唯一键 + 预查；同内容返回原消息，不同内容 2205。
+3. 为什么不用消息队列？——V1 规模与复杂度取舍；Pub/Sub + 历史已够，可靠投递是 V2。
+4. session 和动态聚合的区别？——session 维护未读/置顶/隐藏，读 O(1)；动态聚合每次扫消息表。
+5. 为什么 ACK 不包含接收方已读？——V1 ACK 语义仅服务端持久化（K-2）。
+6. 消息顺序怎么保证？——单会话按自增 messageId 排序；并发事务提交顺序可能不同，但 ID 单调。
+
+**已知边界**
+- 无接收方 delivery/read receipt（K-2）；pending 不跨刷新（K-5）。
+- 推送 at-most-once，Redis 故障会丢实时消息，靠历史恢复。
+- 群聊无 1213 重试（A5/K-10），私聊有。
+
+### 3.5 功能：私聊图片消息
+
+**一句话回答**
+- 先 `POST /api/file/image` 上传拿 `user_files.id`，再发 `type=2`；服务端反查归属/MIME/size 并覆写 URL 等元数据，绝不信任客户端字段。
+
+**需求与约束**
+- 仅图片 MIME；大小上限 `IMAGE_MESSAGE_MAX_BYTES`（默认 10MiB）；接收方需有下载授权；历史/WS 同构。
+
+**方案**
+- 上传 `file/transport/http/handler.go:UploadImage` → `file/service/service.go:Upload`。
+- 发送 `chat/message/service.go:normalizeImage`：`GetOwnedImage`（`user_files JOIN file_objects`，限本人）→ 校验 `image/` 前缀、size → 覆写 `url=/api/file/{id}`、MIME、size。
+- 下载授权 `file/repository/mysql/repository.go:canAccessImage` 匹配 `imageMsg.fileID` 或 `fileMsg.fileID`。
+
+**关键决策与理由**
+- 选择“客户端只传 fileID”，因为 URL/文件名/大小可伪造；代价是发送前多一次 DB 查询。
+- 选择上传与发送分离，因为大文件上传不应占用消息事务；代价是可能产生未引用文件（K-7）。
+- 选择内容寻址 + `user_files` 引用，因为同一内容可复用；代价是授权需跨表 JSON 查询（E-8）。
+
+**权衡**
+- 安全 vs 延迟：服务端反查增加一次查询，换不可伪造。
+- 存储 vs 去重：SHA-256 去重省空间；需要 GC/引用计数。
+
+**失败模式与恢复**
+- 上传失败：无消息；客户端可重试上传。
+- 上传成功但发送失败：留下未引用 `user_files`；K-7 无 GC。
+- 发送时文件被删/无权：2211。
+- 接收方下载失败：2503；前端显示失败/重试。
+- 撤回后：授权 `NOT EXISTS` 使非所有者 2503，所有者仍可下载。
+
+**常见追问与回答要点**
+1. 为什么不在消息里存二进制？——消息表膨胀、事务/推送成本高；对象存储/文件系统更合适。
+2. 如何防伪造 URL？——服务端覆写，客户端 URL 被忽略。
+3. 图片安全扫描？——V1 不做内容解码/病毒扫描（K-11）。
+4. 缩略图？——未实现；预览直接用原图。
+5. 多接收方授权？——私聊双方/群成员，按消息引用查询。
+
+**已知边界**
+- 宽高仅客户端提示，服务端不解码（K-11）。
+- 下载授权 JSON 查询无索引/无限速（E-8）；浏览器缓存不回收（E-9）。
+
+### 3.6 功能：私聊普通文件消息
+
+**一句话回答**
+- 与图片同构：上传拿 `user_files.id`，发 `type=3`；服务端反查 original_name/size/MIME 并覆写，接收方走鉴权下载。
+
+**需求与约束**
+- 不限 MIME 前缀；`FILE_MESSAGE_MAX_BYTES`（默认 25MiB）；文件名/大小以服务端为准；下载 `Content-Disposition: attachment`。
+
+**方案**
+- 上传 `file/transport/http/handler.go:UploadFile` → `file/service/service.go:Upload`。
+- 发送 `chat/message/service.go:normalizeFile`：`GetOwnedFile` → 校验 size → 覆写 `url/fileName/size/mimeType`。
+- 下载 `file/service/service.go:GetAccessible` → `http.ServeContent`，`nosniff` + attachment。
+
+**关键决策与理由**
+- 选择服务端回填文件名，因为客户端文件名可含路径/控制字符；`SanitizeFilename` 已处理上传名。
+- 选择 attachment + nosniff，因为用户文件可能是 HTML/SVG，避免 XSS。
+- 选择与图片共用 `canAccessImage` 查询，因为授权逻辑相同；代价是函数名不直观。
+
+**权衡**
+- 通用性 vs 安全：允许任意 MIME 提升可用性；靠下载头与鉴权降低风险。
+- 存储成本 vs 体验：原文件保存，不做转码/预览。
+
+**失败模式与恢复**
+- 上传中断：临时文件 Abort；无 DB 引用。
+- 发送时文件无权：2215；超限 2216。
+- 下载时引用被删/撤回：2503。
+- 物理对象丢失但 DB 有记录：下载 2504/500；需人工修复。
+
+**常见追问与回答要点**
+1. 大文件会 OOM 吗？——流式 `io.CopyBuffer` + `MaxBytesReader`，不 `ReadAll`。
+2. 文件名如何防路径穿越？——`path.Base` + 控制字符校验 + 存储路径由 hash 生成。
+3. 断点续传？——未实现；V2 候选。
+4. 文件秒传？——SHA-256 命中复用物理对象，但仍建用户引用。
+5. 删除文件会影响历史消息吗？——会 404；V1 无级联/软删。
+
+**已知边界**
+- 无孤儿 GC（K-7）；授权查询无索引/无限速（E-8）；浏览器缓存（E-9）。
+
+### 3.7 功能：私聊撤回（重点）
+
+**一句话回答**
+- `type=4` + `withdrawMsg.msgID` 作为一条新消息落库；校验目标/本人/tombstone/已撤回/时间窗后，历史读时把原消息替换为 `[撤回]`，文件授权用 `NOT EXISTS` 排除被撤回原消息。
+
+**需求与约束**
+- 只能撤回自己消息；窗口 `RECALL_WINDOW_SECONDS`（默认 120s）；历史不返回原文；文件接收方失效；无 schema 变更。
+
+**方案**
+- 入口 `chat/message/inbound.go:Inbound.Handle` → `service.SendPrivateMessage` → `sendWithdraw`。
+- 校验 `GetWithdrawBySenderAndTarget`（幂等）→ `GetByIDForRecall`（含 tombstone）→ 参与者/本人/tombstone/`IsRecalled`/窗口。
+- 落库仍走 `PersistWithSessions`（type=4，preview `[撤回]`）。
+- 历史/会话 `recalledSet` → `markRecalled`；文件授权 `canAccessImage` 的 `NOT EXISTS`。
+
+**关键决策与理由**
+- 选择“撤回消息作为一等消息”，因为天然进入消息序列、多端同步、可 ACK；代价是占 unread/last_message。
+- 选择读时投影而非改写原消息，因为避免批量更新历史/二次广播；代价是每次历史查询多一次 JSON 反查。
+- 选择 `NOT EXISTS` 撤销文件授权，因为不改 schema、保留原消息审计；代价是无索引、非所有者下载变慢（E-8）。
+- 选择“同 sender+target 先查已有撤回”，因为顺序重试幂等；代价是并发不同 clientMsgId 仍可能两条（K-14）。
+
+**权衡**
+- 审计 vs 存储：原消息保留，存储不回收；合规/追责友好。
+- 一致性 vs 并发：无 target 唯一索引，换 schema 简单；代价是 K-14。
+
+**失败模式与恢复**
+- 撤回落库前崩溃：无撤回消息，原消息可见，客户端可重试。
+- ACK 后推送失败：历史已替换，接收方拉历史可见。
+- 文件下载并发撤回：取决于查询时序；撤回后新查询 2503。
+- Redis 挂：撤回仍落库/ACK，推送失败靠历史。
+- 目标被 Admin tombstone：返回 2221（视为不可撤回）。
+
+**常见追问与回答要点**
+1. 为什么原消息不物理删除？——审计/幂等/多端同步；代价是存储。
+2. 历史接口怎么保证不泄露原文？——读侧 `RecalledTargets` 替换 payload，preview `[撤回]`。
+3. 撤回后文件还能下载吗？——非所有者 2503，所有者仍可下载自己的 `user_files`。
+4. 超过窗口怎么办？——2220；前端入口隐藏只是 UX，服务端权威。
+5. 并发撤回两条怎么办？——历史占位仍唯一，前端 `applyWithdrawals` 合并；严格一条需唯一索引（K-14）。
+6. 群撤回呢？——同构，见 3.10。
+
+**已知边界**
+- K-14 并发可能两条；K-13 无管理员撤回；K-12 已实现。
+- 文件授权查询无索引/无限速（E-8）；浏览器缓存（E-9）。
