@@ -54,6 +54,23 @@ Web 选择图片
 
 下载时 File 服务再次授权：所有者始终允许；私聊要求引用消息未 tombstone 且当前用户是发送者/接收者；群聊要求当前仍是群成员且消息未 tombstone。退群/被踢、tombstone 后、非参与者一律 `2503`。已下载到浏览器的副本属于客户端缓存，服务端不会回收。
 
+## 2.2 普通文件消息
+
+```text
+Web 选择文件
+ -> POST /api/file/file（multipart 字段 file）-> 流式存储 / SHA-256 复用
+ -> 返回 user_files.id + fileName/mimeType/size
+ -> Web 以 msg.type=3 + fileMsg.fileID 发送 chat.send / group.send
+ -> 服务端 validate：type=3、fileID>0、size>=0
+ -> 归属校验：user_files.id 属于 sender，并 JOIN file_objects
+ -> 不限制 MIME 前缀；file_objects.size <= FILE_MESSAGE_MAX_BYTES
+ -> 用 DB 的 url/fileName/size/mimeType 规范化 payload
+ -> 与文本相同的 message + session/unread 事务
+ -> COMMIT -> ACK -> best-effort 推送 -> history 返回同一结构
+```
+
+失败码：文件不存在/非本人 `2215`/`2416`、超限 `2216`/`2417`、参数非法 `2217`/`2418`；失败不落库、不 ACK。`msg_preview` 为 `[文件]`；下载授权与图片消息相同（所有者/私聊参与者/群成员，tombstone/退群/非参与者 `2503`）。
+
 ## 3. 私聊已读
 
 用户打开会话/看到指定 messageId -> HTTP `PUT /api/chat/read` -> 验证该消息属于 A/B -> 锁定 A->B session -> 单调推进 A 的 lastReadMessageId -> 按 cursor 后仍存在的入站消息重算 unread -> commit。并发新消息必须在该 session 行锁之后原子增加 unread，因此不会把 read cursor 之后的新消息误清零。V1 不向对方发送已读回执。

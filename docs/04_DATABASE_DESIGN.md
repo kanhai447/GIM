@@ -51,7 +51,7 @@
 
 关键约束：`UNIQUE(send_user_id, client_msg_id)`。
 
-`msg` JSON 复用同一列承载消息 payload：文本为 `{"type":1,"textMsg":{"content":"..."}}`，图片为 `{"type":2,"imageMsg":{"fileID":123,"url":"/api/file/123","width":800,"height":600,"size":123456,"mimeType":"image/png"}}`。图片消息只存元数据，`fileID` 指向 `user_files.id`、`url/mimeType/size` 来自 `file_objects`；**不新增消息表/文件表，也不新增列**。图片消息的 `msg_preview` 固定为 `[图片]`。
+`msg` JSON 复用同一列承载消息 payload：文本为 `{"type":1,"textMsg":{"content":"..."}}`，图片为 `{"type":2,"imageMsg":{"fileID":123,"url":"/api/file/123","width":800,"height":600,"size":123456,"mimeType":"image/png"}}`，普通文件为 `{"type":3,"fileMsg":{"fileID":123,"url":"/api/file/123","fileName":"report.pdf","size":123456,"mimeType":"application/pdf"}}`。图片/文件消息只存元数据，`fileID` 指向 `user_files.id`，`url/fileName/size/mimeType` 来自 `user_files`/`file_objects`；**不新增消息表/文件表，也不新增列**。图片 `msg_preview` 为 `[图片]`，文件为 `[文件]`。
 
 索引：
 
@@ -87,7 +87,7 @@
 
 保留 `group_member_id` 以记录发送时成员身份。
 
-`msg` JSON 与 `chat_messages` 同构：文本 `type=1`，图片 `type=2`（`imageMsg` 只存 `user_files.id` 与元数据）；群聊图片 `msg_preview` 同样为 `[图片]`。无新增表/列。
+`msg` JSON 与 `chat_messages` 同构：文本 `type=1`，图片 `type=2`，普通文件 `type=3`（`imageMsg`/`fileMsg` 只存 `user_files.id` 与元数据）；群聊图片/文件 `msg_preview` 分别为 `[图片]`/`[文件]`。无新增表/列。
 
 ### group_sessions
 

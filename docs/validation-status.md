@@ -33,6 +33,18 @@
 | **群聊图片 WS E2E** | **PASS** | Chrome + Compose（15 healthy + 2 exit 0） | A 建群邀请 B/C → A 发送 type=2 → B/C 收到并预览 → 非成员 D `2503` → B 退群后 `2503` → owner A 仍可下载。首轮“退群后 200”确认是浏览器缓存，改 `cache: 'no-store'` 后复跑 PASS |
 | 图片吞吐 / 预览性能 | **NOT RUN** | 本轮未做 | 可选 |
 
+## V2 Phase 1 普通文件消息（2026-11-14）
+
+| 项目 | 结果 | 命令 / 环境 | 证据 |
+|---|---|---|---|
+| 后端构建/单测 | **PASS** | `go build` / `go vet` / `gofmt` / `go test ./...`（69 packages） | type=3 解析、归属/大小/参数校验、幂等、`[文件]` preview |
+| **聊天文件集成（真实 MySQL/Redis/WS）** | **PASS** | `GIM_ENV_FILE=<absolute .env.local>`；`go test ./tests -run TestChatFileMessage -v` | `TestChatFileMessageWebSocketHistoryAndValidation`：ACK、接收方 `chat.message`（fileName/size/mime 规范化）、历史、重复 clientMsgId 仅 1 行、`2215/2216` 不落库、接收方可解析文件、非参与者不可 |
+| 群聊文件消息 | **PASS（单测）** | `go test ./internal/group/message -count=1` | 归一化、幂等冲突、`2416–2418`；群文件消息授权在授权测试中覆盖 |
+| 文件下载授权（文件消息） | **PASS** | `TestImageDownloadAuthorizationSemantics`（含群文件消息） | 群成员可下载；tombstone 后/退群/非成员 `2503`；owner 仍可下载 |
+| Web | **PASS** | `vue-tsc --noEmit`；`vitest run`（21 files / 122 tests）；`vite build` | type=3 解析、上传后发送、文件卡片、鉴权下载、失败重试 |
+| **浏览器文件 E2E** | **PASS** | Chrome + Compose 17 services（15 healthy + 2 exit 0） | 8 步：A 上传 `report.pdf` 并发送 → B 收到文件卡片 → B 下载 `report.pdf` → 非参与者 D `2503` |
+| 文件消息吞吐 / 下载性能 | **NOT RUN** | 本轮未做 | 可选 |
+
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
 | 项目 | 结果 | 证据 |
@@ -55,6 +67,7 @@
 | 5 分钟 soak / restart 稳定性 | **NOT RUN** | 历史结果仍为 2026-10-15 记录，未复跑 | 可选后续轮次 |
 | 文件吞吐档位（1 MiB/10 MiB、并发） | **NOT RUN** | 本轮未跑 file 负载 | 可选后续轮次 |
 | 图片上传/下载吞吐与预览性能 | **NOT RUN** | 未单独做图片性能档位 | 可选后续轮次 |
+| 普通文件消息吞吐/下载性能 | **NOT RUN** | 未单独做文件消息性能档位 | 可选后续轮次 |
 | 远端 GitHub Actions 结果 | **NOT OBSERVED** | 本环境无 GitHub API 访问；仅 local equivalent PASS | — |
 
 > 历史性能数字（`docs/performance/baseline.md`）是 2026-10-15 的记录；本轮最小场景结果只代表当前机器当前栈，不构成容量承诺，也不替代历史完整档位。
@@ -97,3 +110,4 @@ cd ..\admin; pnpm type-check; pnpm test; pnpm build
 - 2026-11-12：race / Compose / Kafka / 浏览器 E2E / 性能最小场景，见 `agent_logs/operations/day-8/`。
 - 2026-11-12：V2 Phase 1 图片消息（单测 / 聊天集成 / 浏览器 E2E），见 `agent_logs/operations/day-10/`。
 - 2026-11-14：图片 Phase 1 收尾（图片 race / 授权专项测试 / 群聊图片 E2E），见 `agent_logs/operations/day-11/`。
+- 2026-11-14：V2 Phase 1 普通文件消息（单测 / 聊天文件集成 / 浏览器文件 E2E），见 `agent_logs/operations/day-12/`。
