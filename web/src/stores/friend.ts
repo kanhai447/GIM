@@ -46,6 +46,11 @@ export const useFriendStore = defineStore('friend', () => {
     authFailureHandler = onAuthenticationFailure ?? null
   }
 
+  function applyPresence(userID: number, online: boolean): void {
+    const target = friends.value.find((friend) => friend.userID === userID)
+    if (target) target.isOnline = online
+  }
+
   function stop(): void {
     friends.value = []
     requests.value = []
@@ -177,6 +182,6 @@ export const useFriendStore = defineStore('friend', () => {
   return {
     friends, requests, searchResults, loading, requestsLoading, searching, lastError, searchKeyword, sentRequestIDs,
     onlineCount, friendIDs, pendingRequestCount,
-    start, stop, loadFriends, loadRequests, search, sendRequest, respond, updateRemark, remove,
+    start, stop, loadFriends, loadRequests, search, sendRequest, respond, updateRemark, remove, applyPresence,
   }
 })

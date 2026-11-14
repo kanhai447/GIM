@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PublicApiError } from '@/api/client'
+import { useFriendStore } from '@/stores/friend'
 import type { ChatConnectionState, ChatSendEnvelope, ChatServerEnvelope, ChatSession } from '@/types/chat'
 
 interface SocketCallbacks {
@@ -196,6 +197,21 @@ describe('chat store', () => {
     expect(store.lastError).toBe('文件上传失败')
     expect(store.currentMessages.some((item) => item.msg.type === 3)).toBe(false)
     expect(latestSocket().send).not.toHaveBeenCalled()
+  })
+
+  it('applies friend presence events to the friend store', async () => {
+    const store = await startStore()
+    const friendStore = useFriendStore()
+    friendStore.friends = [{
+      userID: 2, account: 'friend', nickname: 'Friend', avatar: '', abstract: '', remark: '',
+      isOnline: false, createdAt: '2026-11-14T12:00:00Z',
+    }]
+    latestSocket().options.onEnvelope({ event: 'friend.online', data: { userID: 2, at: '2026-11-14T12:00:00Z' } })
+    expect(friendStore.friends[0]?.isOnline).toBe(true)
+    latestSocket().options.onEnvelope({ event: 'friend.offline', data: { userID: 2, at: '2026-11-14T12:00:01Z' } })
+    expect(friendStore.friends[0]?.isOnline).toBe(false)
+    latestSocket().options.onEnvelope({ event: 'friend.online', data: { userID: 999, at: '2026-11-14T12:00:02Z' } })
+    expect(friendStore.friends).toHaveLength(1)
   })
 
   it('recalls an own sent message and replaces it on ACK', async () => {

@@ -107,7 +107,24 @@ export interface ChatErrorEnvelope {
   }
 }
 
-export type ChatServerEnvelope = ChatAckEnvelope | ChatMessageEnvelope | ChatErrorEnvelope
+export interface FriendPresenceData {
+  userID: number
+  at: string
+}
+
+export interface FriendOnlineEnvelope {
+  event: 'friend.online'
+  data: FriendPresenceData
+}
+
+export interface FriendOfflineEnvelope {
+  event: 'friend.offline'
+  data: FriendPresenceData
+}
+
+export type FriendPresenceEnvelope = FriendOnlineEnvelope | FriendOfflineEnvelope
+
+export type ChatServerEnvelope = ChatAckEnvelope | ChatMessageEnvelope | ChatErrorEnvelope | FriendPresenceEnvelope
 
 export type LocalMessageStatus = 'pending' | 'sent' | 'failed'
 

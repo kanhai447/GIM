@@ -164,6 +164,15 @@ describe('ChatSocketClient', () => {
     expect(parseChatServerEnvelope(JSON.stringify(badSize))).toBeNull()
   })
 
+  it('parses friend presence events and rejects malformed data', () => {
+    const online = { event: 'friend.online', data: { userID: 2, at: '2026-11-14T12:00:00Z' } }
+    expect(parseChatServerEnvelope(JSON.stringify(online))?.event).toBe('friend.online')
+    const offline = { event: 'friend.offline', data: { userID: 2, at: '2026-11-14T12:00:00Z' } }
+    expect(parseChatServerEnvelope(JSON.stringify(offline))?.event).toBe('friend.offline')
+    expect(parseChatServerEnvelope(JSON.stringify({ event: 'friend.online', data: { userID: '2', at: 'x' } }))).toBeNull()
+    expect(parseChatServerEnvelope(JSON.stringify({ event: 'friend.online', data: { userID: 2 } }))).toBeNull()
+  })
+
   it('parses withdraw messages and rejects malformed targets', () => {
     const withdraw = {
       event: 'chat.message',

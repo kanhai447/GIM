@@ -13,6 +13,7 @@ import {
   peerIDForMessage,
   toSentMessage,
 } from '@/stores/chat_reconcile'
+import { useFriendStore } from '@/stores/friend'
 import type {
   ChatConnectionState,
   ChatHistoryState,
@@ -439,6 +440,10 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function handleEnvelope(envelope: ChatServerEnvelope): void {
+    if (envelope.event === 'friend.online' || envelope.event === 'friend.offline') {
+      useFriendStore().applyPresence(envelope.data.userID, envelope.event === 'friend.online')
+      return
+    }
     if (envelope.event === 'chat.ack') {
       if (pendingRecalls.has(envelope.clientMsgId)) {
         const targetID = finishRecall(envelope.clientMsgId)

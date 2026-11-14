@@ -5,6 +5,7 @@ import type {
   ChatMessageEnvelope,
   ChatSendEnvelope,
   ChatServerEnvelope,
+  FriendPresenceEnvelope,
   PrivateChatMessage,
 } from '@/types/chat'
 import { isValidFilePayload, isValidImagePayload, isValidWithdrawPayload } from '@/utils/message'
@@ -67,6 +68,10 @@ export function parseChatServerEnvelope(raw: string): ChatServerEnvelope | null 
   }
   if (value.event === 'chat.message' && isMessage(value.data)) {
     return value as unknown as ChatMessageEnvelope
+  }
+  if ((value.event === 'friend.online' || value.event === 'friend.offline') && isRecord(value.data)) {
+    if (!isPositiveNumber(value.data.userID) || typeof value.data.at !== 'string') return null
+    return value as unknown as FriendPresenceEnvelope
   }
   if (value.event === 'error' && isRecord(value.error) && typeof value.error.code === 'number' && typeof value.error.message === 'string') {
     if (value.clientMsgId !== undefined && typeof value.clientMsgId !== 'string') return null

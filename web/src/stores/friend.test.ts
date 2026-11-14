@@ -92,6 +92,17 @@ describe('friend store', () => {
     expect(store.friends.map((item) => item.userID)).toEqual([3])
   })
 
+  it('applies presence updates for known friends only', async () => {
+    const store = useFriendStore()
+    await store.loadFriends()
+    store.applyPresence(2, true)
+    expect(store.friends.find((item) => item.userID === 2)?.isOnline).toBe(true)
+    store.applyPresence(3, false)
+    expect(store.friends.find((item) => item.userID === 3)?.isOnline).toBe(false)
+    store.applyPresence(999, true)
+    expect(store.friends).toHaveLength(2)
+  })
+
   it('reports authentication failures through the handler', async () => {
     const store = useFriendStore()
     const handler = vi.fn()
