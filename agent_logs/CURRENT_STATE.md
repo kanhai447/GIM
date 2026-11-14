@@ -2,39 +2,40 @@
 
 - **PROJECT:** GIM
 - **V1 STATUS:** COMPLETED（文本 IM + 文件 + 好友闭环 + Admin + 审计）
-- **V2 STATUS:** Phase 1 图片消息 COMPLETED（仅图片；视频/语音/普通文件/回复/引用/撤回/@/图文未实现）
-- **Current Round:** 2026-11-12 Day 10 — V2 Phase 1 图片消息闭环：COMPLETED
+- **V2 STATUS:** Phase 1 图片消息 COMPLETED（含 race/授权/群聊 E2E 收尾）；其余富消息未实现
+- **Current Round:** 2026-11-14 Day 11 — 图片 Phase 1 收尾（授权审计/测试、race、群聊图片 E2E）：COMPLETED
 - **Branch:** `main`
-- **Tags:** `gim-v1`（2026-10-15 基线）、`gim-v1.1`（2026-11-12 验证状态版本）；均未移动，本轮未打新 tag
-- **Next Authorized Work:** 图片代码 `-race`、群聊图片 E2E，或下一 V2 Phase（待用户决定）
+- **Tags:** `gim-v1`、`gim-v1.1`；均未移动，本轮未打新 tag
+- **Next Authorized Work:** 图片吞吐/预览性能，或下一 V2 Phase（待用户决定）
 
 ## 当前事实
 
-- 图片消息 `msg.type=2`：先 `POST /api/file/image` 上传，再经 `chat.send`/`group.send` 发送 `imageMsg.fileID`；服务端校验文件归属、`image/*` MIME 与 `IMAGE_MESSAGE_MAX_BYTES`（默认 10 MiB），用 DB 元数据规范化后与文本走同一事务、ACK、推送与历史。
-- 错误码：Chat `2211–2214`（文件不存在/非本人、非图片、超限、参数非法），Group `2412–2415`；未知类型仍为 `2201/2403`；幂等比较含 `type+fileID`。
-- 图片下载：`GET /api/file/:id` 允许所有者或引用该文件的聊天/群聊消息参与者；非参与者 `2503`；UUID 下载仍仅所有者。
-- Web：私聊/群聊共用 `MessageBubble`，支持选择图片、上传、pending/ACK/重试、渲染、点击预览、失败占位；未知类型显示“暂不支持的消息”。
-- 无 schema 变更：复用 `chat_messages.msg` / `group_messages.msg` 与 `user_files`/`file_objects`。
-- 文档已同步：docs/06 §5.1–5.4、docs/05 §6/§7、docs/07 §2.1、docs/04 消息结构、README、validation-status、known-issues。
+- 图片消息 `msg.type=2`：上传 `POST /api/file/image` → `chat.send`/`group.send` 发送 `imageMsg.fileID`；服务端校验归属/`image/*`/`IMAGE_MESSAGE_MAX_BYTES`，事务落库、ACK、推送、历史同构。
+- 文件下载授权（`GET /api/file/:id`）：
+  - 所有者始终允许；
+  - 私聊发送者/接收方，且引用消息未 tombstone；
+  - 当前群成员，且群消息未 tombstone；
+  - 退群/被踢、tombstone 后、非参与者统一 `2503`；
+  - 文本消息不构成文件引用、不触发下载。
+- 授权查询只读现有表，`SELECT 1 … LIMIT 1`，无 schema/索引变更；JSON 无索引与无速率限制已登记。
+- 浏览器已缓存的图片副本不因退群/tombstone 回收（客户端缓存语义）。
+- Web：私聊/群聊共用 `MessageBubble`，支持上传、pending/ACK/重试、渲染、预览、失败占位。
 
-## 验证矩阵（本轮真实执行）
+## 验证矩阵（真实执行）
 
 | 项目 | 结果 |
 |---|---|
-| `go build ./...` / `go vet ./...` / `gofmt -l .` | PASS / PASS / 无输出 |
-| `go test ./... -count=1` | PASS（69 个包） |
-| 聊天图片集成（真实 MySQL/Redis/WS） | **PASS**（ACK、接收、历史、重复 clientMsgId 仅 1 行、归属/MIME/大小、接收方下载授权） |
-| 群聊图片 | PASS（单测；WS E2E 未单独跑） |
-| Web `vue-tsc` / `vitest` / `vite build` | PASS / 21 files 114 tests / PASS |
-| 浏览器图片 E2E（Chrome + Compose） | **PASS**（10 步：注册/好友/上传/发送/接收/预览/关闭） |
+| 后端 `go build` / `go vet` / `gofmt` / `go test ./...` | PASS / PASS / 无输出 / 69 包 PASS |
+| 授权专项测试（真实 MySQL） | **PASS**（所有者/私聊接收方/群成员/非参与者 2503/tombstone/退群/未知 fileID/文本不授权） |
+| 图片代码 Linux Docker race | **PASS**（全量 `go test -race ./...`，exit 0，无 race warning） |
+| 群聊图片 WS E2E（Chrome + Compose） | **PASS**（B/C 收到并预览；D 非成员 2503；B 退群后 2503；owner 仍可下载） |
+| Web `vue-tsc` / `vitest` | PASS / 21 files 114 tests |
 
 ## 未验证（NOT RUN）
 
-- 图片代码 `go test -race`（race 上一轮覆盖的是 V1 代码）。
-- 群聊图片浏览器 E2E、图片吞吐/预览性能。
+- 图片上传/下载吞吐与预览性能。
 - 完整性能阶梯、soak/restart、文件吞吐、远端 CI（历史遗留）。
 
 ## Push
 
-- 本轮 5 个功能/文档 commit 提交后推送到 `origin/main`；不使用 `--force`，不移动 tag。
-- `gim-v1` / `gim-v1.1` 保持不变。
+- 本轮修复/测试/文档 commit 推送至 `origin/main`；不 `--force`，不移动 tag。
