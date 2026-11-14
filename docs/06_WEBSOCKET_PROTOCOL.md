@@ -163,13 +163,14 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 
 ## 5. 消息类型
 
-沿用参考 `ctype.MsgType` 的类型编号。V2 Phase 1 实现 **文本 `type=1`** 与 **图片 `type=2`**；其余类型仍未实现。
+沿用参考 `ctype.MsgType` 的类型编号。V2 已实现 **文本 `type=1`**、**图片 `type=2`** 与 **普通文件 `type=3`**；其余类型仍未实现。
 
 | type | 语义 | 状态 |
 |---|---|---|
 | `1` | 文本 | 已实现（V1） |
-| `2` | 图片 | 已实现（V2 Phase 1，仅图片消息，不含视频/语音/文件/回复/引用/撤回/@/图文） |
-| 其他 | 视频文件、普通文件、语音、回复/引用、撤回、@、图文 | V2 / 未实现；服务端返回 `2201`/`2403` |
+| `2` | 图片 | 已实现（V2 Phase 1） |
+| `3` | 普通文件 | 已实现（V2 Phase 1） |
+| 其他 | 视频文件、语音、回复/引用、撤回、@、图文 | V2 / 未实现；服务端返回 `2201`/`2403` |
 
 ### 5.1 图片消息 payload
 
@@ -208,7 +209,7 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 
 ### 5.2 ACK 与幂等
 
-图片与文本走同一事务（insert message + 更新 session/unread），ACK 语义不变：事务成功提交后才返回 `messageId`/`createdAt`。`clientMsgId` 幂等比较包含 `type` 与 `fileID`：同一 sender/clientMsgId 改成另一张图片返回 `2205`/`2407`，不能生成第二条消息。
+图片与文本走同一事务（insert message + 更新 session/unread），ACK 语义不变：事务成功提交后才返回 `messageId`/`createdAt`。`clientMsgId` 幂等比较包含 `type` 与 `fileID`：同一 sender/clientMsgId 改成另一张图片返回 `2205`/`2407`，不能生成第二条消息。普通文件消息同样适用（比较 `fileMsg.fileID`）。
 
 ### 5.3 图片消息错误码
 
@@ -227,9 +228,54 @@ sender 所有设备（包括 originating Client）均可收到 message；origina
 
 - `type=1` 文本的字段、校验、ACK、历史、前端渲染完全不变。
 - `type=2` 是新增类型，不新增表/列；复用 `chat_messages.msg` / `group_messages.msg` 现有 JSON 列。
-- 旧客户端收到 `type=2` 可能无法渲染；GIM Web 对无法识别的消息显示占位，不崩溃、不影响其他消息。
-- 旧服务端收到 `type=2` 返回 `2201`/`2403`（当前行为）。
+- `type=3` 同样是新增类型，复用同一 JSON 列与 `user_files`/`file_objects`。
+- 旧客户端收到 `type=2`/`type=3` 可能无法渲染；GIM Web 对无法识别的消息显示占位，不崩溃、不影响其他消息。
+- 旧服务端收到 `type=2`/`type=3` 返回 `2201`/`2403`（当前行为）。
 - 图片上传与发消息是两个步骤：先 `POST /api/file/image`（multipart 字段 `image`）拿到 `user_files.id`，再发送图片消息；上传失败不得发送。
+
+### 5.5 普通文件消息
+
+`chat.send` 与 `group.send` 的 `msg` 使用同一结构：
+
+```json
+{
+  "type": 3,
+  "fileMsg": {
+    "fileID": 123,
+    "url": "/api/file/123",
+    "fileName": "report.pdf",
+    "size": 123456,
+    "mimeType": "application/pdf"
+  }
+}
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `fileID` | 是 | `user_files.id`（上传接口返回的 `id`），必须是发送者自己的引用 |
+| `url` | 否 | 服务端回填为 `/api/file/{fileID}`；客户端提交值被忽略 |
+| `fileName` | 否 | 服务端以 `user_files.original_name` 回填；客户端提交值被忽略 |
+| `size` | 否 | 服务端以 `file_objects.size` 回填；客户端提交值被忽略 |
+| `mimeType` | 否 | 服务端以 `file_objects.mime_type`（嗅探结果）回填 |
+
+服务端在事务前校验：
+
+1. `fileID > 0`，且 `user_files.user_id = senderID`；不存在或不属于发送者统一返回 `2215`/`2416`（不区分，避免枚举）。
+2. **不限制 MIME 前缀**（普通文件允许任意类型；上传接口自身仍做大小/文件名/流式限制）。
+3. `file_objects.size <= FILE_MESSAGE_MAX_BYTES`（默认 25 MiB），否则 `2216`/`2417`。
+4. `type=3` 必须携带 `fileMsg.fileID`；`size` 若提供必须为非负数，否则 `2217`/`2418`。
+
+校验通过后，服务端用数据库元数据规范化 payload（`url`、`fileName`、`size`、`mimeType`）再落库；`msg` 只存元数据，不存二进制，不返回原始文件路径。历史与 WS 推送同构。下载复用文件授权语义（所有者、私聊参与者、群成员；tombstone/退群/非参与者 `2503`）；授权查询同时匹配 `imageMsg.fileID` 与 `fileMsg.fileID`。
+
+#### 普通文件消息错误码
+
+| 场景 | Chat | Group |
+|---|---|---|
+| 文件不存在或不属于发送者 | `2215` | `2416` |
+| 文件超过 `FILE_MESSAGE_MAX_BYTES` | `2216` | `2417` |
+| 文件消息参数缺失/非法 | `2217` | `2418` |
+| 未知消息类型 | `2201` | `2403` |
+| 同一 clientMsgId 复用于不同逻辑消息 | `2205` | `2407` |
 
 ## 6. 撤回
 

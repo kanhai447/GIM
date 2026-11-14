@@ -158,6 +158,13 @@ Day 3 / Checkpoint 5 的精确用户文件契约：
 - 上传与发送是两个步骤；上传失败不得发送消息。消息只存元数据（fileID/url/width/height/size/mimeType），不存二进制；预览/下载仍走 `GET /api/file/:id`。
 - 图片消息不新增 HTTP 端点；历史仍用 `GET /api/chat/history` / `GET /api/group/history/:id`，返回结构与 WS 同构。
 
+文件消息与上传的关系（V2 Phase 1，`msg.type=3`）：
+
+- 先调用 `POST /api/file/file`（multipart 字段 `file`）上传，响应中的 `id` 即 `user_files.id`；`fileName/mimeType/size/url` 也来自该响应。
+- 再通过 `chat.send` / `group.send` 发送 `msg.type=3`，`msg.fileMsg.fileID` 填上述 `id`；服务端校验文件归属与 `FILE_MESSAGE_MAX_BYTES`（默认 25 MiB）后落库。
+- **不限制 MIME 前缀**（普通文件允许任意类型）；文件大小仍受上传接口的 `FILE_MAX_UPLOAD_BYTES`（默认 50 MiB）约束。
+- 上传与发送是两个步骤；上传失败不得发送消息。消息只存元数据（fileID/url/fileName/size/mimeType），不存二进制；下载仍走 `GET /api/file/:id`，授权语义与图片消息相同。
+
 ### 文件下载授权（V2 Phase 1）
 
 `GET /api/file/:id` 的访问语义：
@@ -170,6 +177,8 @@ Day 3 / Checkpoint 5 的精确用户文件契约：
 | 退群/被踢用户 | **拒绝**（除非同时是文件所有者） |
 | 非参与者 / 文件不存在 | 统一返回 `2503`，不区分“存在但无权”与“不存在” |
 | 文本消息 | 文本内容不构成文件引用；不授权，也不会触发下载请求 |
+
+图片消息与普通文件消息（`type=2`/`type=3`）都适用上表；授权查询同时匹配 `imageMsg.fileID` 与 `fileMsg.fileID`。
 
 - 授权只读 `user_files`、`file_objects`、`chat_messages`、`group_messages`、`group_members`，无 schema 变更；JSON 引用使用 `LIMIT 1` 命中即停。
 - `JSON_EXTRACT` 无专用索引，仅影响“非所有者下载”路径；当前无速率限制，二者记录在 `docs/known-issues.md`。
@@ -196,6 +205,17 @@ Chat Checkpoint 5 使用：`2207` 会话/历史查询参数无效、`2208` sessi
 | `2413` | Group | 文件不是图片（MIME 非 `image/*`） |
 | `2414` | Group | 图片超过大小限制 |
 | `2415` | Group | 图片消息参数缺失/非法 |
+
+普通文件消息错误码（V2 Phase 1）：
+
+| Code | 归属 | 语义 |
+|---|---|---|
+| `2215` | Chat | 文件不存在或不属于发送者 |
+| `2216` | Chat | 文件超过 `FILE_MESSAGE_MAX_BYTES` |
+| `2217` | Chat | 文件消息参数缺失/非法 |
+| `2416` | Group | 文件不存在或不属于发送者 |
+| `2417` | Group | 文件超过 `FILE_MESSAGE_MAX_BYTES` |
+| `2418` | Group | 文件消息参数缺失/非法 |
 
 图片校验失败不落库、不发成功 ACK；错误响应不包含存储路径、SQL 或内部错误。`IMAGE_MESSAGE_MAX_BYTES` 默认 10 MiB，与 File 的 50 MiB 上传上限相互独立。
 
