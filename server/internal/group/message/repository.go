@@ -43,6 +43,15 @@ type FileRepository interface {
 	GetOwnedFile(context.Context, uint64, uint64) (FileInfo, error)
 }
 
+// RecallRepository supports withdraw-message validation and read-side
+// replacement. Optional so existing repositories remain valid.
+type RecallRepository interface {
+	GetByIDForRecall(context.Context, uint64) (Message, bool, error)
+	IsRecalled(context.Context, uint64) (bool, error)
+	GetWithdrawBySenderAndTarget(context.Context, uint64, uint64) (Message, bool, error)
+	RecalledTargets(context.Context, []uint64) (map[uint64]bool, error)
+}
+
 type Message struct {
 	ID            uint64
 	GroupID       uint64

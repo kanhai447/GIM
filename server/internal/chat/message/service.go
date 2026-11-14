@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	TextMessageType  = uint8(1)
-	ImageMessageType = uint8(2)
-	FileMessageType  = uint8(3)
+	TextMessageType     = uint8(1)
+	ImageMessageType    = uint8(2)
+	FileMessageType     = uint8(3)
+	WithdrawMessageType = uint8(4)
 
 	CodeInvalidMessage      = uint32(2201)
 	CodeRecipientMissing    = uint32(2202)
@@ -35,6 +36,11 @@ const (
 	CodeFileInvalid         = uint32(2215)
 	CodeFileTooLarge        = uint32(2216)
 	CodeFilePayload         = uint32(2217)
+	CodeWithdrawTarget      = uint32(2218)
+	CodeWithdrawNotOwner    = uint32(2219)
+	CodeWithdrawWindow      = uint32(2220)
+	CodeWithdrawRecalled    = uint32(2221)
+	CodeWithdrawPayload     = uint32(2222)
 )
 
 const (
@@ -63,11 +69,12 @@ type Config struct {
 	MaxPayloadBytes   int
 	MaxImageBytes     int
 	MaxFileBytes      int
+	RecallWindow      time.Duration
 	DependencyTimeout time.Duration
 }
 
 func DefaultConfig() Config {
-	return Config{MaxTextBytes: 4096, MaxPayloadBytes: 16 * 1024, MaxImageBytes: 10 << 20, MaxFileBytes: 25 << 20, DependencyTimeout: 2 * time.Second}
+	return Config{MaxTextBytes: 4096, MaxPayloadBytes: 16 * 1024, MaxImageBytes: 10 << 20, MaxFileBytes: 25 << 20, RecallWindow: 120 * time.Second, DependencyTimeout: 2 * time.Second}
 }
 
 type SendRequest struct {
@@ -90,11 +97,12 @@ type Service struct {
 	friends    FriendshipRepository
 	images     ImageRepository
 	files      FileRepository
+	recalls    RecallRepository
 	config     Config
 }
 
 func NewService(messages Repository, recipients RecipientValidator, friends FriendshipRepository, config Config) (*Service, error) {
-	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.MaxImageBytes < 1 || config.MaxFileBytes < 1 || config.DependencyTimeout <= 0 {
+	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.MaxImageBytes < 1 || config.MaxFileBytes < 1 || config.RecallWindow <= 0 || config.DependencyTimeout <= 0 {
 		return nil, errors.New("invalid chat message service configuration")
 	}
 	sends, ok := messages.(SendRepository)
@@ -105,9 +113,10 @@ func NewService(messages Repository, recipients RecipientValidator, friends Frie
 	sessions, _ := messages.(SessionRepository)
 	images, _ := messages.(ImageRepository)
 	files, _ := messages.(FileRepository)
+	recalls, _ := messages.(RecallRepository)
 	return &Service{
 		messages: messages, sends: sends, history: history, sessions: sessions,
-		recipients: recipients, friends: friends, images: images, files: files, config: config,
+		recipients: recipients, friends: friends, images: images, files: files, recalls: recalls, config: config,
 	}, nil
 }
 
@@ -125,6 +134,10 @@ func (service *Service) SendPrivateMessage(ctx context.Context, senderID uint64,
 		return SendResult{Message: existing}, nil
 	case !errors.Is(err, ErrNotFound):
 		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+
+	if request.Message.Type == WithdrawMessageType {
+		return service.sendWithdraw(ctx, senderID, request)
 	}
 
 	policyContext, policyCancel := context.WithTimeout(ctx, service.config.DependencyTimeout)
@@ -195,6 +208,55 @@ func (service *Service) SendPrivateMessage(ctx context.Context, senderID uint64,
 	return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
 }
 
+func (service *Service) sendWithdraw(ctx context.Context, senderID uint64, request SendRequest) (SendResult, error) {
+	if service.recalls == nil {
+		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	targetID := request.Message.WithdrawMsg.MsgID
+	if existing, found, err := service.recalls.GetWithdrawBySenderAndTarget(ctx, senderID, targetID); err != nil {
+		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	} else if found {
+		return SendResult{Message: existing}, nil
+	}
+	target, tombstoned, err := service.recalls.GetByIDForRecall(ctx, targetID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return SendResult{}, public(CodeWithdrawTarget, "撤回目标消息不存在", nil)
+		}
+		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	if target.SenderID != senderID && target.ReceiverID != senderID {
+		return SendResult{}, public(CodeWithdrawTarget, "撤回目标消息不存在", nil)
+	}
+	if target.SenderID != senderID {
+		return SendResult{}, public(CodeWithdrawNotOwner, "只能撤回自己发送的消息", nil)
+	}
+	if tombstoned {
+		return SendResult{}, public(CodeWithdrawRecalled, "消息已撤回或不可撤回", nil)
+	}
+	recalled, err := service.recalls.IsRecalled(ctx, targetID)
+	if err != nil {
+		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	if recalled {
+		return SendResult{}, public(CodeWithdrawRecalled, "消息已撤回或不可撤回", nil)
+	}
+	if time.Since(target.CreatedAt) > service.config.RecallWindow {
+		return SendResult{}, public(CodeWithdrawWindow, "超过撤回时间窗口", nil)
+	}
+	persisted, err := service.sends.PersistWithSessions(ctx, Message{
+		SenderID: senderID, ReceiverID: target.ReceiverID, ClientMsgID: request.ClientMsgID,
+		Type: WithdrawMessageType, Preview: "[撤回]", Payload: request.Message,
+	})
+	if err != nil {
+		return SendResult{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	if !sameLogicalMessage(persisted.Message, request) {
+		return SendResult{}, public(CodeIdempotencyConflict, "clientMsgId 已用于其他消息", nil)
+	}
+	return SendResult{Message: persisted.Message, CreatedNew: persisted.CreatedNew}, nil
+}
+
 type SessionList struct {
 	Items []Session
 	Count int64
@@ -219,6 +281,21 @@ func (service *Service) ListSessions(ctx context.Context, userID uint64, limit i
 	items, count, err := service.sessions.ListSessions(ctx, userID, limit)
 	if err != nil {
 		return SessionList{}, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	ids := make([]uint64, 0, len(items))
+	for _, item := range items {
+		if item.LastMessage.ID != 0 {
+			ids = append(ids, item.LastMessage.ID)
+		}
+	}
+	recalled, err := service.recalledSet(ctx, ids)
+	if err != nil {
+		return SessionList{}, err
+	}
+	for index := range items {
+		if recalled[items[index].LastMessage.ID] {
+			markRecalled(&items[index].LastMessage)
+		}
 	}
 	return SessionList{Items: items, Count: count}, nil
 }
@@ -246,6 +323,19 @@ func (service *Service) History(ctx context.Context, userID, peerID, beforeMessa
 	hasMore := len(items) > limit
 	if hasMore {
 		items = items[:limit]
+	}
+	ids := make([]uint64, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	recalled, err := service.recalledSet(ctx, ids)
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	for index := range items {
+		if recalled[items[index].ID] {
+			markRecalled(&items[index])
+		}
 	}
 	for left, right := 0, len(items)-1; left < right; left, right = left+1, right-1 {
 		items[left], items[right] = items[right], items[left]
@@ -327,6 +417,26 @@ func (service *Service) HideSession(ctx context.Context, userID, peerID uint64) 
 	return nil
 }
 
+func (service *Service) recalledSet(ctx context.Context, ids []uint64) (map[uint64]bool, error) {
+	if service.recalls == nil || len(ids) == 0 {
+		return map[uint64]bool{}, nil
+	}
+	recalled, err := service.recalls.RecalledTargets(ctx, ids)
+	if err != nil {
+		return nil, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	return recalled, nil
+}
+
+func markRecalled(item *Message) {
+	if item.ID == 0 {
+		return
+	}
+	item.Type = WithdrawMessageType
+	item.Preview = "[撤回]"
+	item.Payload = protocol.MessagePayload{Type: WithdrawMessageType, WithdrawMsg: &protocol.WithdrawMessage{MsgID: item.ID}}
+}
+
 func (service *Service) validate(senderID uint64, request SendRequest) error {
 	if senderID == 0 || request.ReceiverID == 0 || senderID == request.ReceiverID {
 		return public(CodeInvalidMessage, "消息发送者或接收者无效", nil)
@@ -350,6 +460,10 @@ func (service *Service) validate(senderID uint64, request SendRequest) error {
 	case FileMessageType:
 		if err := validateFilePayload(request.Message); err != nil {
 			return err
+		}
+	case WithdrawMessageType:
+		if request.Message.WithdrawMsg == nil || request.Message.WithdrawMsg.MsgID == 0 {
+			return public(CodeWithdrawPayload, "撤回消息参数无效", nil)
 		}
 	default:
 		return public(CodeInvalidMessage, "暂不支持该消息类型", nil)
@@ -457,7 +571,14 @@ func public(code uint32, message string, cause error) error {
 }
 
 func sameLogicalMessage(existing Message, request SendRequest) bool {
-	if existing.ReceiverID != request.ReceiverID || existing.Type != request.Message.Type {
+	if existing.Type != request.Message.Type {
+		return false
+	}
+	if existing.Type == WithdrawMessageType {
+		return existing.Payload.WithdrawMsg != nil && request.Message.WithdrawMsg != nil &&
+			existing.Payload.WithdrawMsg.MsgID == request.Message.WithdrawMsg.MsgID
+	}
+	if existing.ReceiverID != request.ReceiverID {
 		return false
 	}
 	switch existing.Type {

@@ -131,6 +131,7 @@ func run(args []string) error {
 	groupMessageConfig := groupmessage.DefaultConfig()
 	groupMessageConfig.MaxImageBytes = groupConfig.MaxImageBytes
 	groupMessageConfig.MaxFileBytes = groupConfig.MaxFileBytes
+	groupMessageConfig.RecallWindow = groupConfig.RecallWindow
 	messageService, err := groupmessage.NewService(messageRepository, groupModule.Service, groupMessageConfig)
 	if err != nil {
 		return err

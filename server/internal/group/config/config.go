@@ -15,6 +15,7 @@ type Config struct {
 	RedisTimeout      time.Duration
 	MaxImageBytes     int
 	MaxFileBytes      int
+	RecallWindow      time.Duration
 }
 
 type WebSocketConfig struct {
@@ -44,7 +45,11 @@ func FromValues(values platformconfig.Values) (Config, error) {
 	if err != nil || maxFileBytes < 1 || maxFileBytes > 1<<30 {
 		return Config{}, errors.New("configuration key FILE_MESSAGE_MAX_BYTES must be between 1 and 1073741824")
 	}
-	return Config{DependencyTimeout: dependency, RedisTimeout: redisTimeout, MaxImageBytes: maxImageBytes, MaxFileBytes: maxFileBytes}, nil
+	recallSeconds, err := integer(values, "RECALL_WINDOW_SECONDS", 120)
+	if err != nil || recallSeconds < 1 || recallSeconds > 86400 {
+		return Config{}, errors.New("configuration key RECALL_WINDOW_SECONDS must be between 1 and 86400")
+	}
+	return Config{DependencyTimeout: dependency, RedisTimeout: redisTimeout, MaxImageBytes: maxImageBytes, MaxFileBytes: maxFileBytes, RecallWindow: time.Duration(recallSeconds) * time.Second}, nil
 }
 
 func WebSocketFromValues(values platformconfig.Values) (WebSocketConfig, error) {

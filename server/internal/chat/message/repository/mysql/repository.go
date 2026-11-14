@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
@@ -18,15 +19,16 @@ type Repository struct{ db *gorm.DB }
 func New(db *gorm.DB) *Repository { return &Repository{db: db} }
 
 type record struct {
-	ID          uint64          `gorm:"column:id;primaryKey"`
-	SenderID    uint64          `gorm:"column:send_user_id"`
-	ReceiverID  uint64          `gorm:"column:rev_user_id"`
-	ClientMsgID string          `gorm:"column:client_msg_id"`
-	Type        uint8           `gorm:"column:msg_type"`
-	Preview     string          `gorm:"column:msg_preview"`
-	Payload     json.RawMessage `gorm:"column:msg;type:json"`
-	CreatedAt   time.Time       `gorm:"column:created_at"`
-	UpdatedAt   time.Time       `gorm:"column:updated_at"`
+	ID             uint64          `gorm:"column:id;primaryKey"`
+	SenderID       uint64          `gorm:"column:send_user_id"`
+	ReceiverID     uint64          `gorm:"column:rev_user_id"`
+	ClientMsgID    string          `gorm:"column:client_msg_id"`
+	Type           uint8           `gorm:"column:msg_type"`
+	Preview        string          `gorm:"column:msg_preview"`
+	Payload        json.RawMessage `gorm:"column:msg;type:json"`
+	CreatedAt      time.Time       `gorm:"column:created_at"`
+	UpdatedAt      time.Time       `gorm:"column:updated_at"`
+	AdminDeletedAt *time.Time      `gorm:"column:admin_deleted_at"`
 }
 
 func (record) TableName() string { return "chat_messages" }
@@ -210,6 +212,83 @@ func encodeRecord(value message.Message) (record, error) {
 		SenderID: value.SenderID, ReceiverID: value.ReceiverID, ClientMsgID: value.ClientMsgID,
 		Type: value.Type, Preview: value.Preview, Payload: payload,
 	}, nil
+}
+
+func (repository *Repository) GetByIDForRecall(ctx context.Context, messageID uint64) (message.Message, bool, error) {
+	var row record
+	err := repository.db.WithContext(ctx).Where("id = ?", messageID).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return message.Message{}, false, message.ErrNotFound
+	}
+	if err != nil {
+		return message.Message{}, false, fmt.Errorf("query recall target: %w", err)
+	}
+	value, err := toDomain(row)
+	if err != nil {
+		return message.Message{}, false, err
+	}
+	return value, row.AdminDeletedAt != nil, nil
+}
+
+func (repository *Repository) IsRecalled(ctx context.Context, targetID uint64) (bool, error) {
+	return repository.withdrawExists(ctx, strconv.FormatUint(targetID, 10))
+}
+
+func (repository *Repository) GetWithdrawBySenderAndTarget(ctx context.Context, senderID, targetID uint64) (message.Message, bool, error) {
+	var row record
+	err := repository.db.WithContext(ctx).
+		Where("send_user_id = ? AND msg_type = 4 AND admin_deleted_at IS NULL", senderID).
+		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.withdrawMsg.msgID')) = ?", strconv.FormatUint(targetID, 10)).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return message.Message{}, false, nil
+	}
+	if err != nil {
+		return message.Message{}, false, fmt.Errorf("query existing withdraw: %w", err)
+	}
+	value, err := toDomain(row)
+	if err != nil {
+		return message.Message{}, false, err
+	}
+	return value, true, nil
+}
+
+func (repository *Repository) RecalledTargets(ctx context.Context, ids []uint64) (map[uint64]bool, error) {
+	result := make(map[uint64]bool, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	values := make([]string, 0, len(ids))
+	for _, id := range ids {
+		values = append(values, strconv.FormatUint(id, 10))
+	}
+	var rows []struct {
+		Payload json.RawMessage `gorm:"column:msg"`
+	}
+	if err := repository.db.WithContext(ctx).Table("chat_messages").Select("msg").
+		Where("msg_type = 4 AND admin_deleted_at IS NULL").
+		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.withdrawMsg.msgID')) IN ?", values).
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("query recalled targets: %w", err)
+	}
+	for _, row := range rows {
+		var payload protocol.MessagePayload
+		if json.Unmarshal(row.Payload, &payload) == nil && payload.WithdrawMsg != nil {
+			result[payload.WithdrawMsg.MsgID] = true
+		}
+	}
+	return result, nil
+}
+
+func (repository *Repository) withdrawExists(ctx context.Context, target string) (bool, error) {
+	var hit int
+	if err := repository.db.WithContext(ctx).Table("chat_messages").Select("1").
+		Where("msg_type = 4 AND admin_deleted_at IS NULL").
+		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.withdrawMsg.msgID')) = ?", target).
+		Limit(1).Scan(&hit).Error; err != nil {
+		return false, fmt.Errorf("query recall state: %w", err)
+	}
+	return hit == 1, nil
 }
 
 func isDuplicate(err error) bool {

@@ -130,6 +130,7 @@ func run(args []string) error {
 	messageConfig.MaxPayloadBytes = chatConfiguration.MaxPayloadBytes
 	messageConfig.MaxImageBytes = chatConfiguration.MaxImageBytes
 	messageConfig.MaxFileBytes = chatConfiguration.MaxFileBytes
+	messageConfig.RecallWindow = chatConfiguration.RecallWindow
 	messageConfig.DependencyTimeout = chatConfiguration.DependencyTimeout
 	messageRepository := chatmysql.New(mysqlClient.DB())
 	messageService, err := message.NewService(

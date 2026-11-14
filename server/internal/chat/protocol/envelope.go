@@ -59,11 +59,17 @@ type FileMessage struct {
 	MIMEType string `json:"mimeType,omitempty"`
 }
 
+// WithdrawMessage recalls an earlier message by server message ID.
+type WithdrawMessage struct {
+	MsgID uint64 `json:"msgID"`
+}
+
 type MessagePayload struct {
-	Type     uint8         `json:"type"`
-	TextMsg  *TextMessage  `json:"textMsg,omitempty"`
-	ImageMsg *ImageMessage `json:"imageMsg,omitempty"`
-	FileMsg  *FileMessage  `json:"fileMsg,omitempty"`
+	Type        uint8            `json:"type"`
+	TextMsg     *TextMessage     `json:"textMsg,omitempty"`
+	ImageMsg    *ImageMessage    `json:"imageMsg,omitempty"`
+	FileMsg     *FileMessage     `json:"fileMsg,omitempty"`
+	WithdrawMsg *WithdrawMessage `json:"withdrawMsg,omitempty"`
 }
 
 type ChatSendData struct {

@@ -46,6 +46,16 @@ func TestDecodeFileMessagePayload(t *testing.T) {
 	}
 }
 
+func TestDecodeWithdrawMessagePayload(t *testing.T) {
+	data, err := DecodeData[ChatSendData](json.RawMessage(`{"revUserID":42,"msg":{"type":4,"withdrawMsg":{"msgID":123}}}`))
+	if err != nil || data.Message.Type != 4 || data.Message.WithdrawMsg == nil || data.Message.WithdrawMsg.MsgID != 123 {
+		t.Fatalf("DecodeData() = %#v, %v", data, err)
+	}
+	if _, err := DecodeData[ChatSendData](json.RawMessage(`{"revUserID":42,"msg":{"type":4,"withdrawMsg":{"unknown":1}}}`)); err == nil {
+		t.Fatal("DecodeData() accepted an unknown withdraw field")
+	}
+}
+
 func TestDecodeRejectsInvalidEnvelope(t *testing.T) {
 	for _, payload := range [][]byte{
 		nil,

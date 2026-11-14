@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -11,14 +12,15 @@ import (
 )
 
 type memoryRepository struct {
-	mu       sync.Mutex
-	nextID   uint64
-	rows     map[string]Message
-	images   map[uint64]ImageFile
-	imageErr error
-	files    map[uint64]FileInfo
-	fileErr  error
-	err      error
+	mu         sync.Mutex
+	nextID     uint64
+	rows       map[string]Message
+	images     map[uint64]ImageFile
+	imageErr   error
+	files      map[uint64]FileInfo
+	fileErr    error
+	tombstoned map[uint64]bool
+	err        error
 }
 
 func (repository *memoryRepository) Create(_ context.Context, value Message) (Message, error) {
@@ -98,6 +100,78 @@ func (repository *memoryRepository) GetOwnedFile(_ context.Context, _ uint64, fi
 		return FileInfo{}, ErrFileNotFound
 	}
 	return file, nil
+}
+
+func (repository *memoryRepository) GetByIDForRecall(_ context.Context, messageID uint64) (Message, bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for _, value := range repository.rows {
+		if value.ID == messageID {
+			return value, repository.tombstoned[messageID], nil
+		}
+	}
+	return Message{}, false, ErrNotFound
+}
+
+func (repository *memoryRepository) IsRecalled(_ context.Context, targetID uint64) (bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for _, value := range repository.rows {
+		if value.Type == WithdrawMessageType && value.Payload.WithdrawMsg != nil && value.Payload.WithdrawMsg.MsgID == targetID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (repository *memoryRepository) GetWithdrawBySenderAndTarget(_ context.Context, senderID, targetID uint64) (Message, bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for _, value := range repository.rows {
+		if value.SenderID == senderID && value.Type == WithdrawMessageType && value.Payload.WithdrawMsg != nil && value.Payload.WithdrawMsg.MsgID == targetID {
+			return value, true, nil
+		}
+	}
+	return Message{}, false, nil
+}
+
+func (repository *memoryRepository) RecalledTargets(_ context.Context, ids []uint64) (map[uint64]bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	targets := make(map[uint64]bool, len(ids))
+	wanted := make(map[uint64]bool, len(ids))
+	for _, id := range ids {
+		wanted[id] = true
+	}
+	for _, value := range repository.rows {
+		if value.Type == WithdrawMessageType && value.Payload.WithdrawMsg != nil && wanted[value.Payload.WithdrawMsg.MsgID] {
+			targets[value.Payload.WithdrawMsg.MsgID] = true
+		}
+	}
+	return targets, nil
+}
+
+func (repository *memoryRepository) ListHistory(_ context.Context, userID, peerID, beforeID uint64, limit int) ([]Message, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	items := make([]Message, 0)
+	for _, value := range repository.rows {
+		if value.SenderID != userID && value.ReceiverID != userID {
+			continue
+		}
+		if value.SenderID != peerID && value.ReceiverID != peerID {
+			continue
+		}
+		if beforeID != 0 && value.ID >= beforeID {
+			continue
+		}
+		items = append(items, value)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
 }
 
 type recipientStub struct{ err error }
@@ -365,6 +439,167 @@ func TestSendPrivateFileMessageRejectsInvalidFiles(t *testing.T) {
 				t.Fatalf("invalid file message was persisted: %#v", repository.rows)
 			}
 		})
+	}
+}
+
+func TestRecallMessageReplacesHistoryAndIsIdempotent(t *testing.T) {
+	repository := &memoryRepository{rows: make(map[string]Message)}
+	service, err := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := service.SendPrivateMessage(context.Background(), 1, textRequest("recall-target", 2, "delete me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-1", 2, target.Message.ID))
+	if err != nil || !first.CreatedNew {
+		t.Fatalf("recall = %#v, %v", first, err)
+	}
+	if first.Message.Type != WithdrawMessageType || first.Message.Preview != "[撤回]" ||
+		first.Message.Payload.WithdrawMsg == nil || first.Message.Payload.WithdrawMsg.MsgID != target.Message.ID {
+		t.Fatalf("recall payload = %#v", first.Message)
+	}
+	second, err := service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-1", 2, target.Message.ID))
+	if err != nil || second.CreatedNew || second.Message.ID != first.Message.ID {
+		t.Fatalf("recall retry = %#v, %v", second, err)
+	}
+	third, err := service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-2", 2, target.Message.ID))
+	if err != nil || third.CreatedNew || third.Message.ID != first.Message.ID {
+		t.Fatalf("recall with another clientMsgId = %#v, %v", third, err)
+	}
+	page, err := service.History(context.Background(), 2, 1, 0, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundTarget, foundWithdraw := false, false
+	for _, item := range page.Items {
+		if item.ID == target.Message.ID {
+			foundTarget = true
+			if item.Type != WithdrawMessageType || item.Preview != "[撤回]" || item.Payload.TextMsg != nil ||
+				item.Payload.WithdrawMsg == nil || item.Payload.WithdrawMsg.MsgID != target.Message.ID {
+				t.Fatalf("history target not replaced: %#v", item)
+			}
+		}
+		if item.ID == first.Message.ID {
+			foundWithdraw = true
+			if item.Type != WithdrawMessageType {
+				t.Fatalf("history withdraw = %#v", item)
+			}
+		}
+	}
+	if !foundTarget || !foundWithdraw {
+		t.Fatalf("history missing target/withdraw: target=%v withdraw=%v", foundTarget, foundWithdraw)
+	}
+	if len(repository.rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(repository.rows))
+	}
+}
+
+func TestRecallMessageValidation(t *testing.T) {
+	tests := []struct {
+		name         string
+		targetSender uint64
+		targetPeer   uint64
+		wantCode     uint32
+	}{
+		{name: "target missing", wantCode: CodeWithdrawTarget},
+		{name: "not owner", targetSender: 2, targetPeer: 1, wantCode: CodeWithdrawNotOwner},
+		{name: "not participant", targetSender: 2, targetPeer: 3, wantCode: CodeWithdrawTarget},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &memoryRepository{rows: make(map[string]Message), tombstoned: map[uint64]bool{}}
+			service, err := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			targetID := uint64(999_999)
+			if test.targetSender != 0 {
+				target, createErr := repository.Create(context.Background(), Message{
+					SenderID: test.targetSender, ReceiverID: test.targetPeer, ClientMsgID: "seed-target", Type: TextMessageType,
+					Preview: "seed", Payload: protocol.MessagePayload{Type: TextMessageType, TextMsg: &protocol.TextMessage{Content: "seed"}},
+				})
+				if createErr != nil {
+					t.Fatal(createErr)
+				}
+				targetID = target.ID
+			}
+			_, err = service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-key", 2, targetID))
+			var publicError *PublicError
+			if !errors.As(err, &publicError) || publicError.Code != test.wantCode {
+				t.Fatalf("error = %v, want code %d", err, test.wantCode)
+			}
+			if len(repository.rows) != 1 && test.targetSender != 0 {
+				t.Fatalf("unexpected rows: %d", len(repository.rows))
+			}
+		})
+	}
+
+	t.Run("invalid payload", func(t *testing.T) {
+		repository := &memoryRepository{rows: make(map[string]Message)}
+		service, _ := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+		_, err := service.SendPrivateMessage(context.Background(), 1, SendRequest{
+			ClientMsgID: "withdraw-empty", ReceiverID: 2,
+			Message: protocol.MessagePayload{Type: WithdrawMessageType, WithdrawMsg: &protocol.WithdrawMessage{}},
+		})
+		var publicError *PublicError
+		if !errors.As(err, &publicError) || publicError.Code != CodeWithdrawPayload {
+			t.Fatalf("error = %v", err)
+		}
+	})
+
+	t.Run("tombstoned target", func(t *testing.T) {
+		repository := &memoryRepository{rows: make(map[string]Message), tombstoned: map[uint64]bool{}}
+		service, _ := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+		target, _ := service.SendPrivateMessage(context.Background(), 1, textRequest("tomb-target", 2, "gone"))
+		repository.tombstoned[target.Message.ID] = true
+		_, err := service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-tomb", 2, target.Message.ID))
+		var publicError *PublicError
+		if !errors.As(err, &publicError) || publicError.Code != CodeWithdrawRecalled {
+			t.Fatalf("error = %v", err)
+		}
+	})
+
+	t.Run("already recalled by another sender", func(t *testing.T) {
+		repository := &memoryRepository{rows: make(map[string]Message), tombstoned: map[uint64]bool{}}
+		service, _ := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+		target, _ := service.SendPrivateMessage(context.Background(), 1, textRequest("other-target", 2, "mine"))
+		if _, err := repository.Create(context.Background(), Message{
+			SenderID: 2, ReceiverID: 1, ClientMsgID: "other-withdraw", Type: WithdrawMessageType,
+			Preview: "[撤回]", Payload: protocol.MessagePayload{Type: WithdrawMessageType, WithdrawMsg: &protocol.WithdrawMessage{MsgID: target.Message.ID}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-late", 2, target.Message.ID))
+		var publicError *PublicError
+		if !errors.As(err, &publicError) || publicError.Code != CodeWithdrawRecalled {
+			t.Fatalf("error = %v", err)
+		}
+	})
+
+	t.Run("outside window", func(t *testing.T) {
+		repository := &memoryRepository{rows: make(map[string]Message)}
+		service, _ := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+		target, _ := service.SendPrivateMessage(context.Background(), 1, textRequest("window-target", 2, "too old"))
+		for key, value := range repository.rows {
+			if value.ID == target.Message.ID {
+				value.CreatedAt = time.Now().Add(-time.Hour)
+				repository.rows[key] = value
+			}
+		}
+		_, err := service.SendPrivateMessage(context.Background(), 1, withdrawRequest("withdraw-window", 2, target.Message.ID))
+		var publicError *PublicError
+		if !errors.As(err, &publicError) || publicError.Code != CodeWithdrawWindow {
+			t.Fatalf("error = %v", err)
+		}
+	})
+}
+
+func withdrawRequest(clientMsgID string, receiverID, targetID uint64) SendRequest {
+	return SendRequest{
+		ClientMsgID: clientMsgID, ReceiverID: receiverID,
+		Message: protocol.MessagePayload{Type: WithdrawMessageType, WithdrawMsg: &protocol.WithdrawMessage{MsgID: targetID}},
 	}
 }
 
