@@ -71,6 +71,21 @@ Web 选择文件
 
 失败码：文件不存在/非本人 `2215`/`2416`、超限 `2216`/`2417`、参数非法 `2217`/`2418`；失败不落库、不 ACK。`msg_preview` 为 `[文件]`；下载授权与图片消息相同（所有者/私聊参与者/群成员，tombstone/退群/非参与者 `2503`）。
 
+## 2.3 撤回流程（协议已定义，实现待第十一轮）
+
+```text
+Web 选择“撤回”某条自己发送的消息
+ -> chat.send / group.send，msg.type=4 + withdrawMsg.msgID
+ -> 服务端校验：目标存在且属于当前会话/群、发送者是当前用户、
+    未被 tombstone/撤回、距 createdAt <= RECALL_WINDOW_SECONDS、群聊仍为成员
+ -> 落库一条撤回消息（不物理删除原消息）
+ -> COMMIT -> ACK -> 推送 chat.message / group.message
+ -> 历史/session 读取时把原消息替换为 type=4 占位（不返回原内容）
+ -> 文件下载授权排除“被撤回消息引用的原消息”；所有者仍可下载
+```
+
+失败码：`2218–2221` / `2419–2422`（不存在、非本人、超窗口、已撤回）；群非成员沿用 `2404`。重复撤回同一 `msgID` 不重复插入，已有撤回消息时返回同一 ACK。
+
 ## 3. 私聊已读
 
 用户打开会话/看到指定 messageId -> HTTP `PUT /api/chat/read` -> 验证该消息属于 A/B -> 锁定 A->B session -> 单调推进 A 的 lastReadMessageId -> 按 cursor 后仍存在的入站消息重算 unread -> commit。并发新消息必须在该 session 行锁之后原子增加 unread，因此不会把 read cursor 之后的新消息误清零。V1 不向对方发送已读回执。
