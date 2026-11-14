@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	codeInvalid   uint32 = 2220
-	codeForbidden uint32 = 2221
-	codeNotFound  uint32 = 2222
+	// Chat Admin uses its own 2230-2232 segment; 2218-2222 belongs to recall.
+	codeInvalid   uint32 = 2230
+	codeForbidden uint32 = 2231
+	codeNotFound  uint32 = 2232
 )
 
 type Application interface {
