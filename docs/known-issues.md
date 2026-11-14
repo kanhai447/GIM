@@ -55,3 +55,33 @@
 | K-15 | 好友上线提醒仅单机 | 已实现单机 0→1/1→0 通知；多实例全局判断未实现（V2，`GlobalPresenceCheck` 占位），多实例下可能重复/误报 |
 | K-16 | 好友 offline 事件 best-effort | 进程崩溃/TTL 过期无 Hub 回调，不保证发送 `friend.offline`；channel 满会丢弃；前端通过 HTTP `isOnline` 恢复 |
 | K-17 | 部分 E2E 脚本未入库 | 好友/图片/文件/群聊图片/群聊文件/撤回/窗口/好友上线 E2E 为临时脚本执行后删除；仓库仅 4 个通用 smoke。证据见 `docs/validation-status.md` 的“E2E 证据链说明”；复现需按文档重写 |
+
+## 架构审计（发现于第十五轮深度文档审计，2026-11-14）
+
+| 编号 | 内容 | 状态 / 代码位置 |
+|---|---|---|
+| A1 | `chat_message_deletions` / `group_message_deletions` 生产代码只读，无写入方；隐藏会话实际走 `hidden_at` | 未使用表/待清理；`chat/message/repository/mysql/history.go`、`session.go`，`group/message/repository/mysql/history.go`、`session.go` |
+| A2 | `DELETE /api/chat/chat` 未找到 HTTP 入口；`Service.HideSession` 未接线 | 未实现；`chat/message/service.go:HideSession`，`chat/message/transport/http/handler.go` 无路由 |
+| A3 | 注册不初始化 `user_confs`；`CanChat` 用 `COALESCE(MAX(...),0)` 容忍缺行 | 已知边界（与 K-9 相关）；`user/service/service.go:CreateUser`、`chat/message/repository/mysql/friendship.go:CanChat` |
+| A5 | Group 消息仓库无 1213 死锁重试（Chat 有 3 次） | 已知边界；`group/message/repository/mysql/repository.go`；Chat 见 `chat/message/repository/mysql/repository.go:PersistWithSessions` |
+| A6 | `/api/auth/open_login` 在 Auth Allowlist 但无路由；`/api/settings/open_login` 实际存在 | 文档/实现不一致，已标注；`auth/service/allowlist.go:DefaultAllowlist`、`settings/transport/http/handler.go:OpenLogin` |
+| A10 | `groups.is_all_muted` 只读，无写入入口 | 全员禁言未实现；`group/message/service.go:Send`，`group/transport/http` 无对应路由 |
+
+## 工程/运维限制
+
+| 编号 | 问题 | 说明 |
+|---|---|---|
+| E-1 | Compose 为单机单节点 | 无 HA、Kubernetes、内部 TLS、Secret Manager |
+| E-2 | 内部 API/RPC 无 mTLS | 依赖“只暴露 Gateway + 私有网络”的边界 |
+| E-3 | CI 不运行真实依赖集成测试 | `go test ./...` 会跳过 `server/tests`；race job 同样跳过；Kafka 用例需额外开关 |
+| E-4 | Admin 构建有 chunk-size warning | 非阻塞 |
+| E-5 | Windows native race 不可用 | 32-bit MinGW 不兼容；64-bit MinGW 缺 libc headers；Linux Docker 为验证路径（本轮已 PASS） |
+| E-6 | 远端 GitHub Actions 结果未观察 | 本环境无 API 访问，仅 local equivalent PASS |
+| E-7 | 未使用导出函数无自动扫描 | 当前以“包级可达性 + 手工 grep”为准；`internal/chat.UnavailableInboundHandler` 仅测试使用，保留为测试替身 |
+| E-8 | 图片/文件下载授权跨读消息表 | 非所有者下载时在 File 服务内查询 `chat_messages`/`group_messages` 的 JSON 引用，并用 `NOT EXISTS` 排除被撤回原消息；保持 `SELECT 1 … LIMIT 1`，但 `JSON_EXTRACT` 无索引，且下载接口无速率限制；仅影响非所有者下载路径 |
+| E-9 | 浏览器可能缓存已下载图片 | 退群/tombstone 只阻止新的服务端下载；浏览器已缓存的副本无法回收（客户端缓存语义，已记入 docs/05） |
+
+## 使用约定
+
+- 新发现的问题先登记编号与影响，再决定是否在本轮修复。
+- 修复/验证后更新状态（已验证/关闭/降级），保留记录与证据链接。
