@@ -55,6 +55,8 @@ func TestImageDownloadAuthorizationSemantics(t *testing.T) {
 	chatMessageID := seedChatImageMessage(t, rawDB, owner, peer, imageFileID, "auth-chat-image")
 	groupID, ownerMemberID := seedAuthorizationGroup(t, rawDB, owner, member)
 	groupMessageID := seedGroupImageMessage(t, rawDB, groupID, owner, ownerMemberID, imageFileID, "auth-group-image")
+	fileAttachmentID := seedIntegrationFile(t, rawDB, owner, "application/pdf", 4096, "attachment.pdf")
+	groupFileMessageID := seedGroupFileMessage(t, rawDB, groupID, owner, ownerMemberID, fileAttachmentID, "auth-group-file")
 
 	requireAccess := func(label string, userID, fileID uint64) {
 		t.Helper()
@@ -76,6 +78,8 @@ func TestImageDownloadAuthorizationSemantics(t *testing.T) {
 	requireDenied("non-participant", stranger, imageFileID)
 	requireAccess("group member", member, imageFileID)
 	requireDenied("non-group member", outsider, imageFileID)
+	requireAccess("group member file message", member, fileAttachmentID)
+	requireDenied("non-group member file message", outsider, fileAttachmentID)
 
 	if _, err := rawDB.Exec("UPDATE chat_messages SET admin_deleted_at = CURRENT_TIMESTAMP(3) WHERE id = ?", chatMessageID); err != nil {
 		t.Fatalf("tombstone chat message: %v", err)
@@ -89,8 +93,14 @@ func TestImageDownloadAuthorizationSemantics(t *testing.T) {
 	requireDenied("group member after tombstone", member, imageFileID)
 	requireAccess("owner after group tombstone", owner, imageFileID)
 
-	if _, err := rawDB.Exec("UPDATE group_messages SET admin_deleted_at = NULL WHERE id = ?", groupMessageID); err != nil {
-		t.Fatalf("restore group message: %v", err)
+	if _, err := rawDB.Exec("UPDATE group_messages SET admin_deleted_at = CURRENT_TIMESTAMP(3) WHERE id = ?", groupFileMessageID); err != nil {
+		t.Fatalf("tombstone group file message: %v", err)
+	}
+	requireDenied("group member after file tombstone", member, fileAttachmentID)
+	requireAccess("owner after file tombstone", owner, fileAttachmentID)
+
+	if _, err := rawDB.Exec("UPDATE group_messages SET admin_deleted_at = NULL WHERE id IN (?, ?)", groupMessageID, groupFileMessageID); err != nil {
+		t.Fatalf("restore group messages: %v", err)
 	}
 	if _, err := rawDB.Exec("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupID, member); err != nil {
 		t.Fatalf("remove group member: %v", err)
@@ -152,10 +162,21 @@ func seedAuthorizationGroup(t *testing.T, db *sql.DB, owner, member uint64) (uin
 func seedGroupImageMessage(t *testing.T, db *sql.DB, groupID, sender, senderMemberID, fileID uint64, clientID string) uint64 {
 	t.Helper()
 	msg := fmt.Sprintf(`{"type":2,"imageMsg":{"fileID":%d,"url":"/api/file/%d","mimeType":"image/png","size":2048}}`, fileID, fileID)
+	return seedGroupMessage(t, db, groupID, sender, senderMemberID, clientID, 2, "[图片]", msg)
+}
+
+func seedGroupFileMessage(t *testing.T, db *sql.DB, groupID, sender, senderMemberID, fileID uint64, clientID string) uint64 {
+	t.Helper()
+	msg := fmt.Sprintf(`{"type":3,"fileMsg":{"fileID":%d,"url":"/api/file/%d","fileName":"attachment.pdf","mimeType":"application/pdf","size":4096}}`, fileID, fileID)
+	return seedGroupMessage(t, db, groupID, sender, senderMemberID, clientID, 3, "[文件]", msg)
+}
+
+func seedGroupMessage(t *testing.T, db *sql.DB, groupID, sender, senderMemberID uint64, clientID string, msgType uint8, preview, msg string) uint64 {
+	t.Helper()
 	result, err := db.Exec(`INSERT INTO group_messages (group_id, send_user_id, group_member_id, client_msg_id, msg_type, msg_preview, msg)
-		VALUES (?, ?, ?, ?, 2, '[图片]', ?)`, groupID, sender, senderMemberID, clientID, msg)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, groupID, sender, senderMemberID, clientID, msgType, preview, msg)
 	if err != nil {
-		t.Fatalf("seed group image message: %v", err)
+		t.Fatalf("seed group message: %v", err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {

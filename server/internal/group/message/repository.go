@@ -13,6 +13,7 @@ var (
 	ErrSessionNotFound   = errors.New("group session not found")
 	ErrMessageNotInGroup = errors.New("group message does not belong to group")
 	ErrImageFileNotFound = errors.New("group image file not found")
+	ErrFileNotFound      = errors.New("group file not found")
 )
 
 // ImageFile is the verified metadata of a user-owned uploaded image.
@@ -26,6 +27,20 @@ type ImageFile struct {
 // URL/MIME/size. It is optional so existing repositories remain valid.
 type ImageRepository interface {
 	GetOwnedImage(context.Context, uint64, uint64) (ImageFile, error)
+}
+
+// FileInfo is the verified metadata of a user-owned uploaded file of any type.
+type FileInfo struct {
+	ID       uint64
+	Name     string
+	Size     int64
+	MIMEType string
+}
+
+// FileRepository resolves a generic file reference without trusting
+// client-supplied URL/name/size/MIME.
+type FileRepository interface {
+	GetOwnedFile(context.Context, uint64, uint64) (FileInfo, error)
 }
 
 type Message struct {

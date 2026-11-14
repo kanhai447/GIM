@@ -16,6 +16,7 @@ import (
 const (
 	TextMessageType  = uint8(1)
 	ImageMessageType = uint8(2)
+	FileMessageType  = uint8(3)
 
 	CodeInvalidMessage      = uint32(2201)
 	CodeRecipientMissing    = uint32(2202)
@@ -31,6 +32,9 @@ const (
 	CodeImageMIMEType       = uint32(2212)
 	CodeImageTooLarge       = uint32(2213)
 	CodeImagePayload        = uint32(2214)
+	CodeFileInvalid         = uint32(2215)
+	CodeFileTooLarge        = uint32(2216)
+	CodeFilePayload         = uint32(2217)
 )
 
 const (
@@ -58,11 +62,12 @@ type Config struct {
 	MaxTextBytes      int
 	MaxPayloadBytes   int
 	MaxImageBytes     int
+	MaxFileBytes      int
 	DependencyTimeout time.Duration
 }
 
 func DefaultConfig() Config {
-	return Config{MaxTextBytes: 4096, MaxPayloadBytes: 16 * 1024, MaxImageBytes: 10 << 20, DependencyTimeout: 2 * time.Second}
+	return Config{MaxTextBytes: 4096, MaxPayloadBytes: 16 * 1024, MaxImageBytes: 10 << 20, MaxFileBytes: 25 << 20, DependencyTimeout: 2 * time.Second}
 }
 
 type SendRequest struct {
@@ -84,11 +89,12 @@ type Service struct {
 	recipients RecipientValidator
 	friends    FriendshipRepository
 	images     ImageRepository
+	files      FileRepository
 	config     Config
 }
 
 func NewService(messages Repository, recipients RecipientValidator, friends FriendshipRepository, config Config) (*Service, error) {
-	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.MaxImageBytes < 1 || config.DependencyTimeout <= 0 {
+	if messages == nil || recipients == nil || friends == nil || config.MaxTextBytes < 1 || config.MaxPayloadBytes < 1 || config.MaxImageBytes < 1 || config.MaxFileBytes < 1 || config.DependencyTimeout <= 0 {
 		return nil, errors.New("invalid chat message service configuration")
 	}
 	sends, ok := messages.(SendRepository)
@@ -98,9 +104,10 @@ func NewService(messages Repository, recipients RecipientValidator, friends Frie
 	history, _ := messages.(HistoryRepository)
 	sessions, _ := messages.(SessionRepository)
 	images, _ := messages.(ImageRepository)
+	files, _ := messages.(FileRepository)
 	return &Service{
 		messages: messages, sends: sends, history: history, sessions: sessions,
-		recipients: recipients, friends: friends, images: images, config: config,
+		recipients: recipients, friends: friends, images: images, files: files, config: config,
 	}, nil
 }
 
@@ -154,8 +161,15 @@ func (service *Service) SendPrivateMessage(ctx context.Context, senderID uint64,
 	}
 
 	payload := request.Message
-	if payload.Type == ImageMessageType {
+	switch payload.Type {
+	case ImageMessageType:
 		normalized, normalizeErr := service.normalizeImage(ctx, senderID, payload)
+		if normalizeErr != nil {
+			return SendResult{}, normalizeErr
+		}
+		payload = normalized
+	case FileMessageType:
+		normalized, normalizeErr := service.normalizeFile(ctx, senderID, payload)
 		if normalizeErr != nil {
 			return SendResult{}, normalizeErr
 		}
@@ -333,6 +347,10 @@ func (service *Service) validate(senderID uint64, request SendRequest) error {
 		if err := validateImagePayload(request.Message); err != nil {
 			return err
 		}
+	case FileMessageType:
+		if err := validateFilePayload(request.Message); err != nil {
+			return err
+		}
 	default:
 		return public(CodeInvalidMessage, "暂不支持该消息类型", nil)
 	}
@@ -384,9 +402,49 @@ func (service *Service) normalizeImage(ctx context.Context, senderID uint64, pay
 	return normalized, nil
 }
 
+func validateFilePayload(payload protocol.MessagePayload) error {
+	file := payload.FileMsg
+	if file == nil || file.FileID == 0 {
+		return public(CodeFilePayload, "文件消息参数无效", nil)
+	}
+	if file.Size < 0 {
+		return public(CodeFilePayload, "文件消息参数无效", nil)
+	}
+	return nil
+}
+
+func (service *Service) normalizeFile(ctx context.Context, senderID uint64, payload protocol.MessagePayload) (protocol.MessagePayload, error) {
+	if service.files == nil {
+		return payload, public(CodeMessageUnavailable, "消息服务暂不可用", nil)
+	}
+	fileContext, cancel := context.WithTimeout(ctx, service.config.DependencyTimeout)
+	defer cancel()
+	file, err := service.files.GetOwnedFile(fileContext, senderID, payload.FileMsg.FileID)
+	if err != nil {
+		if errors.Is(err, ErrFileNotFound) {
+			return payload, public(CodeFileInvalid, "文件不存在或无权使用", nil)
+		}
+		return payload, public(CodeMessageUnavailable, "消息服务暂不可用", err)
+	}
+	if file.Size < 0 || file.Size > int64(service.config.MaxFileBytes) {
+		return payload, public(CodeFileTooLarge, "文件超过大小限制", nil)
+	}
+	normalized := payload
+	value := *payload.FileMsg
+	value.URL = fmt.Sprintf("/api/file/%d", file.ID)
+	value.FileName = file.Name
+	value.Size = file.Size
+	value.MIMEType = file.MIMEType
+	normalized.FileMsg = &value
+	return normalized, nil
+}
+
 func previewOf(payload protocol.MessagePayload) string {
-	if payload.Type == ImageMessageType {
+	switch payload.Type {
+	case ImageMessageType:
 		return "[图片]"
+	case FileMessageType:
+		return "[文件]"
 	}
 	if payload.TextMsg == nil {
 		return ""
@@ -409,6 +467,9 @@ func sameLogicalMessage(existing Message, request SendRequest) bool {
 	case ImageMessageType:
 		return existing.Payload.ImageMsg != nil && request.Message.ImageMsg != nil &&
 			existing.Payload.ImageMsg.FileID == request.Message.ImageMsg.FileID
+	case FileMessageType:
+		return existing.Payload.FileMsg != nil && request.Message.FileMsg != nil &&
+			existing.Payload.FileMsg.FileID == request.Message.FileMsg.FileID
 	default:
 		return false
 	}

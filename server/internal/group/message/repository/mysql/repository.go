@@ -156,6 +156,32 @@ func (repository *Repository) GetOwnedImage(ctx context.Context, userID, fileID 
 	}
 	return message.ImageFile{ID: row.ID, Size: row.Size, MIMEType: row.MIMEType}, nil
 }
+
+type ownedFileRecord struct {
+	ID       uint64 `gorm:"column:id"`
+	Name     string `gorm:"column:name"`
+	Size     int64  `gorm:"column:size"`
+	MIMEType string `gorm:"column:mime_type"`
+}
+
+// GetOwnedFile resolves any user_files.id owned by userID, returning the stored
+// original name and server-detected metadata.
+func (repository *Repository) GetOwnedFile(ctx context.Context, userID, fileID uint64) (message.FileInfo, error) {
+	var row ownedFileRecord
+	err := repository.db.WithContext(ctx).
+		Table("user_files AS uf").
+		Select("uf.id AS id, uf.original_name AS name, fo.size AS size, fo.mime_type AS mime_type").
+		Joins("JOIN file_objects AS fo ON fo.id = uf.file_object_id").
+		Where("uf.id = ? AND uf.user_id = ?", fileID, userID).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return message.FileInfo{}, message.ErrFileNotFound
+	}
+	if err != nil {
+		return message.FileInfo{}, fmt.Errorf("query group file: %w", err)
+	}
+	return message.FileInfo{ID: row.ID, Name: row.Name, Size: row.Size, MIMEType: row.MIMEType}, nil
+}
 func result(row record, err error) (message.Message, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return message.Message{}, message.ErrNotFound

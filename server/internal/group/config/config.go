@@ -14,6 +14,7 @@ type Config struct {
 	DependencyTimeout time.Duration
 	RedisTimeout      time.Duration
 	MaxImageBytes     int
+	MaxFileBytes      int
 }
 
 type WebSocketConfig struct {
@@ -39,7 +40,11 @@ func FromValues(values platformconfig.Values) (Config, error) {
 	if err != nil || maxImageBytes < 1 || maxImageBytes > 1<<30 {
 		return Config{}, errors.New("configuration key IMAGE_MESSAGE_MAX_BYTES must be between 1 and 1073741824")
 	}
-	return Config{DependencyTimeout: dependency, RedisTimeout: redisTimeout, MaxImageBytes: maxImageBytes}, nil
+	maxFileBytes, err := integer(values, "FILE_MESSAGE_MAX_BYTES", 25<<20)
+	if err != nil || maxFileBytes < 1 || maxFileBytes > 1<<30 {
+		return Config{}, errors.New("configuration key FILE_MESSAGE_MAX_BYTES must be between 1 and 1073741824")
+	}
+	return Config{DependencyTimeout: dependency, RedisTimeout: redisTimeout, MaxImageBytes: maxImageBytes, MaxFileBytes: maxFileBytes}, nil
 }
 
 func WebSocketFromValues(values platformconfig.Values) (WebSocketConfig, error) {

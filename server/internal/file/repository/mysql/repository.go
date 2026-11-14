@@ -148,7 +148,7 @@ func (repo *Repository) canAccessImage(ctx context.Context, userID, fileID uint6
 	var chatHit int
 	if err := repo.db.WithContext(ctx).Table("chat_messages").Select("1").
 		Where("admin_deleted_at IS NULL AND (send_user_id = ? OR rev_user_id = ?)", userID, userID).
-		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.imageMsg.fileID')) = ?", value).
+		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.imageMsg.fileID')) = ? OR JSON_UNQUOTE(JSON_EXTRACT(msg, '$.fileMsg.fileID')) = ?", value, value).
 		Limit(1).Scan(&chatHit).Error; err != nil {
 		return false, mapError("check chat image access", err)
 	}
@@ -160,7 +160,7 @@ func (repo *Repository) canAccessImage(ctx context.Context, userID, fileID uint6
 		Select("1").
 		Joins("JOIN group_members AS member ON member.group_id = gm.group_id AND member.user_id = ?", userID).
 		Where("gm.admin_deleted_at IS NULL").
-		Where("JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.imageMsg.fileID')) = ?", value).
+		Where("JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.imageMsg.fileID')) = ? OR JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.fileMsg.fileID')) = ?", value, value).
 		Limit(1).Scan(&groupHit).Error; err != nil {
 		return false, mapError("check group image access", err)
 	}

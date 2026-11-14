@@ -130,6 +130,7 @@ func run(args []string) error {
 	messageRepository := groupmessagemysql.New(mysqlClient.DB())
 	groupMessageConfig := groupmessage.DefaultConfig()
 	groupMessageConfig.MaxImageBytes = groupConfig.MaxImageBytes
+	groupMessageConfig.MaxFileBytes = groupConfig.MaxFileBytes
 	messageService, err := groupmessage.NewService(messageRepository, groupModule.Service, groupMessageConfig)
 	if err != nil {
 		return err

@@ -49,10 +49,21 @@ type ImageMessage struct {
 	MIMEType string `json:"mimeType,omitempty"`
 }
 
+// FileMessage references an uploaded user_files row. URL, FileName, Size and
+// MIMEType are filled by the server from user_files/file_objects.
+type FileMessage struct {
+	FileID   uint64 `json:"fileID"`
+	URL      string `json:"url,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+	MIMEType string `json:"mimeType,omitempty"`
+}
+
 type MessagePayload struct {
 	Type     uint8         `json:"type"`
 	TextMsg  *TextMessage  `json:"textMsg,omitempty"`
 	ImageMsg *ImageMessage `json:"imageMsg,omitempty"`
+	FileMsg  *FileMessage  `json:"fileMsg,omitempty"`
 }
 
 type ChatSendData struct {

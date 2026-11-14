@@ -34,6 +34,18 @@ func TestDecodeImageMessagePayload(t *testing.T) {
 	}
 }
 
+func TestDecodeFileMessagePayload(t *testing.T) {
+	data, err := DecodeData[ChatSendData](json.RawMessage(`{"revUserID":42,"msg":{"type":3,"fileMsg":{"fileID":7,"fileName":"report.pdf","size":4096}}}`))
+	if err != nil || data.Message.Type != 3 ||
+		data.Message.FileMsg == nil || data.Message.FileMsg.FileID != 7 ||
+		data.Message.FileMsg.FileName != "report.pdf" || data.Message.FileMsg.Size != 4096 {
+		t.Fatalf("DecodeData() = %#v, %v", data, err)
+	}
+	if _, err := DecodeData[ChatSendData](json.RawMessage(`{"revUserID":42,"msg":{"type":3,"fileMsg":{"fileID":7,"unknown":1}}}`)); err == nil {
+		t.Fatal("DecodeData() accepted an unknown file field")
+	}
+}
+
 func TestDecodeRejectsInvalidEnvelope(t *testing.T) {
 	for _, payload := range [][]byte{
 		nil,
