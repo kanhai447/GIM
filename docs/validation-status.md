@@ -66,13 +66,17 @@
 | 撤回代码全量 race | **PASS** | Linux Docker `golang:1.25-bookworm`；`go test -race ./... -count=1` | exit 0，无 `WARNING: DATA RACE` |
 | 撤回 schema | 无需变更 | 复用 `msg` JSON；无 `recalled_at` 列/表/索引 | — |
 
-## 好友上线提醒协议设计（2026-11-14）
+## 好友上线提醒（2026-11-14，第十三轮，单机）
 
-| 项目 | 结果 | 说明 |
-|---|---|---|
-| 协议（`friend.online`/`friend.offline`） | **设计完成** | docs/06 §5.7：Chat WS 事件、payload `{userID, at}`、全局 0→1/1→0、仅通知好友、多端/多实例语义、Presence 权威、best-effort |
-| 后端/前端实现 | **NOT RUN** | 本轮只做协议设计；未发送/处理事件 |
-| Chat Hub 并发模型 | **无需修改** | 现有 `LocalConnectionTransitionObserver` 已满足“回调不做 I/O”；实现需组合 observer + 有界 worker，不改 Hub 结构 |
+| 项目 | 结果 | 命令 / 环境 | 说明 |
+|---|---|---|---|
+| 后端构建/单测 | **PASS** | `go build` / `go vet` / `gofmt` / `go test ./...`（70 packages） | friendnotify 入队、发送、自己过滤、查询失败、channel 满、shutdown drain、并发 enqueue |
+| **好友提醒集成（真实 MySQL/Redis/WS）** | **PASS** | `GIM_ENV_FILE=<absolute>`；`go test ./tests -run TestFriendPresenceNotifications -v` | A 登录→B online；多端只一次 online；关一端无 offline；关最后 offline；非好友 C 不通知；禁用好友 D 不通知 |
+| Web | **PASS** | `vue-tsc --noEmit`；`vitest run`（21 files / 135 tests） | 事件解析、friend store 更新、未知 userID 忽略、HTTP 列表合并 |
+| **浏览器 E2E** | **PASS** | Chrome + Compose | B 看到 A 在线；A 关闭→B 离线；A 重登→B 在线 |
+| 全量 race | **PASS** | Linux `golang:1.25-bookworm` `go test -race ./...` | exit 0，无 `WARNING: DATA RACE` |
+| 多实例全局 Presence | **NOT RUN** | 本轮只做单机 | V2；`GlobalPresenceCheck` 占位（V-20/K-15） |
+| Chat Hub 并发模型 | 未修改 | 现有 observer + 装配层组合 | 回调只入队，不阻塞 Hub |
 
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
@@ -97,7 +101,7 @@
 | 文件吞吐档位（1 MiB/10 MiB、并发） | **NOT RUN** | 本轮未跑 file 负载 | 可选后续轮次 |
 | 图片上传/下载吞吐与预览性能 | **NOT RUN** | 未单独做图片性能档位 | 可选后续轮次 |
 | 普通文件消息吞吐/下载性能 | **NOT RUN** | 未单独做文件消息性能档位 | 可选后续轮次 |
-| 好友上线提醒实现（后端/前端/E2E） | **NOT RUN** | 本轮只完成协议设计 | 下一轮 |
+| 好友上线提醒多实例 | **NOT RUN** | 单机已 PASS；全局 Presence 为 V2 | V-20 |
 | 远端 GitHub Actions 结果 | **NOT OBSERVED** | 本环境无 GitHub API 访问；仅 local equivalent PASS | — |
 
 > 历史性能数字（`docs/performance/baseline.md`）是 2026-10-15 的记录；本轮最小场景结果只代表当前机器当前栈，不构成容量承诺，也不替代历史完整档位。
@@ -144,3 +148,4 @@ cd ..\admin; pnpm type-check; pnpm test; pnpm build
 - 2026-11-14：文件 Phase 收尾（全量 race / 群聊文件 E2E）+ 撤回协议设计，见 `agent_logs/operations/day-13/`。
 - 2026-11-14：撤回实现（单测 / 集成 / 文件授权 / 浏览器 E2E），见 `agent_logs/operations/day-14/`。
 - 2026-11-14：撤回收尾（并发测试 / 窗口 E2E / 全量 race）+ 好友上线提醒协议设计，见 `agent_logs/operations/day-15/`。
+- 2026-11-14：好友上线提醒实现（后端/前端/集成/E2E/race，单机），见 `agent_logs/operations/day-16/`。
