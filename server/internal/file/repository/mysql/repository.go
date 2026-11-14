@@ -149,6 +149,7 @@ func (repo *Repository) canAccessImage(ctx context.Context, userID, fileID uint6
 	if err := repo.db.WithContext(ctx).Table("chat_messages").Select("1").
 		Where("admin_deleted_at IS NULL AND (send_user_id = ? OR rev_user_id = ?)", userID, userID).
 		Where("JSON_UNQUOTE(JSON_EXTRACT(msg, '$.imageMsg.fileID')) = ? OR JSON_UNQUOTE(JSON_EXTRACT(msg, '$.fileMsg.fileID')) = ?", value, value).
+		Where("NOT EXISTS (SELECT 1 FROM chat_messages AS withdraw WHERE withdraw.msg_type = 4 AND withdraw.admin_deleted_at IS NULL AND JSON_UNQUOTE(JSON_EXTRACT(withdraw.msg, '$.withdrawMsg.msgID')) = CAST(chat_messages.id AS CHAR))").
 		Limit(1).Scan(&chatHit).Error; err != nil {
 		return false, mapError("check chat image access", err)
 	}
@@ -161,6 +162,7 @@ func (repo *Repository) canAccessImage(ctx context.Context, userID, fileID uint6
 		Joins("JOIN group_members AS member ON member.group_id = gm.group_id AND member.user_id = ?", userID).
 		Where("gm.admin_deleted_at IS NULL").
 		Where("JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.imageMsg.fileID')) = ? OR JSON_UNQUOTE(JSON_EXTRACT(gm.msg, '$.fileMsg.fileID')) = ?", value, value).
+		Where("NOT EXISTS (SELECT 1 FROM group_messages AS withdraw WHERE withdraw.msg_type = 4 AND withdraw.admin_deleted_at IS NULL AND JSON_UNQUOTE(JSON_EXTRACT(withdraw.msg, '$.withdrawMsg.msgID')) = CAST(gm.id AS CHAR))").
 		Limit(1).Scan(&groupHit).Error; err != nil {
 		return false, mapError("check group image access", err)
 	}

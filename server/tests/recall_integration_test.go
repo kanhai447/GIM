@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -11,6 +12,8 @@ import (
 	"github.com/kanhai447/GIM/server/internal/chat/message"
 	chatmysql "github.com/kanhai447/GIM/server/internal/chat/message/repository/mysql"
 	"github.com/kanhai447/GIM/server/internal/chat/protocol"
+	filerepo "github.com/kanhai447/GIM/server/internal/file/repository"
+	filemysql "github.com/kanhai447/GIM/server/internal/file/repository/mysql"
 	platformconfig "github.com/kanhai447/GIM/server/internal/platform/config"
 	platformredis "github.com/kanhai447/GIM/server/internal/platform/redis"
 )
@@ -158,6 +161,28 @@ func TestRecallMessageWebSocketHistoryAndAuthorization(t *testing.T) {
 		Message: protocol.MessagePayload{Type: message.WithdrawMessageType, WithdrawMsg: &protocol.WithdrawMessage{MsgID: oldTarget.Message.ID}},
 	})
 	requirePublicCode(t, err, message.CodeWithdrawWindow)
+
+	fileID := seedIntegrationFile(t, rawDB, senderID, "application/pdf", 4096, "recall.pdf")
+	fileTarget, err := service.SendPrivateMessage(ctx, senderID, message.SendRequest{
+		ClientMsgID: "recall-file-target", ReceiverID: receiverID,
+		Message: protocol.MessagePayload{Type: message.FileMessageType, FileMsg: &protocol.FileMessage{FileID: fileID}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SendPrivateMessage(ctx, senderID, message.SendRequest{
+		ClientMsgID: "recall-file-withdraw", ReceiverID: receiverID,
+		Message: protocol.MessagePayload{Type: message.WithdrawMessageType, WithdrawMsg: &protocol.WithdrawMessage{MsgID: fileTarget.Message.ID}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fileRepository := filemysql.New(database)
+	if _, err := fileRepository.FindAccessibleByID(ctx, receiverID, fileID); !errors.Is(err, filerepo.ErrNotFound) {
+		t.Fatalf("receiver access after recall = %v, want ErrNotFound", err)
+	}
+	if _, err := fileRepository.FindAccessibleByID(ctx, senderID, fileID); err != nil {
+		t.Fatalf("owner access after recall = %v", err)
+	}
 }
 
 func requirePublicCode(t *testing.T, err error, want uint32) {
