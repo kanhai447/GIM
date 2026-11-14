@@ -26,7 +26,7 @@ GIM 是一个面向后端工程能力展示的即时通信系统：Go 微服务 
 
 - 富消息：视频文件、语音、回复/引用、@、图文（**图片、普通文件与撤回已在 V2 Phase 1 实现**）。
 - 管理员撤回（含原因/审计）尚未设计，留待 V2 后续。
-- 好友上线提醒 `friend.online/offline`、好友申请方向的完整历史列表。
+- 好友上线提醒 `friend.online/offline`：**协议已定义**（docs/06 §5.7），实现待下一轮；好友申请方向的完整历史列表未实现。
 - `user_confs` 读写、`PUT /api/user/user_info`、`DELETE /api/chat/chat`、`POST /api/user/valid`、`POST /api/auth/open_login`。
 - 接收方 delivery/read receipt、WS 一次性 Ticket、Gateway 本地验签、多实例 WS 路由。
 - HA/Kubernetes/内部 TLS、文件孤儿 GC、审计 outbox/DLQ。
@@ -197,6 +197,7 @@ pnpm type-check; pnpm test; pnpm build
 - **普通文件消息（V2 Phase 1，2026-11-14）**：后端单测 + 聊天文件真实 MySQL/Redis/WS 集成 **PASS**（`type=3` ACK、接收、历史、重复 clientMsgId 仅 1 行、`2215/2216` 不落库、接收方可下载）；Web `vue-tsc` + **21 files / 122 tests** + build PASS；浏览器 E2E **PASS**（A 发送 `report.pdf` → B 收到并下载 → 非参与者 D `2503`）。
 - **文件 Phase 收尾（2026-11-14）**：全量 Linux Docker race **PASS**（无 race warning）；群聊文件 E2E **PASS**（B/C 收到并下载、非成员 D `2503`、B 退群后 `2503`、owner 仍可下载）。
 - **撤回消息（2026-11-14）**：后端单测 + 真实 MySQL/Redis/WS 集成 **PASS**（ACK、接收、历史占位、重复撤回、窗口/非本人/tombstone、文件下载撤销）；Web `vue-tsc` + **21 files / 131 tests** + build PASS；浏览器 E2E **PASS**（文本+文件撤回、占位、接收方下载 `2503`、owner 仍 200）。
+- **撤回收尾（2026-11-14）**：并发撤回测试 **PASS**（观察到 1 条，K-14 记录边界）；短窗口 E2E **PASS**（3s 内成功、4s 后 `2220`）；撤回代码全量 Linux Docker race **PASS**（无 race warning）。
 - **性能最小场景**：HTTP profile c10/10s 27281/27281、2728 req/s、p95 4.834 ms；Private 10 conn/10s@10 msg/s 100/100 ACK、100/100 delivery、p95 22.859 ms、correctness PASS。
 - 既有验证（2026-11-11）：后端单测 **69 包 PASS**；真实依赖集成 **20 PASS / 1 SKIP / 0 FAIL**（该 SKIP 的 Kafka 用例已由第五轮补齐）；Web 当时 **19 files / 103 tests** + build PASS；Admin **11 files / 25 tests** + build PASS；`docker compose config` PASS；仓库安全脚本 PASS。
 - **仍未验证**：完整性能阶梯（25/50/100/200 连接、50 msg/s）、5 分钟 soak、restart 稳定性、文件吞吐档位、图片/文件消息吞吐与预览性能；远端 CI 结果为 `NOT OBSERVED`。

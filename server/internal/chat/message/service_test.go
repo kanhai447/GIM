@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"testing"
@@ -594,6 +595,66 @@ func TestRecallMessageValidation(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+}
+
+func TestConcurrentRecallSameTargetIsSafe(t *testing.T) {
+	repository := &memoryRepository{rows: make(map[string]Message)}
+	service, err := NewService(repository, recipientStub{}, friendshipStub{ok: true}, DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := service.SendPrivateMessage(context.Background(), 1, textRequest("concurrent-target", 2, "concurrent recall"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const attempts = 2
+	var wait sync.WaitGroup
+	errs := make(chan error, attempts)
+	for index := range attempts {
+		wait.Add(1)
+		go func(index int) {
+			defer wait.Done()
+			if _, sendErr := service.SendPrivateMessage(context.Background(), 1, withdrawRequest(fmt.Sprintf("concurrent-withdraw-%d", index), 2, target.Message.ID)); sendErr != nil {
+				errs <- sendErr
+			}
+		}(index)
+	}
+	wait.Wait()
+	close(errs)
+	for sendErr := range errs {
+		t.Fatalf("concurrent recall error: %v", sendErr)
+	}
+	withdrawRows := 0
+	for _, value := range repository.rows {
+		if value.Type == WithdrawMessageType && value.Payload.WithdrawMsg != nil && value.Payload.WithdrawMsg.MsgID == target.Message.ID {
+			withdrawRows++
+		}
+	}
+	t.Logf("concurrent recall produced %d withdraw rows (known boundary K-14)", withdrawRows)
+	if withdrawRows == 0 {
+		t.Fatal("no withdraw row persisted")
+	}
+	page, err := service.History(context.Background(), 2, 1, 0, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	placeholders, visibleWithdraws := 0, 0
+	for _, item := range page.Items {
+		if item.ID == target.Message.ID {
+			placeholders++
+			if item.Type != WithdrawMessageType || item.Payload.TextMsg != nil {
+				t.Fatalf("target not replaced: %#v", item)
+			}
+		} else if item.Type == WithdrawMessageType {
+			visibleWithdraws++
+		}
+	}
+	if placeholders != 1 {
+		t.Fatalf("placeholders = %d, want 1", placeholders)
+	}
+	if visibleWithdraws != withdrawRows {
+		t.Fatalf("history withdraw rows = %d, want %d", visibleWithdraws, withdrawRows)
+	}
 }
 
 func withdrawRequest(clientMsgID string, receiverID, targetID uint64) SendRequest {

@@ -61,8 +61,18 @@
 | 文件授权联动 | **PASS** | 同一集成测试 | 授权 SQL 增加 `NOT EXISTS` 排除被撤回原消息；保持 `SELECT 1 … LIMIT 1`，无 schema 变更 |
 | Web | **PASS** | `vue-tsc --noEmit`；`vitest run`（21 files / 131 tests）；`vite build` | 撤回入口/窗口判断、type=4 解析、发送/ACK 替换、推送合并、失败保留原文、占位渲染 |
 | **浏览器撤回 E2E** | **PASS** | Chrome + Compose（15 healthy + 2 exit 0） | A 撤回文本 → B 看到占位且原文消失；A 撤回文件 → B 卡片消失、下载 `2503`；owner 仍 `200` |
-| 撤回窗口浏览器 E2E | **NOT RUN** | 默认窗口 120s，未做短窗口 UI 验证 | 单测/集成覆盖 `2220` |
+| 并发撤回测试 | **PASS** | `go test ./internal/chat/message -run TestConcurrentRecallSameTargetIsSafe -v` | 本次观察到 1 条撤回消息（调度相关，不强行断言）；历史占位唯一；前端合并去重；K-14 记录边界 |
+| **撤回窗口短配置 E2E** | **PASS** | `RECALL_WINDOW_SECONDS=3`，重启 chat/group；Chrome + Compose | 3s 内撤回成功；4s 后撤回返回 `2220` 且原消息保留；B 看到占位；已恢复默认 120s |
+| 撤回代码全量 race | **PASS** | Linux Docker `golang:1.25-bookworm`；`go test -race ./... -count=1` | exit 0，无 `WARNING: DATA RACE` |
 | 撤回 schema | 无需变更 | 复用 `msg` JSON；无 `recalled_at` 列/表/索引 | — |
+
+## 好友上线提醒协议设计（2026-11-14）
+
+| 项目 | 结果 | 说明 |
+|---|---|---|
+| 协议（`friend.online`/`friend.offline`） | **设计完成** | docs/06 §5.7：Chat WS 事件、payload `{userID, at}`、全局 0→1/1→0、仅通知好友、多端/多实例语义、Presence 权威、best-effort |
+| 后端/前端实现 | **NOT RUN** | 本轮只做协议设计；未发送/处理事件 |
+| Chat Hub 并发模型 | **无需修改** | 现有 `LocalConnectionTransitionObserver` 已满足“回调不做 I/O”；实现需组合 observer + 有界 worker，不改 Hub 结构 |
 
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
@@ -87,7 +97,7 @@
 | 文件吞吐档位（1 MiB/10 MiB、并发） | **NOT RUN** | 本轮未跑 file 负载 | 可选后续轮次 |
 | 图片上传/下载吞吐与预览性能 | **NOT RUN** | 未单独做图片性能档位 | 可选后续轮次 |
 | 普通文件消息吞吐/下载性能 | **NOT RUN** | 未单独做文件消息性能档位 | 可选后续轮次 |
-| 撤回窗口浏览器 E2E | **NOT RUN** | 默认 120s，未做短窗口 UI 验证 | 可选 |
+| 好友上线提醒实现（后端/前端/E2E） | **NOT RUN** | 本轮只完成协议设计 | 下一轮 |
 | 远端 GitHub Actions 结果 | **NOT OBSERVED** | 本环境无 GitHub API 访问；仅 local equivalent PASS | — |
 
 > 历史性能数字（`docs/performance/baseline.md`）是 2026-10-15 的记录；本轮最小场景结果只代表当前机器当前栈，不构成容量承诺，也不替代历史完整档位。
@@ -133,3 +143,4 @@ cd ..\admin; pnpm type-check; pnpm test; pnpm build
 - 2026-11-14：V2 Phase 1 普通文件消息（单测 / 聊天文件集成 / 浏览器文件 E2E），见 `agent_logs/operations/day-12/`。
 - 2026-11-14：文件 Phase 收尾（全量 race / 群聊文件 E2E）+ 撤回协议设计，见 `agent_logs/operations/day-13/`。
 - 2026-11-14：撤回实现（单测 / 集成 / 文件授权 / 浏览器 E2E），见 `agent_logs/operations/day-14/`。
+- 2026-11-14：撤回收尾（并发测试 / 窗口 E2E / 全量 race）+ 好友上线提醒协议设计，见 `agent_logs/operations/day-15/`。
