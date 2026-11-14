@@ -26,6 +26,7 @@ describe('MessageBubble', () => {
     const wrapper = mount(MessageBubble, { props: { msg: { type: 1, textMsg: { content: '<b>hello</b>' } } } })
     expect(wrapper.text()).toBe('<b>hello</b>')
     expect(wrapper.find('b').exists()).toBe(false)
+    expect(harness.download).not.toHaveBeenCalled()
   })
 
   it('downloads an image with the authenticated API and opens a preview on click', async () => {
