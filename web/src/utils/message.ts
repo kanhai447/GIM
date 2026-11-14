@@ -15,20 +15,50 @@ export interface RenderableFile {
   mimeType?: string
 }
 
+export interface RenderableWithdraw {
+  msgID: number
+}
+
 export interface RenderableMessagePayload {
   type: number
   textMsg?: { content: string }
   imageMsg?: RenderableImage
   fileMsg?: RenderableFile
+  withdrawMsg?: RenderableWithdraw
 }
 
 export function messagePreviewText(message: { msg?: RenderableMessagePayload } | undefined): string {
   const payload = message?.msg
   if (!payload) return '暂无消息'
+  if (payload.type === 4) return '[撤回]'
   if (payload.type === 3) return '[文件]'
   if (payload.type === 2) return '[图片]'
   if (payload.type === 1) return payload.textMsg?.content ?? ''
   return '[暂不支持的消息]'
+}
+
+export const RECALL_WINDOW_MS = 120_000
+
+export function canRecallMessage(
+  message: { sendUserID: number; messageId?: number; msg: RenderableMessagePayload; createdAt: string },
+  currentUserID: number,
+  now = Date.now(),
+): boolean {
+  if (!message.messageId || message.sendUserID !== currentUserID) return false
+  if (message.msg.type < 1 || message.msg.type > 3) return false
+  const createdAt = Date.parse(message.createdAt)
+  if (Number.isNaN(createdAt)) return false
+  return now - createdAt <= RECALL_WINDOW_MS
+}
+
+export function isWithdrawMessage(payload: RenderableMessagePayload | undefined): payload is RenderableMessagePayload & { type: 4; withdrawMsg: RenderableWithdraw } {
+  return payload?.type === 4 && typeof payload.withdrawMsg?.msgID === 'number' && payload.withdrawMsg.msgID > 0
+}
+
+export function isValidWithdrawPayload(value: unknown): value is RenderableWithdraw {
+  if (typeof value !== 'object' || value === null) return false
+  const withdraw = value as Record<string, unknown>
+  return typeof withdraw.msgID === 'number' && Number.isSafeInteger(withdraw.msgID) && withdraw.msgID > 0
 }
 
 export function isImageMessage(payload: RenderableMessagePayload | undefined): payload is RenderableMessagePayload & { type: 2; imageMsg: RenderableImage } {

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatFileSize, isFileMessage, isImageMessage, isValidFilePayload, isValidImagePayload, messagePreviewText } from '@/utils/message'
+import { canRecallMessage, formatFileSize, isFileMessage, isImageMessage, isValidFilePayload, isValidImagePayload, isValidWithdrawPayload, isWithdrawMessage, messagePreviewText } from '@/utils/message'
 
 describe('message helpers', () => {
   it('previews text, image, file and unsupported payloads', () => {
     expect(messagePreviewText({ msg: { type: 1, textMsg: { content: 'hello' } } })).toBe('hello')
     expect(messagePreviewText({ msg: { type: 2, imageMsg: { fileID: 9 } } })).toBe('[图片]')
     expect(messagePreviewText({ msg: { type: 3, fileMsg: { fileID: 9 } } })).toBe('[文件]')
-    expect(messagePreviewText({ msg: { type: 4 } })).toBe('[暂不支持的消息]')
+    expect(messagePreviewText({ msg: { type: 4, withdrawMsg: { msgID: 9 } } })).toBe('[撤回]')
+    expect(messagePreviewText({ msg: { type: 5 } })).toBe('[暂不支持的消息]')
     expect(messagePreviewText(undefined)).toBe('暂无消息')
   })
 
@@ -41,5 +42,22 @@ describe('message helpers', () => {
     expect(formatFileSize(2048)).toBe('2.0 KB')
     expect(formatFileSize(5 * 1024 * 1024)).toBe('5.0 MB')
     expect(formatFileSize(undefined)).toBe('')
+  })
+
+  it('recognizes withdraw payloads and recall eligibility', () => {
+    expect(isWithdrawMessage({ type: 4, withdrawMsg: { msgID: 9 } })).toBe(true)
+    expect(isWithdrawMessage({ type: 4, withdrawMsg: { msgID: 0 } })).toBe(false)
+    expect(isValidWithdrawPayload({ msgID: 9 })).toBe(true)
+    expect(isValidWithdrawPayload({ msgID: 0 })).toBe(false)
+    expect(isValidWithdrawPayload({})).toBe(false)
+
+    const now = Date.parse('2026-11-14T12:00:00Z')
+    const recent = { sendUserID: 1, messageId: 1, msg: { type: 1, textMsg: { content: 'x' } }, createdAt: '2026-11-14T11:59:30Z' }
+    const old = { ...recent, createdAt: '2026-11-14T11:50:00Z' }
+    expect(canRecallMessage(recent, 1, now)).toBe(true)
+    expect(canRecallMessage(old, 1, now)).toBe(false)
+    expect(canRecallMessage(recent, 2, now)).toBe(false)
+    expect(canRecallMessage({ ...recent, messageId: undefined }, 1, now)).toBe(false)
+    expect(canRecallMessage({ ...recent, msg: { type: 4, withdrawMsg: { msgID: 1 } } }, 1, now)).toBe(false)
   })
 })

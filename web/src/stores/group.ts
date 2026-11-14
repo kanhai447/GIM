@@ -5,7 +5,7 @@ import { PublicApiError } from '@/api/client'
 import { fileApi } from '@/api/file'
 import { groupApi } from '@/api/group'
 import { GroupSocketClient } from '@/service/ws/group_socket'
-import { latestGroupMessageID, mergeGroupMessages } from '@/stores/group_reconcile'
+import { applyGroupWithdrawals, latestGroupMessageID, mergeGroupMessages } from '@/stores/group_reconcile'
 import type {
   CreateGroupInput,
   GroupConnectionState,
@@ -61,6 +61,7 @@ export const useGroupStore = defineStore('group', () => {
   const lastError = ref('')
   const uploadingImage = ref(false)
   const uploadingFile = ref(false)
+  const recalling = ref<number[]>([])
   const currentUnavailable = ref(false)
 
   let token = ''
@@ -70,6 +71,8 @@ export const useGroupStore = defineStore('group', () => {
   let groupActive = false
   let outageChecked = false
   const ackTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const pendingRecalls = new Map<string, number>()
+  const recallTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const readInFlight = new Set<number>()
   const readRequestedThrough = new Map<number, number>()
 
@@ -272,7 +275,7 @@ export const useGroupStore = defineStore('group', () => {
     history.loading = true
     try {
       const page = await groupApi.history(groupID, undefined, 20)
-      messagesByGroup.value[String(groupID)] = mergeGroupMessages(messagesFor(groupID), page.list, currentUserID.value)
+      messagesByGroup.value[String(groupID)] = applyGroupWithdrawals(mergeGroupMessages(messagesFor(groupID), page.list, currentUserID.value))
       history.loaded = true
       history.hasMore = page.hasMore
       history.nextBeforeMessageID = page.nextBeforeMessageID
@@ -291,7 +294,7 @@ export const useGroupStore = defineStore('group', () => {
     history.loading = true
     try {
       const page = await groupApi.history(groupID, history.nextBeforeMessageID, 20)
-      messagesByGroup.value[String(groupID)] = mergeGroupMessages(messagesFor(groupID), page.list, currentUserID.value)
+      messagesByGroup.value[String(groupID)] = applyGroupWithdrawals(mergeGroupMessages(messagesFor(groupID), page.list, currentUserID.value))
       history.hasMore = page.hasMore
       history.nextBeforeMessageID = page.nextBeforeMessageID
       lastError.value = ''
@@ -395,6 +398,60 @@ export const useGroupStore = defineStore('group', () => {
     sendPending(clientMsgId)
   }
 
+  function findByMessageID(messageID: number): GroupMessageViewItem | undefined {
+    for (const messages of Object.values(messagesByGroup.value)) {
+      const found = messages.find((item) => item.messageId === messageID)
+      if (found) return found
+    }
+    return undefined
+  }
+
+  function finishRecall(clientMsgId: string): number | undefined {
+    const targetID = pendingRecalls.get(clientMsgId)
+    pendingRecalls.delete(clientMsgId)
+    const timer = recallTimers.get(clientMsgId)
+    if (timer) clearTimeout(timer)
+    recallTimers.delete(clientMsgId)
+    if (targetID !== undefined) recalling.value = recalling.value.filter((id) => id !== targetID)
+    return targetID
+  }
+
+  function markRecalledLocally(targetID: number): boolean {
+    const target = findByMessageID(targetID)
+    if (!target) return false
+    target.msg = { type: 4, withdrawMsg: { msgID: targetID } }
+    target.status = 'sent'
+    return true
+  }
+
+  function recallMessage(messageID: number): string | null {
+    const message = findByMessageID(messageID)
+    if (!message || message.sendUserID !== currentUserID.value || currentUnavailable.value) return null
+    if (message.msg.type < 1 || message.msg.type > 3) return null
+    if (!socket) {
+      lastError.value = '群连接不可用，撤回未发送'
+      return null
+    }
+    const clientMsgId = newClientMsgID()
+    const sent = socket.send({
+      event: 'group.send',
+      clientMsgId,
+      data: { groupID: message.groupID, msg: { type: 4, withdrawMsg: { msgID: messageID } } },
+    })
+    if (!sent) {
+      lastError.value = '群连接不可用，撤回未发送'
+      return null
+    }
+    pendingRecalls.set(clientMsgId, messageID)
+    recalling.value = [...recalling.value, messageID]
+    recallTimers.set(clientMsgId, setTimeout(() => {
+      if (!pendingRecalls.has(clientMsgId)) return
+      finishRecall(clientMsgId)
+      lastError.value = '撤回确认超时，可重试'
+    }, ACK_TIMEOUT_MS))
+    return clientMsgId
+  }
+
   function sendPending(clientMsgId: string): void {
     const message = findByClientMsgID(clientMsgId)
     if (!message || message.status !== 'pending' || !socket) return
@@ -444,6 +501,12 @@ export const useGroupStore = defineStore('group', () => {
 
   function handleEnvelope(envelope: GroupServerEnvelope): void {
     if (envelope.event === 'group.ack') {
+      if (pendingRecalls.has(envelope.clientMsgId)) {
+        const targetID = finishRecall(envelope.clientMsgId)
+        if (targetID !== undefined) markRecalledLocally(targetID)
+        scheduleReconcile()
+        return
+      }
       const pending = findByClientMsgID(envelope.clientMsgId)
       if (!pending || pending.groupID !== envelope.data.groupID) return
       clearAckTimer(envelope.clientMsgId)
@@ -464,6 +527,11 @@ export const useGroupStore = defineStore('group', () => {
       return
     }
     if (envelope.event === 'error') {
+      if (envelope.clientMsgId && pendingRecalls.has(envelope.clientMsgId)) {
+        finishRecall(envelope.clientMsgId)
+        lastError.value = envelope.error.message || '撤回失败'
+        return
+      }
       if (!envelope.clientMsgId) return
       const pending = findByClientMsgID(envelope.clientMsgId)
       if (!pending) return
@@ -482,6 +550,10 @@ export const useGroupStore = defineStore('group', () => {
   }
 
   function receiveMessage(message: GroupMessage): void {
+    if (message.msg.type === 4 && markRecalledLocally(message.msg.withdrawMsg.msgID)) {
+      scheduleReconcile()
+      return
+    }
     const existing = messagesFor(message.groupID)
     const alreadyPresent = existing.some((item) => item.messageId === message.messageId)
     messagesByGroup.value[String(message.groupID)] = mergeGroupMessages(existing, [message], currentUserID.value)
@@ -604,6 +676,8 @@ export const useGroupStore = defineStore('group', () => {
     sendText,
     sendImage,
     sendFile,
+    recallMessage,
+    recalling,
     uploadingImage,
     uploadingFile,
     retryMessage,

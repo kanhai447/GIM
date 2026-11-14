@@ -30,7 +30,14 @@ export interface FileMessagePayload {
   }
 }
 
-export type ChatMessagePayload = TextMessagePayload | ImageMessagePayload | FileMessagePayload
+export interface WithdrawMessagePayload {
+  type: 4
+  withdrawMsg: {
+    msgID: number
+  }
+}
+
+export type ChatMessagePayload = TextMessagePayload | ImageMessagePayload | FileMessagePayload | WithdrawMessagePayload
 
 export interface PrivateChatMessage {
   messageId: number

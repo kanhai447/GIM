@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import MessageBubble from '@/components/chat/MessageBubble.vue'
 import type { ChatMessageItem } from '@/types/chat'
+import { canRecallMessage } from '@/utils/message'
 
-defineProps<{ messages: ChatMessageItem[]; currentUserID: number; hasMore: boolean; loading: boolean }>()
-const emit = defineEmits<{ loadOlder: []; retry: [clientMsgId: string] }>()
+const props = defineProps<{ messages: ChatMessageItem[]; currentUserID: number; hasMore: boolean; loading: boolean; recalling?: number[] }>()
+const emit = defineEmits<{ loadOlder: []; retry: [clientMsgId: string]; recall: [messageId: number] }>()
+
+function canRecall(message: ChatMessageItem): boolean {
+  if (message.status !== 'sent') return false
+  return canRecallMessage(message, props.currentUserID)
+}
+
+function recall(message: ChatMessageItem): void {
+  if (message.messageId) emit('recall', message.messageId)
+}
 
 function formatTime(value: string): string {
   const date = new Date(value)
@@ -31,6 +41,13 @@ function formatTime(value: string): string {
         <div v-if="message.msg.type === 1" class="bubble"><MessageBubble :msg="message.msg" /></div>
         <div v-else class="image-bubble-wrap"><MessageBubble :msg="message.msg" /></div>
         <div class="message-meta">
+          <button
+            v-if="canRecall(message)"
+            type="button"
+            class="recall-label"
+            :disabled="recalling?.includes(message.messageId!)"
+            @click="recall(message)"
+          >{{ recalling?.includes(message.messageId!) ? '撤回中…' : '撤回' }}</button>
           <time>{{ formatTime(message.createdAt) }}</time>
           <span v-if="message.status === 'pending'" class="pending-label">发送中</span>
           <span v-else-if="message.status === 'sent' && message.sendUserID === currentUserID" class="sent-label">已发送</span>
@@ -62,5 +79,7 @@ function formatTime(value: string): string {
 .pending-label { color: #b47a27; }
 .sent-label { color: #6680a7; }
 .failed-label { border: 0; padding: 0; background: transparent; color: #d24343; font-size: 10px; cursor: pointer; }
+.recall-label { border: 0; padding: 0; background: transparent; color: #4774bd; font-size: 10px; cursor: pointer; }
+.recall-label:disabled { color: #9aa4b3; cursor: default; }
 .empty-messages { display: grid; place-items: center; min-height: 260px; color: #99a3b2; }
 </style>

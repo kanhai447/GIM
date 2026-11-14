@@ -86,8 +86,10 @@ onBeforeUnmount(() => {
         :has-more="group.currentHistory.hasMore"
         :loading="group.currentHistory.loading"
         :sender-name="group.senderName"
+        :recalling="group.recalling"
         @load-older="group.loadOlder()"
         @retry="group.retryMessage"
+        @recall="group.recallMessage"
       />
       <p v-if="group.lastError" class="group-error">{{ group.lastError }}</p>
       <GroupComposer :disabled="group.currentUnavailable" :connection-state="group.connectionState" :uploading="group.uploadingImage" :uploading-file="group.uploadingFile" @send="group.sendText" @image="group.sendImage" @file="group.sendFile" />

@@ -195,6 +195,18 @@ describe('group store', () => {
     expect(store.currentMessages.find((message) => message.clientMsgId === clientMsgId)?.msg.type).toBe(3)
   })
 
+  it('recalls an own group message and replaces it on ACK', async () => {
+    const store = await openStore()
+    latestSocket().options.onStateChange('connected')
+    const targetClient = store.sendText('group recall')!
+    latestSocket().options.onEnvelope({ event: 'group.ack', clientMsgId: targetClient, data: { messageId: 30, groupID: 5, createdAt: '2026-11-14T12:00:00Z' } })
+    const recallClient = store.recallMessage(30)!
+    expect(latestSocket().send.mock.calls.at(-1)?.[0].data.msg).toEqual({ type: 4, withdrawMsg: { msgID: 30 } })
+    latestSocket().options.onEnvelope({ event: 'group.ack', clientMsgId: recallClient, data: { messageId: 31, groupID: 5, createdAt: '2026-11-14T12:00:01Z' } })
+    expect(store.currentMessages.find((message) => message.messageId === 30)?.msg).toEqual({ type: 4, withdrawMsg: { msgID: 30 } })
+    expect(store.recalling).toEqual([])
+  })
+
   it('merges ACK before group.message into one sent item', async () => {
     const store = await openStore()
     latestSocket().options.onStateChange('connected')

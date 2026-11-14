@@ -70,8 +70,10 @@ onBeforeUnmount(() => {
         :current-user-i-d="chat.currentUserID"
         :has-more="chat.currentHistory.hasMore"
         :loading="chat.currentHistory.loading"
+        :recalling="chat.recalling"
         @load-older="chat.loadOlder()"
         @retry="chat.retryMessage"
+        @recall="chat.recallMessage"
       />
       <p v-if="chat.lastError" class="chat-error">{{ chat.lastError }}</p>
       <ChatComposer :disabled="!chat.currentPeerID" :connection-state="chat.connectionState" :uploading="chat.uploadingImage" :uploading-file="chat.uploadingFile" @send="chat.sendText" @image="chat.sendImage" @file="chat.sendFile" />

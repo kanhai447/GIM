@@ -82,8 +82,13 @@ describe('MessageBubble', () => {
     expect(harness.download).toHaveBeenCalledTimes(2)
   })
 
+  it('renders a withdrawn placeholder for type=4', () => {
+    const wrapper = mount(MessageBubble, { props: { msg: { type: 4, withdrawMsg: { msgID: 9 } } } })
+    expect(wrapper.text()).toContain('消息已撤回')
+  })
+
   it('renders an unsupported placeholder for unknown message types', () => {
-    const wrapper = mount(MessageBubble, { props: { msg: { type: 4 } } })
+    const wrapper = mount(MessageBubble, { props: { msg: { type: 5 } } })
     expect(wrapper.text()).toContain('暂不支持的消息')
   })
 })

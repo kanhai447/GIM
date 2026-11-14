@@ -101,6 +101,7 @@ onBeforeUnmount(() => {
       {{ downloading ? '下载中…' : downloadFailed ? '重试下载' : '下载' }}
     </button>
   </span>
+  <span v-else-if="msg.type === 4" class="withdrawn">消息已撤回</span>
   <span v-else class="unsupported">暂不支持的消息</span>
 
   <div v-if="preview && source" class="image-preview" role="dialog" aria-modal="true" @click.self="preview = false">
@@ -116,6 +117,7 @@ onBeforeUnmount(() => {
 .image-loading, .image-failed { display: inline-block; padding: 10px 12px; border: 1px dashed #c9d4e4; border-radius: 10px; color: #7d8899; font-size: 12px; }
 .image-failed { border-color: #e2b4b4; color: #c05353; cursor: pointer; background: #fff7f7; }
 .unsupported { color: #8a95a6; font-size: 12px; }
+.withdrawn { color: #8a95a6; font-size: 12px; font-style: italic; }
 .file-content { display: flex; gap: 10px; align-items: center; min-width: 220px; padding: 10px 12px; border: 1px solid #dfe6f0; border-radius: 12px; background: #fff; box-shadow: 0 5px 14px rgba(40, 57, 86, .05); }
 .file-icon { font-size: 22px; }
 .file-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }

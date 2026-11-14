@@ -30,7 +30,14 @@ export interface GroupFilePayload {
   }
 }
 
-export type GroupMessagePayload = GroupTextPayload | GroupImagePayload | GroupFilePayload
+export interface GroupWithdrawPayload {
+  type: 4
+  withdrawMsg: {
+    msgID: number
+  }
+}
+
+export type GroupMessagePayload = GroupTextPayload | GroupImagePayload | GroupFilePayload | GroupWithdrawPayload
 
 export interface GroupMessage {
   messageId: number

@@ -164,6 +164,21 @@ describe('ChatSocketClient', () => {
     expect(parseChatServerEnvelope(JSON.stringify(badSize))).toBeNull()
   })
 
+  it('parses withdraw messages and rejects malformed targets', () => {
+    const withdraw = {
+      event: 'chat.message',
+      data: {
+        messageId: 3, sendUserID: 2, revUserID: 3, clientMsgId: 'c3', createdAt: 'now',
+        msg: { type: 4, withdrawMsg: { msgID: 1 } },
+      },
+    }
+    expect(parseChatServerEnvelope(JSON.stringify(withdraw))?.event).toBe('chat.message')
+    const zeroTarget = { ...withdraw, data: { ...withdraw.data, msg: { type: 4, withdrawMsg: { msgID: 0 } } } }
+    expect(parseChatServerEnvelope(JSON.stringify(zeroTarget))).toBeNull()
+    const missingTarget = { ...withdraw, data: { ...withdraw.data, msg: { type: 4 } } }
+    expect(parseChatServerEnvelope(JSON.stringify(missingTarget))).toBeNull()
+  })
+
   it('parses typed server events and ignores malformed or unknown frames', () => {
     const { client, sockets, envelopes } = setup()
     client.connect()

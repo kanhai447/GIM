@@ -7,7 +7,7 @@ import type {
   ChatServerEnvelope,
   PrivateChatMessage,
 } from '@/types/chat'
-import { isValidFilePayload, isValidImagePayload } from '@/utils/message'
+import { isValidFilePayload, isValidImagePayload, isValidWithdrawPayload } from '@/utils/message'
 
 const OPEN = 1
 const AUTH_CLOSE_CODES = new Set([1008, 4001, 4003, 4401, 4403])
@@ -48,7 +48,8 @@ function isMessage(value: unknown): value is PrivateChatMessage {
   const message = value.msg
   return (message.type === 1 && isRecord(message.textMsg) && typeof message.textMsg.content === 'string') ||
     (message.type === 2 && isValidImagePayload(message.imageMsg)) ||
-    (message.type === 3 && isValidFilePayload(message.fileMsg))
+    (message.type === 3 && isValidFilePayload(message.fileMsg)) ||
+    (message.type === 4 && isValidWithdrawPayload(message.withdrawMsg))
 }
 
 export function parseChatServerEnvelope(raw: string): ChatServerEnvelope | null {

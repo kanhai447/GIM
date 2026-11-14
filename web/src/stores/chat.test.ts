@@ -198,6 +198,46 @@ describe('chat store', () => {
     expect(latestSocket().send).not.toHaveBeenCalled()
   })
 
+  it('recalls an own sent message and replaces it on ACK', async () => {
+    const store = await startStore()
+    await store.openConversation(2)
+    latestSocket().options.onStateChange('connected')
+    const targetClient = store.sendText('to recall')!
+    latestSocket().options.onEnvelope({ event: 'chat.ack', clientMsgId: targetClient, data: { messageId: 30, createdAt: '2026-11-14T12:00:00Z' } })
+    const recallClient = store.recallMessage(30)!
+    expect(latestSocket().send.mock.calls.at(-1)?.[0].data.msg).toEqual({ type: 4, withdrawMsg: { msgID: 30 } })
+    expect(store.recalling).toEqual([30])
+    latestSocket().options.onEnvelope({ event: 'chat.ack', clientMsgId: recallClient, data: { messageId: 31, createdAt: '2026-11-14T12:00:01Z' } })
+    expect(store.currentMessages.find((item) => item.messageId === 30)?.msg).toEqual({ type: 4, withdrawMsg: { msgID: 30 } })
+    expect(store.recalling).toEqual([])
+  })
+
+  it('keeps the original and reports an error when recall fails', async () => {
+    const store = await startStore()
+    await store.openConversation(2)
+    latestSocket().options.onStateChange('connected')
+    const targetClient = store.sendText('keep me')!
+    latestSocket().options.onEnvelope({ event: 'chat.ack', clientMsgId: targetClient, data: { messageId: 32, createdAt: '2026-11-14T12:00:00Z' } })
+    const recallClient = store.recallMessage(32)!
+    latestSocket().options.onEnvelope({ event: 'error', clientMsgId: recallClient, error: { code: 2220, message: '超过撤回时间窗口' } })
+    expect(store.currentMessages.find((item) => item.messageId === 32)?.msg.type).toBe(1)
+    expect(store.lastError).toBe('超过撤回时间窗口')
+    expect(store.recalling).toEqual([])
+  })
+
+  it('applies a pushed withdraw to the target without adding a separate row', async () => {
+    const store = await startStore()
+    await store.openConversation(2)
+    const before = store.currentMessages.length
+    latestSocket().options.onEnvelope({
+      event: 'chat.message',
+      data: { messageId: 33, sendUserID: 1, revUserID: 2, clientMsgId: 'push-recall', msg: { type: 4, withdrawMsg: { msgID: 10 } }, createdAt: '2026-11-14T12:00:02Z' },
+    })
+    expect(store.currentMessages.find((item) => item.messageId === 10)?.msg).toEqual({ type: 4, withdrawMsg: { msgID: 10 } })
+    expect(store.currentMessages).toHaveLength(before)
+    expect(store.currentMessages.some((item) => item.messageId === 33)).toBe(false)
+  })
+
   it('moves pending to sent and assigns messageId on ACK without adding a duplicate', async () => {
     const store = await startStore()
     await store.openConversation(2)

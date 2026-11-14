@@ -181,6 +181,19 @@ describe('group protocol parsing', () => {
     expect(parseGroupServerEnvelope(JSON.stringify(badName))).toBeNull()
   })
 
+  it('parses withdraw messages and rejects malformed targets', () => {
+    const withdraw = {
+      event: 'group.message',
+      data: {
+        messageId: 3, groupID: 2, sendUserID: 3, clientMsgId: 'c3', createdAt: 'now',
+        msg: { type: 4, withdrawMsg: { msgID: 1 } },
+      },
+    }
+    expect(parseGroupServerEnvelope(JSON.stringify(withdraw))?.event).toBe('group.message')
+    const zeroTarget = { ...withdraw, data: { ...withdraw.data, msg: { type: 4, withdrawMsg: { msgID: 0 } } } }
+    expect(parseGroupServerEnvelope(JSON.stringify(zeroTarget))).toBeNull()
+  })
+
   it('rejects invalid numeric and message fields', () => {
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'group.ack', clientMsgId: 'c1', data: { messageId: 0, groupID: 2, createdAt: 'now' } }))).toBeNull()
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'group.message', data: { messageId: 1, groupID: 2, sendUserID: 3, clientMsgId: 'c1', msg: { type: 2 }, createdAt: 'now' } }))).toBeNull()

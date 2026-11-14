@@ -70,6 +70,23 @@ describe('private chat components', () => {
     expect(wrapper.emitted('select')).toEqual([[2]])
   })
 
+  it('shows recall only for recent own messages and emits the message ID', async () => {
+    const recent = { ...message('sent', '9'), createdAt: new Date().toISOString() }
+    const wrapper = mount(ChatMessageList, {
+      props: { messages: [recent], currentUserID: 1, hasMore: false, loading: false, recalling: [] },
+    })
+    await wrapper.get('.recall-label').trigger('click')
+    expect(wrapper.emitted('recall')).toEqual([[9]])
+    const old = mount(ChatMessageList, {
+      props: { messages: [message('sent', '10')], currentUserID: 1, hasMore: false, loading: false },
+    })
+    expect(old.find('.recall-label').exists()).toBe(false)
+    const recalling = mount(ChatMessageList, {
+      props: { messages: [recent], currentUserID: 1, hasMore: false, loading: false, recalling: [9] },
+    })
+    expect(recalling.get('.recall-label').text()).toContain('撤回中')
+  })
+
   it('renders HTML-like message content as literal text', () => {
     const unsafeLooking = message('sent', '4')
     if (unsafeLooking.msg.type !== 1) throw new Error('expected a text payload')

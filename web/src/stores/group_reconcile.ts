@@ -41,3 +41,22 @@ export function latestGroupMessageID(messages: GroupMessageViewItem[]): number |
   }
   return latest
 }
+
+/** Replaces recalled originals and hides the separate withdraw row when merged. */
+export function applyGroupWithdrawals(items: GroupMessageViewItem[]): GroupMessageViewItem[] {
+  const byID = new Map<number, GroupMessageViewItem>()
+  for (const item of items) {
+    if (item.messageId !== undefined) byID.set(item.messageId, item)
+  }
+  const removed = new Set<number>()
+  for (const item of items) {
+    if (item.messageId === undefined || item.msg.type !== 4) continue
+    const targetID = item.msg.withdrawMsg.msgID
+    const target = byID.get(targetID)
+    if (!target || target === item) continue
+    target.msg = { type: 4, withdrawMsg: { msgID: targetID } }
+    target.status = 'sent'
+    removed.add(item.messageId)
+  }
+  return removed.size ? items.filter((item) => item.messageId === undefined || !removed.has(item.messageId)) : items
+}

@@ -6,6 +6,7 @@ import { PublicApiError } from '@/api/client'
 import { fileApi } from '@/api/file'
 import { ChatSocketClient } from '@/service/ws/chat_socket'
 import {
+  applyWithdrawals,
   latestServerMessageID,
   mergeServerMessages,
   messagePreview,
@@ -49,6 +50,7 @@ export const useChatStore = defineStore('chat', () => {
   const lastError = ref('')
   const uploadingImage = ref(false)
   const uploadingFile = ref(false)
+  const recalling = ref<number[]>([])
 
   let token = ''
   let socket: ChatSocketClient | null = null
@@ -57,6 +59,8 @@ export const useChatStore = defineStore('chat', () => {
   let outageChecked = false
   let conversationActive = false
   const ackTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const pendingRecalls = new Map<string, number>()
+  const recallTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const readInFlight = new Set<number>()
   const readRequestedThrough = new Map<number, number>()
 
@@ -210,7 +214,7 @@ export const useChatStore = defineStore('chat', () => {
     state.loading = true
     try {
       const page = await chatApi.history(peerID, undefined, 20)
-      messagesByPeer.value[String(peerID)] = mergeServerMessages(messagesFor(peerID), page.list, currentUserID.value)
+      messagesByPeer.value[String(peerID)] = applyWithdrawals(mergeServerMessages(messagesFor(peerID), page.list, currentUserID.value))
       state.loaded = true
       state.hasMore = page.hasMore
       state.nextBeforeMessageID = page.nextBeforeMessageID
@@ -229,7 +233,7 @@ export const useChatStore = defineStore('chat', () => {
     state.loading = true
     try {
       const page = await chatApi.history(peerID, state.nextBeforeMessageID, 20)
-      messagesByPeer.value[String(peerID)] = mergeServerMessages(messagesFor(peerID), page.list, currentUserID.value)
+      messagesByPeer.value[String(peerID)] = applyWithdrawals(mergeServerMessages(messagesFor(peerID), page.list, currentUserID.value))
       state.hasMore = page.hasMore
       state.nextBeforeMessageID = page.nextBeforeMessageID
       lastError.value = ''
@@ -330,6 +334,62 @@ export const useChatStore = defineStore('chat', () => {
     sendPending(clientMsgId)
   }
 
+  function findByMessageID(messageID: number): ChatMessageItem | undefined {
+    for (const messages of Object.values(messagesByPeer.value)) {
+      const found = messages.find((item) => item.messageId === messageID)
+      if (found) return found
+    }
+    return undefined
+  }
+
+  function finishRecall(clientMsgId: string): number | undefined {
+    const targetID = pendingRecalls.get(clientMsgId)
+    pendingRecalls.delete(clientMsgId)
+    const timer = recallTimers.get(clientMsgId)
+    if (timer) clearTimeout(timer)
+    recallTimers.delete(clientMsgId)
+    if (targetID !== undefined) {
+      recalling.value = recalling.value.filter((id) => id !== targetID)
+    }
+    return targetID
+  }
+
+  function markRecalledLocally(targetID: number): boolean {
+    const target = findByMessageID(targetID)
+    if (!target) return false
+    target.msg = { type: 4, withdrawMsg: { msgID: targetID } }
+    target.status = 'sent'
+    return true
+  }
+
+  function recallMessage(messageID: number): string | null {
+    const message = findByMessageID(messageID)
+    if (!message || message.sendUserID !== currentUserID.value) return null
+    if (message.msg.type < 1 || message.msg.type > 3) return null
+    if (!socket) {
+      lastError.value = '连接不可用，撤回未发送'
+      return null
+    }
+    const clientMsgId = newClientMsgID()
+    const sent = socket.send({
+      event: 'chat.send',
+      clientMsgId,
+      data: { revUserID: message.revUserID, msg: { type: 4, withdrawMsg: { msgID: messageID } } },
+    })
+    if (!sent) {
+      lastError.value = '连接不可用，撤回未发送'
+      return null
+    }
+    pendingRecalls.set(clientMsgId, messageID)
+    recalling.value = [...recalling.value, messageID]
+    recallTimers.set(clientMsgId, setTimeout(() => {
+      if (!pendingRecalls.has(clientMsgId)) return
+      finishRecall(clientMsgId)
+      lastError.value = '撤回确认超时，可重试'
+    }, ACK_TIMEOUT_MS))
+    return clientMsgId
+  }
+
   function sendPending(clientMsgId: string): void {
     const message = findByClientMsgID(clientMsgId)
     if (!message || message.status !== 'pending' || !socket) return
@@ -380,6 +440,12 @@ export const useChatStore = defineStore('chat', () => {
 
   function handleEnvelope(envelope: ChatServerEnvelope): void {
     if (envelope.event === 'chat.ack') {
+      if (pendingRecalls.has(envelope.clientMsgId)) {
+        const targetID = finishRecall(envelope.clientMsgId)
+        if (targetID !== undefined) markRecalledLocally(targetID)
+        scheduleSessionRefresh()
+        return
+      }
       const message = findByClientMsgID(envelope.clientMsgId)
       if (!message) return
       clearAckTimer(envelope.clientMsgId)
@@ -399,6 +465,11 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     if (envelope.event === 'error') {
+      if (envelope.clientMsgId && pendingRecalls.has(envelope.clientMsgId)) {
+        finishRecall(envelope.clientMsgId)
+        lastError.value = envelope.error.message || '撤回失败'
+        return
+      }
       if (!envelope.clientMsgId) return
       const message = findByClientMsgID(envelope.clientMsgId)
       if (!message) return
@@ -411,6 +482,10 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function receiveMessage(message: PrivateChatMessage): void {
+    if (message.msg.type === 4 && markRecalledLocally(message.msg.withdrawMsg.msgID)) {
+      scheduleSessionRefresh()
+      return
+    }
     const peerID = peerIDForMessage(message, currentUserID.value)
     const existing = messagesFor(peerID)
     if (existing.some((item) => item.messageId === message.messageId)) return
@@ -505,6 +580,8 @@ export const useChatStore = defineStore('chat', () => {
     sendText,
     sendImage,
     sendFile,
+    recallMessage,
+    recalling,
     uploadingImage,
     uploadingFile,
     retryMessage,
