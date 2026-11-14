@@ -48,6 +48,7 @@ export const useChatStore = defineStore('chat', () => {
   const currentUserID = ref(0)
   const lastError = ref('')
   const uploadingImage = ref(false)
+  const uploadingFile = ref(false)
 
   let token = ''
   let socket: ChatSocketClient | null = null
@@ -286,6 +287,41 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function sendFile(file: File): Promise<string | null> {
+    const peerID = currentPeerID.value
+    if (!peerID || !currentUserID.value) return null
+    uploadingFile.value = true
+    try {
+      const uploaded = await fileApi.upload(file)
+      const clientMsgId = newClientMsgID()
+      messagesFor(peerID).push({
+        localID: `client:${clientMsgId}`,
+        sendUserID: currentUserID.value,
+        revUserID: peerID,
+        clientMsgId,
+        msg: {
+          type: 3,
+          fileMsg: {
+            fileID: uploaded.id,
+            url: uploaded.url,
+            fileName: uploaded.fileName,
+            size: uploaded.size,
+            mimeType: uploaded.mimeType,
+          },
+        },
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      })
+      sendPending(clientMsgId)
+      return clientMsgId
+    } catch (error) {
+      handleRequestFailure(error, '文件上传失败')
+      return null
+    } finally {
+      uploadingFile.value = false
+    }
+  }
+
   function retryMessage(clientMsgId: string): void {
     const message = findByClientMsgID(clientMsgId)
     if (!message || message.sendUserID !== currentUserID.value) return
@@ -468,7 +504,9 @@ export const useChatStore = defineStore('chat', () => {
     loadOlder,
     sendText,
     sendImage,
+    sendFile,
     uploadingImage,
+    uploadingFile,
     retryMessage,
     markConversationRead,
     setConversationActive,

@@ -149,6 +149,21 @@ describe('ChatSocketClient', () => {
     expect(parseChatServerEnvelope(JSON.stringify(badWidth))).toBeNull()
   })
 
+  it('parses file messages and rejects malformed file metadata', () => {
+    const file = {
+      event: 'chat.message',
+      data: {
+        messageId: 2, sendUserID: 2, revUserID: 3, clientMsgId: 'c2', createdAt: 'now',
+        msg: { type: 3, fileMsg: { fileID: 11, fileName: 'report.pdf', size: 2048, mimeType: 'application/pdf' } },
+      },
+    }
+    expect(parseChatServerEnvelope(JSON.stringify(file))?.event).toBe('chat.message')
+    const zeroFile = { ...file, data: { ...file.data, msg: { ...file.data.msg, fileMsg: { ...file.data.msg.fileMsg, fileID: 0 } } } }
+    expect(parseChatServerEnvelope(JSON.stringify(zeroFile))).toBeNull()
+    const badSize = { ...file, data: { ...file.data, msg: { ...file.data.msg, fileMsg: { ...file.data.msg.fileMsg, size: -1 } } } }
+    expect(parseChatServerEnvelope(JSON.stringify(badSize))).toBeNull()
+  })
+
   it('parses typed server events and ignores malformed or unknown frames', () => {
     const { client, sockets, envelopes } = setup()
     client.connect()

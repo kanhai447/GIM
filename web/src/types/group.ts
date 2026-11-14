@@ -19,7 +19,18 @@ export interface GroupImagePayload {
   }
 }
 
-export type GroupMessagePayload = GroupTextPayload | GroupImagePayload
+export interface GroupFilePayload {
+  type: 3
+  fileMsg: {
+    fileID: number
+    url?: string
+    fileName?: string
+    size?: number
+    mimeType?: string
+  }
+}
+
+export type GroupMessagePayload = GroupTextPayload | GroupImagePayload | GroupFilePayload
 
 export interface GroupMessage {
   messageId: number

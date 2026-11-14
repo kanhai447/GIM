@@ -55,8 +55,35 @@ describe('MessageBubble', () => {
     expect(harness.download).toHaveBeenCalledTimes(2)
   })
 
+  it('renders a file card and downloads through the authenticated API', async () => {
+    harness.download.mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }))
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const wrapper = mount(MessageBubble, {
+      props: { msg: { type: 3, fileMsg: { fileID: 11, fileName: 'report.pdf', size: 2048, mimeType: 'application/pdf' } } },
+    })
+    expect(wrapper.text()).toContain('report.pdf')
+    expect(wrapper.text()).toContain('2.0 KB')
+    await wrapper.get('.file-download').trigger('click')
+    await vi.waitFor(() => expect(click).toHaveBeenCalledOnce())
+    expect(harness.download).toHaveBeenCalledWith(11)
+    click.mockRestore()
+  })
+
+  it('shows retry when a file download fails', async () => {
+    harness.download.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(new Blob(['retry']))
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const wrapper = mount(MessageBubble, {
+      props: { msg: { type: 3, fileMsg: { fileID: 12, fileName: 'notes.txt', size: 128 } } },
+    })
+    await wrapper.get('.file-download').trigger('click')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('重试下载'))
+    await wrapper.get('.file-download').trigger('click')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('下载'))
+    expect(harness.download).toHaveBeenCalledTimes(2)
+  })
+
   it('renders an unsupported placeholder for unknown message types', () => {
-    const wrapper = mount(MessageBubble, { props: { msg: { type: 3 } } })
+    const wrapper = mount(MessageBubble, { props: { msg: { type: 4 } } })
     expect(wrapper.text()).toContain('暂不支持的消息')
   })
 })

@@ -24,6 +24,7 @@ const harness = vi.hoisted(() => ({
   markRead: vi.fn(),
   setTop: vi.fn(),
   uploadImage: vi.fn(),
+  upload: vi.fn(),
   sockets: [] as FakeSocketInstance[],
 }))
 
@@ -37,7 +38,7 @@ vi.mock('@/api/chat', () => ({
 }))
 
 vi.mock('@/api/file', () => ({
-  fileApi: { uploadImage: harness.uploadImage },
+  fileApi: { uploadImage: harness.uploadImage, upload: harness.upload },
 }))
 
 vi.mock('@/service/ws/chat_socket', () => ({
@@ -94,6 +95,7 @@ describe('chat store', () => {
     harness.markRead.mockReset().mockResolvedValue({ ...session, unreadCount: 0, lastReadMessageID: 10 })
     harness.setTop.mockReset().mockResolvedValue({ ...session, isTop: true })
     harness.uploadImage.mockReset()
+    harness.upload.mockReset()
   })
 
   it('starts one socket and loads server-ordered sessions', async () => {
@@ -166,6 +168,33 @@ describe('chat store', () => {
     expect(clientMsgId).toBeNull()
     expect(store.lastError).toBe('图片上传失败')
     expect(store.currentMessages.some((item) => item.msg.type === 2)).toBe(false)
+    expect(latestSocket().send).not.toHaveBeenCalled()
+  })
+
+  it('uploads a file and sends type=3 with server metadata', async () => {
+    harness.upload.mockResolvedValue({ id: 51, url: '/api/file/51', fileName: 'report.pdf', size: 2048, mimeType: 'application/pdf' })
+    const store = await startStore()
+    await store.openConversation(2)
+    latestSocket().options.onStateChange('connected')
+    const clientMsgId = await store.sendFile(new File(['pdf'], 'report.pdf', { type: 'application/pdf' }))
+    expect(clientMsgId).not.toBeNull()
+    expect(harness.upload).toHaveBeenCalledOnce()
+    expect(latestSocket().send.mock.calls.at(-1)?.[0].data.msg).toEqual({
+      type: 3,
+      fileMsg: { fileID: 51, url: '/api/file/51', fileName: 'report.pdf', size: 2048, mimeType: 'application/pdf' },
+    })
+    expect(store.currentMessages.find((item) => item.clientMsgId === clientMsgId)?.msg.type).toBe(3)
+  })
+
+  it('does not send a file message when the upload fails', async () => {
+    harness.upload.mockRejectedValue(new PublicApiError('文件上传失败', 2502))
+    const store = await startStore()
+    await store.openConversation(2)
+    latestSocket().options.onStateChange('connected')
+    const clientMsgId = await store.sendFile(new File(['x'], 'bad.bin', { type: 'application/octet-stream' }))
+    expect(clientMsgId).toBeNull()
+    expect(store.lastError).toBe('文件上传失败')
+    expect(store.currentMessages.some((item) => item.msg.type === 3)).toBe(false)
     expect(latestSocket().send).not.toHaveBeenCalled()
   })
 

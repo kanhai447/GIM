@@ -60,6 +60,7 @@ export const useGroupStore = defineStore('group', () => {
   const currentUserID = ref(0)
   const lastError = ref('')
   const uploadingImage = ref(false)
+  const uploadingFile = ref(false)
   const currentUnavailable = ref(false)
 
   let token = ''
@@ -350,6 +351,42 @@ export const useGroupStore = defineStore('group', () => {
     }
   }
 
+  async function sendFile(file: File): Promise<string | null> {
+    const groupID = currentGroupID.value
+    if (!groupID || !currentUserID.value || currentUnavailable.value) return null
+    uploadingFile.value = true
+    try {
+      const uploaded = await fileApi.upload(file)
+      const clientMsgId = newClientMsgID()
+      messagesFor(groupID).push({
+        localID: `client:${clientMsgId}`,
+        groupID,
+        sendUserID: currentUserID.value,
+        clientMsgId,
+        msg: {
+          type: 3,
+          fileMsg: {
+            fileID: uploaded.id,
+            url: uploaded.url,
+            fileName: uploaded.fileName,
+            size: uploaded.size,
+            mimeType: uploaded.mimeType,
+          },
+        },
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+        retryable: true,
+      })
+      sendPending(clientMsgId)
+      return clientMsgId
+    } catch (error) {
+      lastError.value = safeRequestError(error, '文件上传失败')
+      return null
+    } finally {
+      uploadingFile.value = false
+    }
+  }
+
   function retryMessage(clientMsgId: string): void {
     const message = findByClientMsgID(clientMsgId)
     if (!message || message.sendUserID !== currentUserID.value || message.retryable === false) return
@@ -566,7 +603,9 @@ export const useGroupStore = defineStore('group', () => {
     loadOlder,
     sendText,
     sendImage,
+    sendFile,
     uploadingImage,
+    uploadingFile,
     retryMessage,
     markGroupRead,
     setGroupActive,

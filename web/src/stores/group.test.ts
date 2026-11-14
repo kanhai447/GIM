@@ -28,6 +28,7 @@ const harness = vi.hoisted(() => ({
   create: vi.fn(),
   setMemberMute: vi.fn(),
   uploadImage: vi.fn(),
+  upload: vi.fn(),
   sockets: [] as FakeSocketInstance[],
 }))
 
@@ -45,7 +46,7 @@ vi.mock('@/api/group', () => ({
 }))
 
 vi.mock('@/api/file', () => ({
-  fileApi: { uploadImage: harness.uploadImage },
+  fileApi: { uploadImage: harness.uploadImage, upload: harness.upload },
 }))
 
 vi.mock('@/service/ws/group_socket', () => ({
@@ -126,6 +127,7 @@ describe('group store', () => {
     harness.history.mockReset().mockResolvedValue({ list: [firstMessage], hasMore: false })
     harness.markRead.mockReset().mockResolvedValue({ ...session, unreadCount: 0, lastReadMessageID: 10 })
     harness.uploadImage.mockReset()
+    harness.upload.mockReset()
     harness.create.mockReset().mockResolvedValue({ ...groupInfo, groupId: 6, title: 'New Group' })
     harness.setMemberMute.mockReset().mockResolvedValue({ updated: true })
   })
@@ -178,6 +180,19 @@ describe('group store', () => {
       imageMsg: { fileID: 77, url: '/api/file/77', size: 4096, mimeType: 'image/jpeg' },
     })
     expect(store.currentMessages.find((message) => message.clientMsgId === clientMsgId)?.msg.type).toBe(2)
+  })
+
+  it('uploads a file and sends type=3 with server metadata', async () => {
+    harness.upload.mockResolvedValue({ id: 52, url: '/api/file/52', fileName: 'notes.txt', size: 128, mimeType: 'text/plain' })
+    const store = await openStore()
+    latestSocket().options.onStateChange('connected')
+    const clientMsgId = await store.sendFile(new File(['notes'], 'notes.txt', { type: 'text/plain' }))
+    expect(clientMsgId).not.toBeNull()
+    expect(latestSocket().send.mock.calls.at(-1)?.[0].data.msg).toEqual({
+      type: 3,
+      fileMsg: { fileID: 52, url: '/api/file/52', fileName: 'notes.txt', size: 128, mimeType: 'text/plain' },
+    })
+    expect(store.currentMessages.find((message) => message.clientMsgId === clientMsgId)?.msg.type).toBe(3)
   })
 
   it('merges ACK before group.message into one sent item', async () => {

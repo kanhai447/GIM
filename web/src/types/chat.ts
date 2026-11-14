@@ -19,7 +19,18 @@ export interface ImageMessagePayload {
   }
 }
 
-export type ChatMessagePayload = TextMessagePayload | ImageMessagePayload
+export interface FileMessagePayload {
+  type: 3
+  fileMsg: {
+    fileID: number
+    url?: string
+    fileName?: string
+    size?: number
+    mimeType?: string
+  }
+}
+
+export type ChatMessagePayload = TextMessagePayload | ImageMessagePayload | FileMessagePayload
 
 export interface PrivateChatMessage {
   messageId: number

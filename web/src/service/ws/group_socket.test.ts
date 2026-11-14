@@ -166,6 +166,21 @@ describe('group protocol parsing', () => {
     expect(parseGroupServerEnvelope(JSON.stringify(badSize))).toBeNull()
   })
 
+  it('parses file messages and rejects malformed file metadata', () => {
+    const file = {
+      event: 'group.message',
+      data: {
+        messageId: 2, groupID: 2, sendUserID: 3, clientMsgId: 'c2', createdAt: 'now',
+        msg: { type: 3, fileMsg: { fileID: 11, fileName: 'report.pdf', size: 2048, mimeType: 'application/pdf' } },
+      },
+    }
+    expect(parseGroupServerEnvelope(JSON.stringify(file))?.event).toBe('group.message')
+    const zeroFile = { ...file, data: { ...file.data, msg: { ...file.data.msg, fileMsg: { ...file.data.msg.fileMsg, fileID: 0 } } } }
+    expect(parseGroupServerEnvelope(JSON.stringify(zeroFile))).toBeNull()
+    const badName = { ...file, data: { ...file.data, msg: { ...file.data.msg, fileMsg: { ...file.data.msg.fileMsg, fileName: 5 } } } }
+    expect(parseGroupServerEnvelope(JSON.stringify(badName))).toBeNull()
+  })
+
   it('rejects invalid numeric and message fields', () => {
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'group.ack', clientMsgId: 'c1', data: { messageId: 0, groupID: 2, createdAt: 'now' } }))).toBeNull()
     expect(parseGroupServerEnvelope(JSON.stringify({ event: 'group.message', data: { messageId: 1, groupID: 2, sendUserID: 3, clientMsgId: 'c1', msg: { type: 2 }, createdAt: 'now' } }))).toBeNull()

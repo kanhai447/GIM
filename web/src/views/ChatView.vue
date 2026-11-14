@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
         @retry="chat.retryMessage"
       />
       <p v-if="chat.lastError" class="chat-error">{{ chat.lastError }}</p>
-      <ChatComposer :disabled="!chat.currentPeerID" :connection-state="chat.connectionState" :uploading="chat.uploadingImage" @send="chat.sendText" @image="chat.sendImage" />
+      <ChatComposer :disabled="!chat.currentPeerID" :connection-state="chat.connectionState" :uploading="chat.uploadingImage" :uploading-file="chat.uploadingFile" @send="chat.sendText" @image="chat.sendImage" @file="chat.sendFile" />
     </main>
     <main v-else class="conversation-empty">
       <div><strong>选择一个会话</strong><span>在左侧打开私聊，消息历史将按游标加载。</span></div>
