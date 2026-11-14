@@ -239,8 +239,22 @@ pnpm type-check; pnpm test; pnpm build
 
 ## 文档入口
 
-- [HTTP API](docs/05_HTTP_API.md)、[WebSocket 协议](docs/06_WEBSOCKET_PROTOCOL.md)、[核心流程](docs/07_CORE_FLOWS.md)
-- [数据库设计](docs/04_DATABASE_DESIGN.md)、[Redis/配置](docs/08_REDIS_CONFIG.md)
-- [验证状态](docs/validation-status.md)、[测试验收](docs/10_TEST_ACCEPTANCE.md)、[已知问题](docs/known-issues.md)
-- [Compose 部署](docs/deployment/docker-compose.md)、[性能基线](docs/performance/baseline.md)
-- [面试材料](docs/interview/project-overview.md)
+| 文档 | 用途 |
+|---|---|
+| [HTTP API](docs/05_HTTP_API.md) | HTTP 契约与错误码 |
+| [WebSocket 协议](docs/06_WEBSOCKET_PROTOCOL.md) | Chat/Group WS 事件、撤回、好友上线 |
+| [核心流程](docs/07_CORE_FLOWS.md) | 登录、消息、好友、文件、撤回、好友提醒流程 |
+| [数据库设计](docs/04_DATABASE_DESIGN.md) | 表、索引、事务与 migration 对齐 |
+| [Redis/配置](docs/08_REDIS_CONFIG.md) | Presence、delivery、禁言 key 与 TTL |
+| [架构深度文档](docs/architecture-deep-dive.md) | 源码级架构：进程、HTTP/WS 链路、16 个功能、数据模型、并发、配置、测试地图 |
+| [V2 范围](docs/v2-scope.md) | V2 范围与边界：已实现、V2 后期/不做、已知边界 |
+| [验证状态](docs/validation-status.md) | 已验证 / 临时执行未入库 / NOT RUN |
+| [测试验收](docs/10_TEST_ACCEPTANCE.md) | 测试与验收标准 |
+| [已知问题](docs/known-issues.md) | 已知边界与架构审计发现 |
+| [面试设计问答](docs/interview/design-questions.md) | 16 个功能 + 横向问题 + 故障专题 + 简历表述 |
+| [项目概览](docs/interview/project-overview.md) | 面试用项目概览 |
+| [简历表述](docs/interview/resume-bullets.md) | 简历 bullet 建议 |
+| [架构问答](docs/interview/architecture-questions.md) | 架构/取舍追问 |
+| [可靠性问答](docs/interview/reliability-questions.md) | 可靠性/故障追问 |
+| [Compose 部署](docs/deployment/docker-compose.md) | 单机全栈部署与 Admin bootstrap |
+| [性能基线](docs/performance/baseline.md) | 最小性能记录（非容量承诺） |
