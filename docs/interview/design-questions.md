@@ -427,3 +427,346 @@
 **已知边界**
 - K-14 并发可能两条；K-13 无管理员撤回；K-12 已实现。
 - 文件授权查询无索引/无限速（E-8）；浏览器缓存（E-9）。
+
+### 3.8 功能：群创建、成员、角色、邀请、申请、禁言
+
+**一句话回答**
+- 群与成员用 `groups/group_members`，角色 1 owner/2 admin/3 member；建群/加成员/审批在事务内锁群行控制人数上限；禁言只放 Redis TTL。
+
+**需求与约束**
+- 群主/管理员/成员权限矩阵；入群策略 0–4；成员上限；禁言可过期；V1 单机。
+
+**方案**
+- 入口 `group/transport/http/handler.go:Create/Members/Invite/RemoveMember/UpdateRole/Apply/Review/Mute`；service `group/service/service.go` + `policy.go:canManageJoin/canInvite/canActOn`；repo `group/repository/mysql/repository.go`；禁言 `group/mute/store.go`。
+
+**关键决策与理由**
+- 选择锁 `groups` 行 + 重新 COUNT 控人数，因为单库内正确、成本低；代价是群行热点。
+- 选择禁言 Redis TTL，因为天然过期、读快；代价是 Redis 丢失即禁言丢失、无审计历史。
+- 选择邀请直接入群（无待接受），因为实现简单；代价是缺少被邀请人同意语义。
+
+**权衡**
+- 一致性 vs 并发：行锁保证不超员，但大群邀请串行化。
+- 功能完整度：入群问题/答案未真正校验；`request_type=2` 未使用。
+
+**失败模式与恢复**
+- 审批中崩溃：事务回滚，申请仍 pending。
+- 并发加入：唯一键 2303，人数上限 2313。
+- Redis 挂：禁言不可用（2311），发送侧 `IsMuted` 失败按不可用处理。
+- 踢人与在途发送：发送事务仍可能解析到旧成员，存在窗口。
+
+**常见追问与回答要点**
+1. 群主能退群吗？——不能（2310），只能解散/转让（V1 无转让）。
+2. 管理员能踢管理员吗？——不能，`canActOn` 只能动成员。
+3. 禁言为什么不入库？——临时状态、TTL 自然过期；代价是不可审计。
+4. 全员禁言怎么开？——当前无写入入口（A10）。
+5. 邀请需要确认吗？——V1 直接入群，V2 可加邀请确认。
+
+**已知边界**
+- A10 全员禁言无写入；邀请确认/入群问题未实现；禁言 key 随成员 ID 残留至 TTL。
+
+### 3.9 功能：群文本/图片/文件消息
+
+**一句话回答**
+- 与私聊同构：`group.send` → `Service.Send`，事务内写 `group_messages` + 全群 `group_sessions`，提交后 ACK，再 Redis Pub/Sub 按成员扇出。
+
+**需求与约束**
+- 仅群成员；禁言/全员禁言；文本/图片/文件校验同私聊；每成员 session 未读；V1 无读扩散优化。
+
+**方案**
+- 入口 `group/ws/client.go:readPump` → `group/message/inbound.go:Inbound.Handle` → `service.go:Send`。
+- `PersistWithSessions`：锁 active 群 → `group_members.id` → INSERT 消息 → `Pluck` 成员 → `upsertSessions`；`delivery.Publish` → `LocalDeliveryHandler` → `Hub.SendToUser`。
+
+**关键决策与理由**
+- 选择写扩散 session（每成员一行），因为未读/置顶查询 O(1)；代价是 O(成员数) 写放大。
+- 选择事务后 ACK + 异步广播，因为不丢已确认消息；代价是实时性依赖 Redis。
+- 选择 Redis Pub/Sub 而非持久队列，因为实现简单；代价是 at-most-once、无重投。
+
+**权衡**
+- 读 vs 写：大群读快、写慢；V1 接受。
+- 一致性：成员快照在事务内，发送后新成员看不到该消息的实时推送，但历史可见。
+
+**失败模式与恢复**
+- 事务失败：无消息，客户端重试；1062 回查赢家。
+- ACK 后广播失败：历史兜底。
+- 接收方离线：上线拉历史。
+- Redis 挂：实时推送失败，消息仍在。
+
+**常见追问与回答要点**
+1. 大群 1000 人怎么办？——当前 O(N) 写放大；需要异步扇出/读扩散，属优化。
+2. 多设备会重复吗？——每连接一份，未做设备去重。
+3. 发送者会收到自己的消息吗？——会，广播包含发送者。
+4. 群成员被踢后还能收吗？——在途消息可能仍推给已连接客户端，历史权限以当前成员为准。
+5. 群消息顺序？——按自增 messageId 排序。
+
+**已知边界**
+- 无 1213 重试（A5/K-10）；Pub/Sub 丢实时消息；session 写放大。
+
+### 3.10 功能：群撤回
+
+**一句话回答**
+- 复用 `type=4`，额外校验群归属与“当前仍是成员”；历史/会话替换、文件授权排除，和私聊同构。
+
+**需求与约束**
+- 目标属于本群；只能撤回自己消息；窗口/已撤回/tombstone 同私聊；退群后不能撤回。
+
+**方案**
+- `group/message/service.go:sendWithdraw` → `GetByIDForRecall/IsRecalled/GetWithdrawBySenderAndTarget` → `PersistWithSessions`；历史 `recalledSet/markRecalled`；授权 `file/.../canAccessImage` 的 `NOT EXISTS`。
+
+**关键决策与理由**
+- 选择把成员校验放在最后，因为目标/作者/窗口更基础；代价是退群用户得到 2404 而非 2419。
+- 选择与私聊相同的读时投影，因为复用语义；代价是群历史查询多一次 JSON 反查。
+- 选择不删除文件引用，因为审计与 owner 下载；代价是文件仍存在。
+
+**权衡**
+- 一致性与权限：退群后不能撤回，避免“离群仍操作”；和“作者永久可撤回”语义不同。
+
+**失败模式与恢复**
+- 同私聊：撤回消息事务失败无副作用；推送失败历史兜底。
+- 管理员删除原消息：目标 tombstone → 2422。
+- 并发不同 clientMsgId：K-14。
+
+**常见追问与回答要点**
+1. 退群后能撤回旧消息吗？——不能（2404）。
+2. 群解散后？——群成员关系删除，撤回失败。
+3. 群主能撤回别人消息吗？——不能，只有本人。
+4. 撤回后群文件还能下载吗？——非成员/非所有者 2503，owner 仍可。
+5. 和私聊撤回代码复用吗？——同构但独立 package/错误码 2419–2423。
+
+**已知边界**
+- K-14、K-13；无管理员撤回；文件授权无索引（E-8）。
+
+### 3.11 功能：Session 列表、未读、已读、置顶、删除（重点）
+
+**一句话回答**
+- 每个用户/会话一行 `chat_sessions`（群为 `group_sessions`），冗余 last_message/unread/is_top/hidden_at；已读用消息行+session 行锁 + 重算未读。
+
+**需求与约束**
+- 会话列表按置顶/时间排序；未读准确；已读单调；置顶；隐藏会话；V1 不做 OFFSET 深分页。
+
+**方案**
+- 入口 `chat/message/transport/http/handler.go:Sessions/Read/Top`；service `ListSessions/MarkRead/SetSessionTop/ToggleSessionTop/HideSession`；repo `repository/mysql/session.go`。
+- 列表 JOIN users/last message；`MarkRead` 锁消息行 → 锁 session → max(lastRead) → COUNT 未读 → 更新。
+- 新消息 `upsertSession` 增加 unread、清 hidden_at。
+
+**关键决策与理由**
+- 选择 session 表而非动态聚合，因为未读/置顶/隐藏是独立状态；代价是写放大。
+- 选择已读游标单调 max + COUNT 重算，因为并发消息下不会把新消息误清零；代价是每次已读一次 COUNT。
+- 选择隐藏而非删除，因为对端不受影响；代价是表里保留 hidden 行。
+
+**权衡**
+- 读性能 vs 写成本：读 O(1)，写多两行/多行。
+- 准确 vs 性能：未读 COUNT 保证准确；大会话可改为增量，V1 未做。
+
+**失败模式与恢复**
+- 已读请求失败：客户端重试；游标只前进不后退。
+- 新消息与已读并发：session 行锁 + 事务顺序保证不丢未读/不误清零（仍可能出现“已读后新消息”正常未读）。
+- 隐藏后新消息：`upsertSession` 清 hidden_at 重新出现。
+- 进程崩溃：已提交的 session 状态保留；未提交回滚。
+
+**常见追问与回答要点**
+1. 为什么不每次 COUNT 消息表？——列表会 N 次聚合；session 读快。
+2. 未读会不会不准？——发送事务原子 +1，已读重算；并发下有行锁。
+3. 置顶有数量限制吗？——V1 没有，产品可加。
+4. 删除会话是删除消息吗？——不是，仅 `hidden_at`；A1/A2 说明单条删除表未使用、HideSession 无 HTTP 入口。
+5. 多端已读同步？——当前无跨端 read receipt；各端拉 session。
+
+**已知边界**
+- K-5 pending 不跨刷新；A1/A2 删除表未使用、HideSession 未接线；无跨端已读回执。
+
+### 3.12 功能：文件上传与下载授权（重点）
+
+**一句话回答**
+- 流式读取 + SHA-256 内容寻址 + 临时文件原子 rename；DB 里 `file_objects`（物理对象）+ `user_files`（用户引用）；下载按所有者/私聊参与者/群成员鉴权。
+
+**需求与约束**
+- 不能 `io.ReadAll`；大小限制；同一内容去重；不泄露存储路径；下载要防越权；V1 无病毒扫描。
+
+**方案**
+- 入口 `file/transport/http/handler.go:upload/Download`；service `Upload/GetAccessible/Open`；storage `local.go:CreateTemp/Commit/Abort`；repo `Attach/FindAccessibleByID/canAccessImage`。
+- 上传：`MaxBytesReader` → `io.CopyBuffer(io.MultiWriter(temp,sha256,prefix))` → hash 去重 → `Commit`（Sync/Rename）→ `Attach` 事务。
+
+**关键决策与理由**
+- 选择“先落盘再写库 + 补偿”，因为大文件不能长时间占事务；代价是可能孤儿对象（K-7）。
+- 选择 SHA-256 内容寻址，因为天然去重/秒传；代价是需要引用计数/GC。
+- 选择 `user_files` 引用而非对象直接归用户，因为共享对象；代价是授权多一层 JOIN。
+- 选择下载时鉴权而非公开 URL，因为消息/群成员关系是权限源；代价是每次下载查消息表（E-8）。
+
+**权衡**
+- 性能 vs 安全：授权查询无索引，非所有者下载慢；换不可越权。
+- 存储 vs 成本：共享对象省空间；无 GC 会膨胀。
+
+**失败模式与恢复**
+- 上传中断：temp Abort，无 DB 记录。
+- DB 失败：物理对象可能残留（K-7）；上传返回错误。
+- 下载时 DB 失败：2504/500；不返回文件。
+- 文件被删/撤回：2503。
+- 浏览器缓存：E-9，服务端无法回收。
+
+**常见追问与回答要点**
+1. 为什么用 SHA-256 不用 MD5？——抗碰撞；代价是计算稍慢。
+2. 原子 rename 跨文件系统？——temp 与 objects 同卷；跨卷 rename 会失败，部署需保证。
+3. 如何防越权？——私有消息参与者/群成员 + `admin_deleted_at`/撤回 `NOT EXISTS`。
+4. 秒传安全吗？——只复用物理对象，仍建用户引用；不泄露他人文件。
+5. 删除引用会删对象吗？——不会，K-7 无 GC。
+
+**已知边界**
+- K-7 无 GC；E-8 授权无索引/无限速；E-9 浏览器缓存；无内容扫描/缩略图。
+
+### 3.13 功能：好友上线提醒（重点）
+
+**一句话回答**
+- Chat Hub 本地 0→1/1→0 回调只做非阻塞入队；有界 worker 查好友并 `Hub.SendToUser` 推 `friend.online/offline`；单机语义，Presence 仍是权威。
+
+**需求与约束**
+- 只通知好友；多端只首个/最后连接触发；不阻塞 Hub；不改 Presence 写入；V1 单机。
+
+**方案**
+- `chat/hub.go:registerClient/removeClient` → `cmd/chat-api` 的 `transitionObservers` → `chat/friendnotify/notifier.go:enqueue` → worker `handle` → `FriendIDs`（`friends JOIN users status=1`）→ `protocol.FriendPresenceData` → `Hub.SendToUser`。
+- Presence：`chat/presence/service.go` 异步写 Redis ZSET；Group 不参与。
+
+**关键决策与理由**
+- 选择 Hub 只入队、worker 做 I/O，因为 Hub 事件循环不能被网络/DB 阻塞；代价是事件可能延迟/丢弃。
+- 选择本地 0→1/1→0，因为天然多端去重；代价是多实例会重复/误报（K-15）。
+- 选择只通知好友、跳过禁用/已删除，因为隐私与无效连接；代价是查询失败时不推送。
+- 选择 best-effort，因为 Presence/HTTP 是权威；代价是崩溃/TTL 无 offline（K-16）。
+
+**权衡**
+- 实时性 vs 稳定性：异步队列满丢弃，换 Hub 不阻塞。
+- 单机简单 vs 多实例正确：`GlobalPresenceCheck` 占位，V2 接 Redis 全局判断。
+
+**失败模式与恢复**
+- 进程崩溃：无 offline 事件；前端 HTTP `isOnline` 恢复。
+- Redis 挂：Presence 写入重试；通知仍可发（只读好友表）。
+- 好友查询失败：跳过该事件，不重试。
+- 队列满：丢弃并计数，不阻塞。
+- 多实例：可能重复/误报（K-15）。
+
+**常见追问与回答要点**
+1. 多端怎么只发一次？——Hub 本地连接计数 0→1/1→0。
+2. 多实例怎么办？——需要 Redis 全局 Presence 判断，V2；当前 `GlobalPresenceCheck` 恒 true。
+3. 如何防止刷事件？——有界队列 + 丢弃计数；未做限流。
+4. 好友离线时发吗？——`SendToUser` 投递 0 个连接，不重试。
+5. 为什么 Group WS 不参与？——Presence 唯一写入方是 Chat，避免两套 socket 误判。
+6. 事件丢了怎么办？——HTTP `GET /api/user/friends` 的 `isOnline` 恢复。
+
+**已知边界**
+- K-15 单机；K-16 offline best-effort；V-20 多实例 NOT RUN。
+
+### 3.14 功能：Admin 私聊审计、群管理、文件管理、设置、日志（重点）
+
+**一句话回答**
+- Admin 统一经 Gateway/Auth，服务端 `adminapi.Identity` 强制 `Role==1`；删除用 tombstone + 修复 session，群解散置 status 并隐藏 session，文件只删引用，设置固定 key，日志只读。
+
+**需求与约束**
+- 前端守卫不是安全边界；所有 Admin API 必须服务端校验；删除要可审计/可恢复；不能泄露 Secret。
+
+**方案**
+- 私聊：`chat/message/admin/transport/http/handler.go` → `service.List/Delete` → `mysql/repository.go:deleteOnce/repairSession`；错误码 2230–2232。
+- 群：`group/admin/...` → `Dissolve/DeleteMessage/repairGroupSession`；错误码 2320–2322。
+- 文件：`file/admin/...` 只删 `user_files` 引用。
+- 设置：`settings/...` 固定 key upsert；日志：`logs/...` 只读查询。
+
+**关键决策与理由**
+- 选择 tombstone 而非物理删除，因为审计/恢复；代价是查询都带 `admin_deleted_at IS NULL`。
+- 选择同步修复 session，因为列表不能指向已删消息；代价是删除事务变重。
+- 选择 Admin 独立错误码 2230–2232/2320–2322，因为避免与撤回/消息码冲突（A4 修复）。
+- 选择服务端二次校验 Role，因为 Gateway 头不是充分信任；代价是重复代码。
+
+**权衡**
+- 权限 vs 便利：所有操作要身份；Admin 前端只是 UI。
+- 删除一致性 vs 延迟：同步修 session 强一致；大会话慢。
+
+**失败模式与恢复**
+- 删除事务失败：回滚，消息仍可见；可重试。
+- 会话修复失败：整个事务回滚；不会半删除。
+- 审计失败：best-effort，不影响删除。
+- Redis Presence 失败：群在线人数降级，不影响主流程。
+
+**常见追问与回答要点**
+1. 为什么删除不是物理删？——审计/恢复；代价是存储。
+2. Admin 能看私聊内容吗？——能，这是审计功能；读取本身不产生 LogEvent。
+3. 删除消息会撤回已推送内容吗？——不会；客户端已收到的无法回收。
+4. 解散群会删消息吗？——不删，只 status=2 + 删成员 + 隐藏 session。
+5. 文件删除会删物理对象吗？——不会，只删引用（K-7）。
+6. 错误码怎么区分？——Chat Admin 2230–2232，Group Admin 2320–2322。
+
+**已知边界**
+- A1/A2 删除表/HideSession 未接线；K-7 无 GC；私聊读取不审计；管理员撤回未设计（K-13）。
+
+### 3.15 功能：审计日志（重点）
+
+**一句话回答**
+- 业务 handler 显式构造 `audit.Event`，经有界 producer 发 Kafka；consumer 先落库 `audit_logs` 再 commit，`event_id` 唯一键保证至少一次下的幂等。
+
+**需求与约束**
+- 不阻塞业务；脱敏；每请求 requestId；Kafka 不可用不能拖垮 IM；V1 无 outbox/DLQ。
+
+**方案**
+- `platform/audit/event.go:NewEvent/Validate`、`metadata.go:ValidateMetadata`、`request.go:EnrichHTTP`、`emit.go:EmitBestEffort`。
+- `platform/kafkaaudit/producer.go:Publish/run`；`logs/consumer/consumer.go:Run`；`logs/repository/mysql/repository.go:Insert`。
+- Gateway 生成 `X-Request-ID`；业务成功后才 emit。
+
+**关键决策与理由**
+- 选择异步 best-effort，因为审计不能阻塞 IM；代价是 Kafka 故障/队列满会丢事件（K-8）。
+- 选择 metadata allowlist，因为通用脱敏容易漏；代价是新增字段要改代码。
+- 选择至少一次 + `event_id` 唯一键，因为实现简单、可恢复；代价是重复消费。
+- 选择显式 emit，因为只审计关键业务动作；代价是普通读请求无审计。
+
+**权衡**
+- 完整性 vs 可用性：允许丢审计，保业务；需要监控 `Dropped`。
+- 安全 vs 灵活性：allowlist 安全，但扩展成本高。
+
+**失败模式与恢复**
+- Kafka 不可用：producer 重试 `MaxAttempts` 后丢弃；业务成功。
+- consumer 崩溃：offset 未提交，重启重放；唯一键幂等。
+- DB 失败：consumer 无限重试（阻塞分区），不丢但延迟。
+- 队列满：`ErrQueueFull` + 计数；不阻塞。
+- 进程崩溃：内存队列丢失，无 outbox（K-8）。
+
+**常见追问与回答要点**
+1. 能保证审计不丢吗？——不能，V1 best-effort；要可靠需 outbox/DLQ。
+2. 密码/JWT 会进日志吗？——allowlist + 敏感 key 拒绝；登录失败只记安全信息。
+3. 每请求都有审计吗？——不是；只有显式 emit 的业务动作。
+4. 为什么先落库后 commit？——至少一次，重复靠唯一键；代价是可能重复消费。
+5. Kafka 挂了业务会失败吗？——不会，`EmitBestEffort` 只记日志。
+6. IP 有吗？——`Event.IP` 存在但 `EnrichHTTP` 未填；无可信代理列表。
+
+**已知边界**
+- K-8 无 outbox/DLQ；E-3 CI 不跑真实 Kafka；查询本身不审计；IP 为空。
+
+### 3.16 功能：Migration 与 runner
+
+**一句话回答**
+- 001–008 嵌入式 SQL 是唯一 schema 真相；runner 先写 `schema_migrations.dirty=1` 再执行，成功后清 0，失败拒绝继续 Up；应用不使用 AutoMigrate。
+
+**需求与约束**
+- 可重复、可审查、可回滚；MySQL DDL 隐式提交；单实例部署；V1 无迁移锁。
+
+**方案**
+- `server/migrations/runner.go:New/Status/Up/Down/DownAll/applyUp/applyDown`；`server/cmd/migrate/main.go:run`；`schema_migrations(version,name,dirty,applied_at)`。
+
+**关键决策与理由**
+- 选择自研 runner，因为依赖少、命名/版本校验可控；代价是无 advisory lock/checksum。
+- 选择 dirty 标记，因为能阻止半应用继续 Up；代价是恢复靠人工。
+- 选择连续 3 位版本，因为防跳号/重名；代价是合并分支易冲突。
+- 选择嵌入式 SQL，因为部署单二进制；代价是改迁移要重编译。
+
+**权衡**
+- 安全 vs 自动化：dirty 保护简单，但没有自动修复。
+- 单实例 vs 并发：无锁；多实例迁移需外部协调。
+
+**失败模式与恢复**
+- 执行中途失败：dirty=1，后续 Up 拒绝；人工审查后 Down/修复。
+- 并发 Up：可能同时看到 pending；一个版本插入冲突，需人工处理。
+- DB 不可用：CLI 失败 exit 1；不影响已运行服务。
+- Down 半失败：版本行未删，需人工核对。
+
+**常见追问与回答要点**
+1. 为什么不用 golang-migrate？——自研可控、依赖少；缺锁/校验和是代价。
+2. dirty 怎么修？——人工确认 schema 后执行对应 Down 或手工修，再清 dirty。
+3. 迁移能回滚吗？——有 Down，但 DDL 非事务；需备份。
+4. 多实例同时迁移？——当前无锁，不推荐。
+5. 008 做了什么？——只加 `admin_deleted_at`，不加索引。
+
+**已知边界**
+- 无迁移锁/checksum；`migrations/README` 已改为 008；`schema_migrations` 由 runner 建表（A9 已补文档）。
