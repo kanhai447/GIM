@@ -256,7 +256,7 @@
 2. 并发反向申请？——pending 生成列唯一键仲裁。
 3. 备注为什么方向性？——A 对 B 的备注不应影响 B 的视图。
 4. 被删除好友还能发消息吗？——`AreFriends` 失败 → 2203。
-5. 好友申请实时推送？——V2 后期，当前 HTTP（K-3 历史表述已过时，实际以 K-15 为准；好友申请推送仍未做）。
+5. 好友申请实时推送？——V2 后期，当前好友申请走 HTTP；WS 推送未实现。
 
 **已知边界**
 - 只有接收方向申请列表，无“我发出的”（K-4）。
@@ -770,3 +770,68 @@
 
 **已知边界**
 - 无迁移锁/checksum；`migrations/README` 已改为 008；`schema_migrations` 由 runner 建表（A9 已补文档）。
+
+## 4. 故障与边界专题
+
+### 4.1 ACK 后进程崩溃，消息会丢吗？
+- 不会。ACK 只在 `PersistWithSessions` 提交后发送；已提交消息在 MySQL，重启后历史可查。未提交则客户端重试。
+- 注意：ACK 丢失会导致客户端 failed，但重试命中唯一键返回原消息。
+
+### 4.2 接收方离线，消息怎么恢复？
+- 持久化在 `chat_messages/group_messages`；接收方上线打开会话拉 `GET /api/chat/history` / group history，按 messageId 游标分页。
+- Redis Pub/Sub 只负责实时，不承担存储。
+
+### 4.3 推送失败，发送方会知道吗？
+- 不会。ACK 只代表持久化；推送失败日志 `realtime delivery degraded`，接收方靠历史恢复。V1 没有 delivery receipt（K-2）。
+
+### 4.4 Redis 挂了，Presence 和好友通知会怎样？
+- Presence 写入重试，`isOnline` 可能降级 false；好友通知 worker 仍查 MySQL 好友并尝试推送，但接收方连接在 Hub 内存，不依赖 Redis。事件丢失靠 HTTP `isOnline` 恢复。
+- Redis 是 Presence 权威，但 IM 消息不依赖 Redis 持久化。
+
+### 4.5 Kafka 不可用，审计会怎样？
+- producer 重试后丢弃并计数，业务不失败；无 outbox/DLQ（K-8）。审计完整性降级，IM 不受影响。
+
+### 4.6 并发发消息和 Admin 删除同一会话，会死锁吗？
+- 可能竞争同一 session 行；两边都按 userID 升序，Chat 发送有 1213 三次重试，Admin 删除也有重试。极端竞争仍可能失败，返回错误可重试。
+
+### 4.7 并发不同 clientMsgId 撤回同一消息，会怎样？
+- 两个请求都可能通过 `IsRecalled` 检查并各写一条撤回消息（无 target 唯一索引），即 K-14。历史读侧仍只把原消息替换一次，前端 `applyWithdrawals` 合并撤回行；文件授权不受影响。严格一条需唯一索引/列。
+
+### 4.8 文件上传中途失败，会留下垃圾吗？
+- 临时文件 `Abort`；若进程崩溃，temp 可能残留；DB 无引用。已提交物理对象但 DB 失败时也可能残留，K-7 无 GC。当前接受人工/后续 GC。
+
+### 4.9 退群后还能下载群历史图片吗？浏览器缓存呢？
+- 服务端：`canAccessImage` 要求当前仍是 `group_members`，退群后非所有者 2503；撤回/tombstone 也被排除。
+- 浏览器：已缓存副本无法回收（E-9）；只能保证新的服务端下载被拒。
+
+### 4.10 多实例部署，好友上线提醒会怎样？
+- 每个实例只看到本地连接，0→1/1→0 可能重复/误报；`GlobalPresenceCheck` 当前恒 true，K-15。需要 Redis 全局 Presence 判断（V2），当前不声称多实例正确。
+
+## 5. 主动说明的边界
+
+| 边界 | 一句话解释/后续 |
+|---|---|
+| 多实例 Presence 未做（K-15） | 当前单机；后续接 Redis 全局 0→1/1→0。 |
+| 完整性能阶梯/soak/restart/远端 CI 未跑 | 只有 HTTP c10 与 Private 10 conn 两档最小结果，不构成容量结论。 |
+| 部分 E2E 脚本未入库（K-17） | 临时脚本执行后删除；仓库仅 4 个 smoke，复现需重写。 |
+| Group 无 1213 重试（A5/K-10） | 目前只处理 1062；高竞争下可能失败，后续可复用 Chat 的重试。 |
+| 删除表未使用、HideSession 未接线（A1/A2） | 表/服务预留，HTTP 未暴露；当前隐藏走 `hidden_at`。 |
+| 撤回并发可能两条（K-14） | 历史占位唯一、前端合并；严格一条需 schema 变更。 |
+| offline 事件 best-effort（K-16） | 崩溃/TTL 无事件；HTTP `isOnline` 兜底。 |
+| 文件授权无索引/无限速（E-8） | 仅非所有者下载路径；后续可加索引/限流。 |
+
+## 6. 简历表述建议
+
+**可写**：真实实现的功能、真实验证项、可解释的设计（消息+session 事务、幂等、文件流式/授权、撤回、好友提醒、审计脱敏）。
+
+**不可写**：百万连接、全量压测、分布式 WS 路由、多实例 Presence、生产级容量。
+
+**Bullet 示例（均可在代码/文档找到依据）**
+
+1. 设计并实现私聊/群聊消息链路：`clientMsgId` 唯一约束幂等、消息+session 同事务、提交后 ACK、Redis Pub/Sub 实时推送与历史补偿。
+2. 实现流式文件上传（`io.CopyBuffer` + SHA-256 内容寻址 + 原子 rename）与按消息/群成员关系的鉴权下载，支持图片/普通文件消息。
+3. 实现撤回消息 `type=4`：窗口校验、历史 `[撤回]` 占位、文件授权 `NOT EXISTS` 排除，前端多端占位合并。
+4. 实现好友上线提醒（单机）：Hub 本地 0→1/1→0、有界异步 worker、只通知好友，Presence 与 HTTP `isOnline` 兜底。
+5. 实现 Admin + Kafka 审计链路：服务端 Role 二次校验、metadata allowlist 脱敏、至少一次消费 + `event_id` 幂等落库。
+
+> 面试时主动补一句：多实例 Presence、完整性能阶梯、部分 E2E 脚本未入库是已知边界，详见 `docs/v2-scope.md` 与 `docs/known-issues.md`。
