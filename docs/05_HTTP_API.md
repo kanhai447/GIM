@@ -1,5 +1,7 @@
 # 05 HTTP API 契约
 
+> V2 范围与不做项见 [v2-scope.md](v2-scope.md)。
+
 ## 1. 统一响应
 
 兼容参考前端：

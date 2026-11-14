@@ -78,6 +78,13 @@
 | 多实例全局 Presence | **NOT RUN** | 本轮只做单机 | V2；`GlobalPresenceCheck` 占位（V-20/K-15） |
 | Chat Hub 并发模型 | 未修改 | 现有 observer + 装配层组合 | 回调只入队，不阻塞 Hub |
 
+## V2 收口（2026-11-14）
+
+- 范围、V2 后期/不做项、已知边界、验证摘要与 tag 语义见 **[v2-scope.md](v2-scope.md)**。
+- V2 核心四 Phase：图片 `type=2`、普通文件 `type=3`、撤回 `type=4`、好友上线提醒（单机）均 PASS（明细见上表）。
+- 本文既有 **NOT RUN / NOT OBSERVED** 项保持不变：完整性能阶梯、5 分钟 soak/restart、图片/文件吞吐与预览性能、远端 GitHub Actions。
+- 不声称“全量验证通过”或“支持百万连接”。
+
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
 | 项目 | 结果 | 证据 |

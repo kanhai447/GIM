@@ -32,6 +32,12 @@ GIM 是一个面向后端工程能力展示的即时通信系统：Go 微服务 
 - 接收方 delivery/read receipt、WS 一次性 Ticket、Gateway 本地验签、多实例 WS 路由。
 - HA/Kubernetes/内部 TLS、文件孤儿 GC、审计 outbox/DLQ。
 
+## V2 范围
+
+V2 核心四 Phase（图片消息、普通文件消息、撤回、好友上线提醒单机）已完成并验证。完整范围、V2 后期/不做项及理由、已知边界、验证摘要与 tag 语义见 **[docs/v2-scope.md](docs/v2-scope.md)**。
+
+`gim-v2.0` 仅代表上述核心四 Phase 完成；不包含 `user_confs`、管理员撤回、多实例 Presence、好友申请实时推送、完整性能阶梯等（详见 v2-scope 第 2 节）。
+
 ## 架构
 
 ```mermaid
@@ -211,6 +217,7 @@ pnpm type-check; pnpm test; pnpm build
 - `gim-v1.2`：图片消息、普通文件消息、文件授权专项与文件 Phase 收尾。
 - `gim-v1.3`：撤回消息实现 + 撤回收尾（并发/短窗口/race）+ 好友上线提醒协议设计。
 - `gim-v1.4`：好友上线提醒单机实现 + 前后端测试/集成/E2E/race；多实例 Presence、user_confs、管理员撤回仍未实现。
+- `gim-v2.0`：V2 核心四 Phase（图片/文件/撤回/好友上线提醒单机）完成；范围外项见 [docs/v2-scope.md](docs/v2-scope.md)。
 
 ## 已知限制
 

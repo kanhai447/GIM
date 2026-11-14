@@ -2,6 +2,8 @@
 
 V1 保留两条连接：Chat WS 和 Group WS。URL 路径以参考项目实际路由为基线；若路径调整，必须同步 Gateway 和前端配置。
 
+> V2 范围与不做项见 [v2-scope.md](v2-scope.md)。
+
 ## 1. 鉴权
 
 V1 query token：

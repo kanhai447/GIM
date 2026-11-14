@@ -2,39 +2,22 @@
 
 - **PROJECT:** GIM
 - **V1 STATUS:** COMPLETED（文本 IM + 文件 + 好友闭环 + Admin + 审计）
-- **V2 STATUS:** Phase 1 完成（图片 `type=2`、普通文件 `type=3`、撤回 `type=4`、好友上线提醒单机）；多实例 Presence/user_confs/管理员撤回未实现
-- **Current Round:** 2026-11-14 Day 16 — 好友上线提醒实现 + `gim-v1.4`：COMPLETED
+- **V2 STATUS:** 核心四 Phase 完成（图片 `type=2`、普通文件 `type=3`、撤回 `type=4`、好友上线提醒单机）；范围外项见 [docs/v2-scope.md](../docs/v2-scope.md)
+- **Current Round:** 2026-11-14 Day 17 — V2 收口评估 + `gim-v2.0`：COMPLETED
 - **Branch:** `main`
-- **Tags:** `gim-v1`（09994cb）、`gim-v1.1`（55bbb8e）、`gim-v1.2`（c97618f）、`gim-v1.3`（32a4a55）、`gim-v1.4`（886d55e）；旧 tag 未移动
-- **Next Authorized Work:** 好友上线提醒多实例 / 好友申请实时推送 / `user_confs` / 性能 / `gim-v2.0`（需授权）
+- **Tags:** `gim-v1`（09994cb）、`gim-v1.1`（55bbb8e）、`gim-v1.2`（c97618f）、`gim-v1.3`（32a4a55）、`gim-v1.4`（886d55e）、`gim-v2.0`（本轮收口 commit，以 `git rev-list -n 1 gim-v2.0` 为准）；旧 tag 未移动
+- **Next Authorized Work:** 到此为止 / 补 user_confs / 管理员撤回 / 性能 / 多实例 Presence（均需另行授权）
 
 ## 当前事实
 
-- 好友上线提醒已实现（单机）：Chat Hub 本地 0→1/1→0 → `friendnotify` 有界 worker → `friends JOIN users(status=1)` → `Hub.SendToUser` 推送 `friend.online`/`friend.offline`；前端 Chat WS 更新 `isOnline`；HTTP 好友列表仍为权威恢复路径。
-- 队列默认 256 / 1 worker / 2s 超时，可配；满队列丢弃并计数；shutdown drain。
-- 过滤：自己、已删除好友、禁用用户；非好友不通知；Group WS 不参与。
-- 多实例全局 Presence 判断未实现（`GlobalPresenceCheck` 占位，V2）；崩溃/TTL 不保证 offline（best-effort）。
-- 撤回 `type=4`、图片/文件、好友闭环保持既有实现；无 schema/索引变更。
-
-## 验证矩阵（真实执行）
-
-| 项目 | 结果 |
-|---|---|
-| 后端 `go build` / `go vet` / `gofmt` / `go test ./...` | PASS / PASS / 无输出 / 70 包 PASS |
-| 好友提醒集成（真实 MySQL/Redis/WS） | **PASS**（online/offline、多端、非好友、禁用好友） |
-| Web `vue-tsc` / `vitest` | PASS / 21 files 135 tests |
-| 浏览器 E2E | **PASS**（在线→离线→重登在线） |
-| 全量 race | **PASS**（exit 0，无 DATA RACE） |
-
-## 未验证（NOT RUN）
-
-- 多实例好友上线提醒（V-20/K-15）。
-- 好友申请实时推送、`user_confs`、管理员撤回。
-- 图片/文件吞吐、完整性能阶梯、soak/restart、远端 CI。
-- K-14 并发撤回严格单条（需 schema 决策）。
+- V2 已实现并验证：图片、普通文件、撤回、好友上线提醒（单机）。
+- 范围外（V2 后期/不做）：`user_confs`、管理员撤回、多实例 Presence 全局判断、好友申请实时推送、图片/文件吞吐与预览性能、语音/视频/@/图文、WS Ticket/Gateway 本地验签、Kafka outbox/多实例 WS 路由。
+- 已知边界：K-14（并发撤回可能两条）、K-15（好友提醒单机）、K-16（offline best-effort）、E-8（授权查询无索引）、E-9（浏览器缓存不回收）。
+- 验证：单测 70 包、集成（图片/文件/撤回/好友提醒）、前端 21 files/135 tests、全量 race、Compose、E2E 均 PASS；完整性能阶梯/soak/restart/远端 CI 为 NOT RUN/NOT OBSERVED。
+- 无 schema 变更；Group WS 不修改 Presence。
 
 ## Tag / Push
 
-- `gim-v1.4`：tag object `2cf99b5`，target `886d55e`；已推送。
-- 旧 tag peeled commit 未变：09994cb / 55bbb8e / c97618f / 32a4a55。
-- main `eace570..886d55e` 已推送；不 `--force`。
+- `gim-v2.0` annotated tag 指向包含 `docs/v2-scope.md` 的本轮收口 commit；已推送。
+- 旧 tag peeled commit 未变：09994cb / 55bbb8e / c97618f / 32a4a55 / 886d55e。
+- 不 `--force`，不移动/删除 tag。

@@ -29,7 +29,7 @@ tools/       负载工具
 | `migrate` | 一次性 migration（`up` / `down -steps N` / `status`） |
 | `admin-bootstrap` | 一次性创建首个管理员（从环境变量读取，不写死密码） |
 
-V1 已实现：文本私聊/群聊、好友闭环、文件所有权、Admin 管理、bounded Kafka 审计。富消息、好友上线提醒、`user_confs` 编辑、delivery/read receipt 为 V2。
+V1 已实现：文本私聊/群聊、好友闭环、文件所有权、Admin 管理、bounded Kafka 审计。V2 已实现图片、普通文件、撤回、好友上线提醒（单机）；范围与不做项见 [docs/v2-scope.md](../docs/v2-scope.md)。
 
 ## 依赖与配置
 

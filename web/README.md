@@ -29,7 +29,7 @@ pnpm build
 
 - 好友 `isOnline` 来自 `GET /api/user/friends`（Redis Presence），进入页面时刷新；V1 没有 `friend.online/offline` 实时推送。
 - pending 消息只在当前页面内保留，不跨刷新持久化。
-- 仅文本消息；富消息为 V2。
+- 文本/图片/普通文件/撤回消息与好友上线提醒已支持；V2 范围与不做项见 [docs/v2-scope.md](../docs/v2-scope.md)。
 - 所有用户输入使用文本插值渲染，不使用 `v-html`。
 
 ## 测试

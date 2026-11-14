@@ -2,6 +2,8 @@
 
 以下是逻辑模型。Agent 应生成可重复执行的 migration；不要仅依赖开发环境 AutoMigrate。
 
+> V2 范围与不做项见 [v2-scope.md](v2-scope.md)。
+
 ## 1. 通用约定
 
 - MySQL 8.x，utf8mb4。
