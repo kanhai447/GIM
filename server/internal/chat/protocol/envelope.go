@@ -23,10 +23,12 @@ type Envelope struct {
 }
 
 const (
-	EventChatSend    = "chat.send"
-	EventChatAck     = "chat.ack"
-	EventChatMessage = "chat.message"
-	EventError       = "error"
+	EventChatSend      = "chat.send"
+	EventChatAck       = "chat.ack"
+	EventChatMessage   = "chat.message"
+	EventFriendOnline  = "friend.online"
+	EventFriendOffline = "friend.offline"
+	EventError         = "error"
 )
 
 type Error struct {
@@ -80,6 +82,12 @@ type ChatSendData struct {
 type AckData struct {
 	MessageID uint64 `json:"messageId"`
 	CreatedAt string `json:"createdAt"`
+}
+
+// FriendPresenceData is the data payload of friend.online/friend.offline.
+type FriendPresenceData struct {
+	UserID uint64 `json:"userID"`
+	At     string `json:"at"`
 }
 
 // PrivateMessage is shared by chat.message and the future history endpoint.

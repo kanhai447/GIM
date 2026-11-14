@@ -241,9 +241,9 @@ type chatMessageInstance struct {
 	server *httptest.Server
 }
 
-func newChatMessageInstance(t *testing.T, ctx context.Context, service *message.Service, redisClient *redisv9.Client) *chatMessageInstance {
+func newChatMessageInstance(t *testing.T, ctx context.Context, service *message.Service, redisClient *redisv9.Client, transitions ...chat.LocalConnectionTransitionObserver) *chatMessageInstance {
 	t.Helper()
-	hub := chat.NewHub()
+	hub := chat.NewHub(transitions...)
 	go hub.Run(ctx)
 	bus, err := delivery.New(redisClient, time.Second, nil)
 	if err != nil {

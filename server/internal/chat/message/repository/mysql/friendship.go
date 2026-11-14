@@ -33,3 +33,21 @@ func (repository *FriendshipRepository) CanChat(ctx context.Context, userID uint
 	}
 	return restricted == 0, nil
 }
+
+// FriendIDs returns the active friends of userID. Disabled/deleted users are
+// excluded by the users join; deleted friendships have no rows.
+func (repository *FriendshipRepository) FriendIDs(ctx context.Context, userID uint64) ([]uint64, error) {
+	if userID == 0 {
+		return nil, nil
+	}
+	ids := make([]uint64, 0, 16)
+	err := repository.db.WithContext(ctx).Table("friends AS f").
+		Select("f.friend_id").
+		Joins("JOIN users AS u ON u.id = f.friend_id").
+		Where("f.user_id = ? AND f.friend_id <> ? AND u.status = 1", userID, userID).
+		Pluck("f.friend_id", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("query friend ids: %w", err)
+	}
+	return ids, nil
+}

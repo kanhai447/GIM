@@ -25,20 +25,23 @@ const (
 )
 
 type Config struct {
-	Path              string
-	SendBuffer        int
-	AllowedOrigins    []string
-	ReadLimit         int64
-	PongWait          time.Duration
-	PingPeriod        time.Duration
-	WriteWait         time.Duration
-	MaxTextBytes      int
-	MaxPayloadBytes   int
-	MaxImageBytes     int
-	MaxFileBytes      int
-	RecallWindow      time.Duration
-	DependencyTimeout time.Duration
-	DeliveryTimeout   time.Duration
+	Path                string
+	SendBuffer          int
+	AllowedOrigins      []string
+	ReadLimit           int64
+	PongWait            time.Duration
+	PingPeriod          time.Duration
+	WriteWait           time.Duration
+	MaxTextBytes        int
+	MaxPayloadBytes     int
+	MaxImageBytes       int
+	MaxFileBytes        int
+	RecallWindow        time.Duration
+	DependencyTimeout   time.Duration
+	DeliveryTimeout     time.Duration
+	FriendNotifyBuffer  int
+	FriendNotifyWorkers int
+	FriendNotifyTimeout time.Duration
 }
 
 func FromValues(values platformconfig.Values) (Config, error) {
@@ -101,10 +104,23 @@ func FromValues(values platformconfig.Values) (Config, error) {
 	if err != nil || deliveryTimeout <= 0 || deliveryTimeout > 30*time.Second {
 		return Config{}, errors.New("configuration key CHAT_DELIVERY_OPERATION_TIMEOUT must be positive and no greater than 30s")
 	}
+	friendNotifyBuffer, err := optionalInt(values, "FRIEND_NOTIFY_BUFFER", 256)
+	if err != nil || friendNotifyBuffer < 1 || friendNotifyBuffer > 65536 {
+		return Config{}, errors.New("configuration key FRIEND_NOTIFY_BUFFER must be between 1 and 65536")
+	}
+	friendNotifyWorkers, err := optionalInt(values, "FRIEND_NOTIFY_WORKERS", 1)
+	if err != nil || friendNotifyWorkers < 1 || friendNotifyWorkers > 8 {
+		return Config{}, errors.New("configuration key FRIEND_NOTIFY_WORKERS must be between 1 and 8")
+	}
+	friendNotifyTimeout, err := optionalDuration(values, "FRIEND_NOTIFY_OPERATION_TIMEOUT", 2*time.Second)
+	if err != nil || friendNotifyTimeout <= 0 || friendNotifyTimeout > 30*time.Second {
+		return Config{}, errors.New("configuration key FRIEND_NOTIFY_OPERATION_TIMEOUT must be positive and no greater than 30s")
+	}
 	return Config{
 		Path: path, SendBuffer: buffer, AllowedOrigins: origins, ReadLimit: int64(readLimit),
 		PongWait: pongWait, PingPeriod: pingPeriod, WriteWait: writeWait, MaxTextBytes: maxTextBytes,
 		MaxPayloadBytes: maxPayloadBytes, MaxImageBytes: maxImageBytes, MaxFileBytes: maxFileBytes, RecallWindow: time.Duration(recallSeconds) * time.Second, DependencyTimeout: dependencyTimeout, DeliveryTimeout: deliveryTimeout,
+		FriendNotifyBuffer: friendNotifyBuffer, FriendNotifyWorkers: friendNotifyWorkers, FriendNotifyTimeout: friendNotifyTimeout,
 	}, nil
 }
 

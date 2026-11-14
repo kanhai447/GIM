@@ -13,6 +13,7 @@ import (
 	"github.com/kanhai447/GIM/server/internal/chat"
 	chatconfig "github.com/kanhai447/GIM/server/internal/chat/config"
 	"github.com/kanhai447/GIM/server/internal/chat/delivery"
+	"github.com/kanhai447/GIM/server/internal/chat/friendnotify"
 	"github.com/kanhai447/GIM/server/internal/chat/message"
 	chatadmin "github.com/kanhai447/GIM/server/internal/chat/message/admin"
 	chatadminmysql "github.com/kanhai447/GIM/server/internal/chat/message/admin/mysql"
@@ -121,6 +122,13 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	friendNotifier, err := friendnotify.New(chatmysql.NewFriendshipRepository(mysqlClient.DB()), friendnotify.Config{
+		Buffer: chatConfiguration.FriendNotifyBuffer, Workers: chatConfiguration.FriendNotifyWorkers,
+		OperationTimeout: chatConfiguration.FriendNotifyTimeout,
+	}, log.Default())
+	if err != nil {
+		return err
+	}
 	deliveryBus, err := delivery.New(redisClient.Raw(), chatConfiguration.DeliveryTimeout, log.Default())
 	if err != nil {
 		return err
@@ -142,10 +150,11 @@ func run(args []string) error {
 	}
 	chatModule, err := chat.NewWithInboundFactory(values, func(hub *chat.Hub) (chat.InboundHandler, error) {
 		return message.NewInbound(messageService, hub, deliveryBus, log.Default(), auditProducer)
-	}, presenceService)
+	}, transitionObservers{presenceService, friendNotifier})
 	if err != nil {
 		return err
 	}
+	friendNotifier.SetSender(chatModule.Hub)
 	subscription, err := deliveryBus.Subscribe(startupContext, message.LocalDeliveryHandler(chatModule.Hub, chatConfiguration.DeliveryTimeout, log.Default()))
 	if err != nil {
 		return err
@@ -212,6 +221,7 @@ func run(args []string) error {
 		chatModule.Hub.Run(lifecycleContext)
 		close(hubDone)
 	}()
+	friendNotifier.Start(lifecycleContext)
 	serveErr := serviceruntime.ServeREST(lifecycleContext, server, runtimeConfig.ShutdownTimeout)
 	shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
 	defer shutdownCancel()
@@ -223,6 +233,9 @@ func run(args []string) error {
 			hubErr = shutdownContext.Err()
 		}
 	}
+	friendNotifyShutdownContext, friendNotifyShutdownCancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
+	friendNotifyErr := friendNotifier.Shutdown(friendNotifyShutdownContext)
+	friendNotifyShutdownCancel()
 	presenceShutdownContext, presenceShutdownCancel := context.WithTimeout(context.Background(), runtimeConfig.ShutdownTimeout)
 	presenceErr := presenceService.Shutdown(presenceShutdownContext)
 	presenceCancel()
@@ -238,5 +251,27 @@ func run(args []string) error {
 	case <-deliveryDone:
 	case <-shutdownContext.Done():
 	}
-	return errors.Join(serveErr, hubErr, presenceErr)
+	return errors.Join(serveErr, hubErr, friendNotifyErr, presenceErr)
+}
+
+// transitionObservers fans a local 0->1/1->0 transition out to independent
+// observers. Hub still owns the connection map and calls this synchronously;
+// each observer must return quickly (presence queues writes, friendnotify only
+// enqueues onto its bounded channel).
+type transitionObservers []chat.LocalConnectionTransitionObserver
+
+func (observers transitionObservers) LocalUserOnline(userID uint64) {
+	for _, observer := range observers {
+		if observer != nil {
+			observer.LocalUserOnline(userID)
+		}
+	}
+}
+
+func (observers transitionObservers) LocalUserOffline(userID uint64) {
+	for _, observer := range observers {
+		if observer != nil {
+			observer.LocalUserOffline(userID)
+		}
+	}
 }
