@@ -2,38 +2,38 @@
 
 - **PROJECT:** GIM
 - **V1 STATUS:** COMPLETED（文本 IM + 文件 + 好友闭环 + Admin + 审计）
-- **V2 STATUS:** Phase 1 完成（图片 `type=2` + 普通文件 `type=3`）；语音/视频/回复/引用/撤回/@/图文未实现
-- **Current Round:** 2026-11-14 Day 12 — gim-v1.2 tag + 普通文件消息 Phase 1：COMPLETED
+- **V2 STATUS:** Phase 1 完成（图片 `type=2` + 普通文件 `type=3`）；撤回协议已定义、实现待第十一轮；语音/视频/回复/引用/@/图文未实现
+- **Current Round:** 2026-11-14 Day 13 — 文件 Phase 收尾（race + 群聊文件 E2E）+ 撤回协议设计：COMPLETED
 - **Branch:** `main`
-- **Tags:** `gim-v1`（09994cb）、`gim-v1.1`（55bbb8e）、`gim-v1.2`（c97618f）；均未移动，本轮未打 `gim-v2.0`
-- **Next Authorized Work:** 撤回 / 好友上线提醒 / `user_confs` / 图片与文件消息性能（待用户决定）
+- **Tags:** `gim-v1`（09994cb）、`gim-v1.1`（55bbb8e）、`gim-v1.2`（c97618f）；均未移动，本轮未打新 tag
+- **Next Authorized Work:** 撤回实现（第十一轮）/ 好友上线提醒 / user_confs / 图片与文件性能
 
 ## 当前事实
 
-- 普通文件消息 `msg.type=3`：先 `POST /api/file/file` 上传，再发送 `fileMsg.fileID`；服务端校验归属与 `FILE_MESSAGE_MAX_BYTES`（默认 25 MiB），**不限制 MIME 前缀**，回填 `url/fileName/size/mimeType`；`msg_preview="[文件]"`。
-- 错误码：Chat `2215` 文件不存在/非本人、`2216` 超限、`2217` 参数；Group `2416–2418`；未知类型 `2201/2403`；幂等冲突 `2205/2407`。
-- 下载授权：图片与文件消息统一——所有者始终允许；私聊发送者/接收者且消息未 tombstone；当前群成员且消息未 tombstone；退群/非参与者 `2503`。授权 SQL 同时匹配 `imageMsg.fileID` 与 `fileMsg.fileID`，`SELECT 1 … LIMIT 1`。
-- Web：私聊/群聊共用 `MessageBubble`；文件卡片显示文件名/大小，下载走带 token 的 File API（Blob + `<a download>`），失败可重试。
-- 无 schema/索引/migration 变更；复用 `msg` JSON 与 `user_files`/`file_objects`。
+- 图片消息 `type=2`、普通文件消息 `type=3` 已实现并验证；文件消息不限制 MIME 前缀，`FILE_MESSAGE_MAX_BYTES` 默认 25 MiB。
+- 撤回协议已定义（docs/06 §5.6）：`msg.type=4` + `withdrawMsg.msgID`，沿用 `chat.send`/`group.send`；校验存在/本人/未 tombstone/未撤回/`RECALL_WINDOW_SECONDS`（默认 120）/群成员；Chat `2218–2221`、Group `2419–2422`；历史替换为撤回占位、`[撤回]`；文件授权对非所有者失效。
+- **撤回尚未实现**：服务端收到 `type=4` 仍返回 `2201/2403`；前端无撤回入口；无新表/列/索引。
+- 下载授权：所有者/私聊参与者/群成员（消息未 tombstone）；退群/非参与者 `2503`；授权 SQL 同时匹配 `imageMsg.fileID`/`fileMsg.fileID`。
+- 文档与 `.env.example` 已预留 `RECALL_WINDOW_SECONDS=120`（第十一轮实现使用）。
 
 ## 验证矩阵（真实执行）
 
 | 项目 | 结果 |
 |---|---|
-| 后端 `go build` / `go vet` / `gofmt` / `go test ./...` | PASS / PASS / 无输出 / 69 包 PASS |
-| 聊天文件集成（真实 MySQL/Redis/WS） | **PASS**（ACK、接收、历史、重复 clientMsgId 仅 1 行、`2215/2216` 不落库、接收方可下载） |
-| 群聊文件消息 | PASS（单测；授权测试含群文件消息） |
-| 文件下载授权 | **PASS**（所有者/私聊/群成员/tombstone/退群/非参与者/未知 fileID/文本不授权） |
-| Web `vue-tsc` / `vitest` / `vite build` | PASS / 21 files 122 tests / PASS |
-| 浏览器文件 E2E | **PASS**（A 发 `report.pdf` → B 下载 → D `2503`） |
-| 图片代码 race（前一轮） | PASS（本轮未新增并发代码，未复跑） |
+| 全量 race（Linux Docker） | **PASS**（exit 0，无 race warning，覆盖 chat/group/file/friend） |
+| 群聊文件浏览器 E2E | **PASS**（B/C 下载、D `2503`、B 退群 `2503`、owner 200） |
+| 聊天文件集成（前一轮） | PASS |
+| 文件下载授权专项测试（前一轮） | PASS |
+| Web | PASS（21 files / 122 tests；本轮无前端改动） |
+| 撤回协议设计 | **完成**；实现 **NOT RUN** |
 
 ## 未验证（NOT RUN）
 
-- 图片与普通文件消息的上传/下载吞吐、预览性能。
+- 撤回后端/前端实现与 E2E（第十一轮）。
+- 图片/普通文件消息吞吐与预览性能。
 - 完整性能阶梯、soak/restart、文件吞吐、远端 CI（历史遗留）。
 
 ## Tag / Push
 
-- `gim-v1.2` 已于本轮创建并推送；`gim-v1`、`gim-v1.1` 未移动。
-- 本轮代码/文档 commit 推送至 `origin/main`；不 `--force`。
+- `gim-v1`/`gim-v1.1`/`gim-v1.2` 均未移动；本轮未打新 tag。
+- 本轮协议/文档 commit 推送至 `origin/main`；不 `--force`。
