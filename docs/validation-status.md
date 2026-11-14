@@ -85,6 +85,23 @@
 - 本文既有 **NOT RUN / NOT OBSERVED** 项保持不变：完整性能阶梯、5 分钟 soak/restart、图片/文件吞吐与预览性能、远端 GitHub Actions。
 - 不声称“全量验证通过”或“支持百万连接”。
 
+## E2E 证据链说明（2026-11-14 核实）
+
+仓库 `web/e2e/` 仅保留 4 个通用 smoke：`private-chat-smoke.mjs`、`group-chat-smoke.mjs`、`file-management-smoke.mjs`、`admin-compose-smoke.mjs`。本页标 **PASS** 的以下专项 E2E 均为**临时脚本执行、未入库**（执行后删除），证据是当日操作日志；复现需按 docs/06/07 与操作日志重写脚本：
+
+| 场景 | 证据 |
+|---|---|
+| 好友 E2E | `agent_logs/operations/day-6/002_task-2_real-dependency-verification.md` |
+| 图片 E2E | `agent_logs/operations/day-10/004_task-3b_image-e2e-and-access-fix.md` |
+| 群聊图片 E2E | `agent_logs/operations/day-11/005_task-4_group-image-e2e.md` |
+| 文件 E2E | `agent_logs/operations/day-12/005_task-3b_file-e2e.md` |
+| 群聊文件 E2E | `agent_logs/operations/day-13/002_task-2_group-file-e2e.md` |
+| 撤回 E2E | `agent_logs/operations/day-14/003_task-2_frontend-recall.md` |
+| 撤回窗口 E2E | `agent_logs/operations/day-15/002_task-1b_window-e2e.md` |
+| 好友上线 E2E | `agent_logs/operations/day-16/003_task-2_frontend-implementation.md` |
+
+因此：这些 PASS 是真实执行记录，但**不是仓库内可一键复现的脚本**；不得在简历/README 中表述为“E2E 脚本已入库”。
+
 ## 既有验证（2026-11-11，真实 MySQL/Redis/etcd）
 
 | 项目 | 结果 | 证据 |

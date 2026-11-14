@@ -593,7 +593,7 @@
 - 列表只读；删除（软删 + 两侧 session 修复）单事务；1213 重试 3 次；审计在提交后 best-effort。
 
 **并发/幂等/错误码**
-- 错误码 `2220/2221/2222`（与撤回数值重叠，见第 9.1 节）；重复删除第二次 404；行锁顺序与消息持久化一致。
+- 错误码 `2230/2231/2232`（Chat Admin 独立段；撤回使用 `2218–2222`）；重复删除第二次 404；行锁顺序与消息持久化一致。
 
 **已知边界**
 - 读取私聊不产生审计事件；删除不通知在线用户；大会话修复 O(消息数)。
@@ -782,6 +782,8 @@
 | `schema_migrations` | version, name, dirty, applied_at | PK(version)；CHECK dirty∈(0,1) | `server/migrations/runner.go` | 先 dirty=1 → DDL → 清 0 |
 
 ## 5.1 与 docs/04 的差异（只记录，不改旧文档）
+
+> 以下 D1–D9 已于第十六轮按 migration 修正 docs/04（核对日期 2026-11-14）；本表保留差异发现记录。
 
 | # | docs/04 表述 | 实际 schema/代码 |
 |---|---|---|
@@ -1026,17 +1028,18 @@ V2 范围外项（`user_confs`、管理员撤回、多实例 Presence、好友�
 
 | # | 现象 | 证据/位置 |
 |---|---|---|
-| A1 | `chat_message_deletions` / `group_message_deletions` 生产代码只读，未找到写入方；隐藏会话实际走 `hidden_at` | `chat/message/repository/mysql/history.go`、`session.go`；`group/message/repository/mysql/history.go`、`session.go` |
-| A2 | `DELETE /api/chat/chat` 未找到 HTTP 入口；`Service.HideSession` 未接线 | `chat/message/service.go:HideSession`，`transport/http/handler.go` 无路由 |
-| A3 | 注册不初始化 `user_confs`；`CanChat` 用 `COALESCE(MAX(...),0)` 容忍 | `user/service/service.go:CreateUser`、`chat/message/repository/mysql/friendship.go:CanChat` |
-| A4 | `chat/message/admin` 使用 `2220/2221/2222`，与撤回错误码数值重叠 | `chat/message/admin/transport/http/handler.go` 常量；撤回在 `chat/message/service.go` |
-| A5 | Group 消息仓库无 1213 死锁重试（Chat 有 3 次） | `group/message/repository/mysql/repository.go`；Chat 见 `chat/message/repository/mysql/repository.go:PersistWithSessions` |
-| A6 | `/api/auth/open_login` 在 Auth Allowlist，但未找到路由注册；`/api/settings/open_login` 实际存在 | `auth/service/allowlist.go:DefaultAllowlist`；`settings/transport/http/handler.go:OpenLogin` |
-| A7 | validation-status 的多个浏览器 E2E 无入库脚本 | `web/e2e/` 仅 4 个 smoke |
-| A8 | `server/migrations/README.md` 称迁移到 007，实际有 008 | `server/migrations/008_admin_management.up.sql` |
-| A9 | `schema_migrations` 未列入 docs/04 索引清单 | `server/migrations/runner.go:ensureTable` |
-| A10 | `groups.is_all_muted` 只读，未找到修改入口 | `group/message/service.go:Send`；`group/transport/http` 无对应路由 |
-| A11 | docs/04 的 `user_confs`/`friend_verifies`/`file_*`/`friends` 若干列名与 migration 不一致（D1–D5） | 第 5.1 节 |
+| A1 | ~~`chat_message_deletions` / `group_message_deletions` 生产代码只读，未找到写入方；隐藏会话实际走 `hidden_at`~~ **已记录（K/A1）** | `chat/message/repository/mysql/history.go`、`session.go`；`group/message/repository/mysql/history.go`、`session.go` |
+| A2 | ~~`DELETE /api/chat/chat` 未找到 HTTP 入口；`Service.HideSession` 未接线~~ **已记录（K/A2）** | `chat/message/service.go:HideSession`，`transport/http/handler.go` 无路由 |
+| A3 | ~~注册不初始化 `user_confs`；`CanChat` 用 `COALESCE(MAX(...),0)` 容忍~~ **已记录（K/A3）** | `user/service/service.go:CreateUser`、`chat/message/repository/mysql/friendship.go:CanChat` |
+| A4 | ~~`chat/message/admin` 使用 `2220/2221/2222`，与撤回错误码数值重叠~~ **已修复（第十六轮）**：Chat Admin 改为 `2230/2231/2232`；Group Admin 保持 `2320–2322` | `chat/message/admin/transport/http/handler.go` 常量；撤回在 `chat/message/service.go` |
+| A5 | ~~Group 消息仓库无 1213 死锁重试（Chat 有 3 次）~~ **已记录（K/A5）** | `group/message/repository/mysql/repository.go`；Chat 见 `chat/message/repository/mysql/repository.go:PersistWithSessions` |
+| A6 | ~~`/api/auth/open_login` 在 Auth Allowlist，但未找到路由注册；`/api/settings/open_login` 实际存在~~ **已记录（K/A6）** | `auth/service/allowlist.go:DefaultAllowlist`；`settings/transport/http/handler.go:OpenLogin` |
+| A7 | ~~validation-status 的多个浏览器 E2E 无入库脚本~~ **已澄清（第十六轮）**：好友/图片/文件/群聊/撤回/窗口/好友上线为临时脚本；仓库仅 4 个 smoke，validation-status 已加“E2E 证据链说明” | `web/e2e/`；`docs/validation-status.md` |
+| A8 | ~~`server/migrations/README.md` 称迁移到 007，实际有 008~~ **已修正（第十六轮）** | `server/migrations/README.md` |
+| A9 | ~~`schema_migrations` 未列入 docs/04 索引清单~~ **已补充（第十六轮）** | `docs/04_DATABASE_DESIGN.md` §7.1/§7.11 |
+| A10 | ~~`groups.is_all_muted` 只读，未找到修改入口~~ **已记录（K/A10）** | `group/message/service.go:Send`；`group/transport/http` 无对应路由 |
+| A11 | ~~docs/04 的 `user_confs`/`friend_verifies`/`file_*`/`friends` 若干列名与 migration 不一致（D1–D5）~~ **已修正（第十六轮）** | 第 5.1 节 |
+
 
 # 10. 文件索引
 
